@@ -13,3 +13,30 @@
 @media(max-height:820px){.timeline-layout{min-height:234px;max-height:234px}}
 
 .scene-drop-marker{pointer-events:none}.dragging-scenes .scene-drop-marker{pointer-events:auto}
+
+/* Alternating scene backdrops and the dedicated timeline workspace. */
+.scene-grid.scene-shaded{background:#1c2d3d;box-shadow:0 0 0 10px #1c2d3d;border-radius:4px}
+.film-scene.scene-shaded{background:#263849;box-shadow:0 0 0 5px #263849;border-radius:4px}
+.timeline-view{overflow:hidden}
+.timeline-preview{flex:1;min-height:60px;height:auto;width:100%;min-width:0;aspect-ratio:auto;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.timeline-preview canvas{width:100%;height:100%;object-fit:contain;background:transparent;box-shadow:none}
+.timeline-layout{flex:0 0 254px;min-height:254px;max-height:254px}
+@media(max-height:820px){.timeline-layout{flex-basis:234px;min-height:234px;max-height:234px}}
+
+/* Panel thumbnails flow in one grid, preserving scene ownership and color. */
+.continuous-panels{display:grid;grid-template-columns:repeat(auto-fill,200px);align-content:start;gap:18px}
+.continuous-panels .scene-grid,.continuous-panels .reorder-grid{display:contents}
+.continuous-panels .scene-grid>.scene-drop-marker{display:none}
+.continuous-panels .panel-position{width:200px;padding-top:34px}
+.continuous-panels .scene-title{position:absolute;top:0;left:0;right:0;height:28px;gap:3px;margin:0;padding:0;border:0;align-items:center}
+.continuous-panels .scene-title h2{font-size:10px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:75px}
+.continuous-panels .scene-title>span{display:none}
+.continuous-panels .scene-title .scene-drag-handle{font-size:17px}
+.continuous-panels .scene-title .scene-order-button{padding:0 3px}
+.continuous-panels .scene-grid.scene-shaded .panel-position,.continuous-panels .scene-grid.scene-shaded .empty-scene{background:#1c2d3d;box-shadow:0 0 0 7px #1c2d3d;border-radius:4px}
+.continuous-panels .continuous-scene-end{position:absolute;right:-8px;top:34px;bottom:0;width:8px}
+.continuous-scene-end>.panel-drop-slot{left:0;width:8px}
+.continuous-panels .empty-scene{width:200px;margin-top:34px;min-height:180px;position:relative}
+.continuous-panels .empty-scene .scene-title{top:-34px}
+.continuous-panels.dragging-scenes .scene-grid>.scene-drop-marker{display:block;position:static;grid-column:1/-1;height:14px}
+.continuous-panels.dragging-scenes .scene-grid>.scene-drop-marker.active{background:var(--orange)}
