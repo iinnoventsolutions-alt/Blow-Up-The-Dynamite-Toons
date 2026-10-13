@@ -32,3 +32,5 @@ test('frame geometry uses project aspect ratio, zoom, pan and rotation',()=>{
  const p=makeProject();assert.deepEqual(cameraCorners({x:960,y:540,zoom:1,rotation:0},p),[[0,0],[1920,0],[1920,1080],[0,1080]]);
  const c=cameraCorners({x:960,y:540,zoom:2,rotation:90},p);assert(Math.abs(c[0][0]-1230)<1e-8);assert(Math.abs(c[0][1]-60)<1e-8);
 });
+
+test('poses sampled from endpoint keys cannot duplicate IDs or override target frame',()=>{const p=makeProject(),s=p.scenes[0];s.panels.push(makePanel());const original=putCameraKey(s,p,0);const pose=cameraAt(s,120,p);const next=putCameraKey(s,p,120,{...pose,x:1000});assert.notEqual(next.id,original.id);assert.equal(next.frame,120);const metadata={...original,frame:0,id:original.id,y:600};const out=putCameraKey(s,p,239,metadata);assert.notEqual(out.id,original.id);assert.equal(out.frame,239);assert.equal(out.y,600);assert.doesNotThrow(()=>serializeProject(p));});

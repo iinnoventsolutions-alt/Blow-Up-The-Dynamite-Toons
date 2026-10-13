@@ -1,6 +1,6 @@
 # Innovent Professional Storyboard
 
-**Version 1 · Build 10132026.1629**
+**Version 1 · Build 10132026.1724**
 
 The GitHub download includes source, a sample project, tests, and this startup guide. The separately supplied developer ZIP also includes a prebuilt browser preview. It is not yet a signed/notarized Mac installer.
 
@@ -36,6 +36,16 @@ npm run desktop
 The first installation downloads dependencies and Electron. Application operation is offline after installation. The Electron shell implements native Save/Open, File/Edit menus, recent files, recovery, and unsaved-close prompts. Those native interactions still need testing on a Mac. The shared model, filesystem persistence, and browser interface have automated checks.
 
 The current Electron runtime minimum is documented at https://www.electronjs.org/docs/latest/breaking-changes. Mac signing, notarization, and installer verification remain release tasks.
+
+## Build 10132026.1724 · Drawing adjustments
+
+- Text selection handles now use rendered font metrics rather than estimated character widths. They enclose text after font/style changes, tracking, multiline content, resizing, rotation and reselection.
+- Drawing’s panel strip now has **Duplicate** and **Delete** beside **+ Panel / + Scene**. These act on the selected panel, using the same undo, deletion confirmation and camera safeguards as the inspector buttons.
+- Fixed a camera ID bug: poses sampled from endpoint keys carried metadata that could overwrite a newly created key’s ID/frame when dragging. Camera key creation now copies only pose/interpolation values, preserving distinct IDs and the requested time. This was an application bug, not user error; failed edits did not modify project data.
+
+Camera quick start: choose **Camera (C)**, then **Set scene IN / OUT**. Select a key time in Camera controls; adjust X/Y, zoom, rotation or interpolation. In Drawing, drag green/red frame centers to pan and corner squares to zoom. Timeline and Pitch preview the move. You can use these controls on duplicated panels without the former duplicate-ID error. Existing safeguards still protect individual panel deletion/transfers in camera-keyed scenes.
+
+See `docs/Build_10132026.1724_Conflicts.html` for verification. File schema remains 2 and the major version remains 1.
 
 ## Build 10132026.1629 · Drawing tools milestone
 
@@ -142,7 +152,7 @@ This updates display metadata, package metadata, and the lockfile together. Ordi
 
 ## Conflicts and safeguards
 
-Open `docs/Build_10132026.1629_Conflicts.html` for the current HTML report. Earlier reports remain as build history. It describes the empty-scene format change, time quantization, name collisions, camera safeguards, fixes found during testing, and GitHub publication status.
+Open `docs/Build_10132026.1724_Conflicts.html` for the current HTML report. Earlier reports remain as build history. It describes the empty-scene format change, time quantization, name collisions, camera safeguards, fixes found during testing, and GitHub publication status.
 
 Individual panel moves involving a scene with camera keys remain blocked to avoid changing its scene camera timing silently. Whole-scene reorder preserves its keys. Reducing duration so a key would fall outside the scene is also blocked. Camera authoring/retiming UI is a later milestone.
 

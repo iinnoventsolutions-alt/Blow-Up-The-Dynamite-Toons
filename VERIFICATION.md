@@ -1,3 +1,12 @@
+## Build 10132026.1724 · Drawing adjustments
+
+- Production build and all 26 model/filesystem tests pass.
+- Targeted browser regression compares selection bounds with rendered glyph pixels for Arial, Georgia and Verdana, including multiline, bold/italic, tracking/indent, alignment, rotation, resize and save/reopen.
+- Drawing-strip Duplicate/Delete/confirmation/Undo are verified.
+- Camera endpoint dragging on later/duplicated panels preserves unique IDs and correct key times.
+- Previous four browser workflows plus the new adjustment workflow pass; visual text-bound screenshot reviewed.
+- Schema remains 2; no unrelated workflow changes. Existing camera safeguards and native Mac/tablet validation limits remain.
+
 ## Build 10132026.1629 · Drawing tools milestone
 
 - Production build and all 25 model/filesystem tests pass.

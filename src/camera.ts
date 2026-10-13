@@ -9,7 +9,9 @@ export function cameraCorners(pose: CameraPose, project: Project): [number, numb
 export function putCameraKey(scene: Scene, project: Project, frame: number, values: Partial<CameraPose & Pick<CameraKey, 'interpolation'>> = {}) {
   if (!Number.isInteger(frame) || frame < 0 || frame >= sceneFrames(scene)) throw new Error('Camera key must be inside the scene.');
   const existing = scene.camera.find(k => k.frame === frame);
-  const key = { ...(existing || { ...cameraAt(scene, frame, project), id: uid(), frame, interpolation: 'linear' as const }), ...values };
+  const pose = cameraAt(scene, frame, project);
+  // Poses may originate from an endpoint key; never copy its ID or frame.
+  const key: CameraKey = { id: existing?.id || uid(), frame, x: values.x ?? pose.x, y: values.y ?? pose.y, zoom: values.zoom ?? pose.zoom, rotation: values.rotation ?? pose.rotation, interpolation: values.interpolation ?? existing?.interpolation ?? 'linear' };
   if (existing) Object.assign(existing, key); else scene.camera.push(key);
   scene.camera.sort((a, b) => a.frame - b.frame);
   return key;

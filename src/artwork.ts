@@ -11,7 +11,23 @@ export function contourFromPoints(points: Point[], size: number, startCap='round
  const cap=(p:Point,angle:number)=>Array.from({length:8},(_,i)=>[p[0]+Math.cos(angle+i*Math.PI/8)*size*p[2]/2,p[1]+Math.sin(angle+i*Math.PI/8)*size*p[2]/2,1] as Point);
  const a=points[0],b=points[1],z=points.at(-1)!,y=points.at(-2)!,startAngle=Math.atan2(b[1]-a[1],b[0]-a[0]),endAngle=Math.atan2(z[1]-y[1],z[0]-y[0]);if(startCap==='square')for(const list of [left,right]){list[0][0]-=Math.cos(startAngle)*size*a[2]/2;list[0][1]-=Math.sin(startAngle)*size*a[2]/2;}if(endCap==='square')for(const list of [left,right]){list[list.length-1][0]+=Math.cos(endAngle)*size*z[2]/2;list[list.length-1][1]+=Math.sin(endAngle)*size*z[2]/2;}return [...left,...(endCap==='round'?cap(z,endAngle+Math.PI/2):[]),...right.reverse(),...(startCap==='round'?cap(a,startAngle-Math.PI/2):[])];
 }
+export const textFont = (s:Stroke) => `${s.italic?'italic ':''}${s.bold?'bold ':''}${s.fontSize||48}px "${(s.font||'Arial').replace(/["\\]/g,'')}"`;
+let textMeasure:CanvasRenderingContext2D|null=null;
+export function textLocalBounds(stroke:Stroke) {
+ const [a,b]=stroke.points,scale=stroke.textScaleX||1,fontSize=stroke.fontSize||48,width=Math.abs(b[0]-a[0])/scale,height=Math.abs(b[1]-a[1]),anchor=stroke.align==='center'?width/2:stroke.align==='right'?width:0;
+ if(typeof document!=='undefined')textMeasure ||= document.createElement('canvas').getContext('2d');
+ const ctx=textMeasure;if(ctx){ctx.font=textFont(stroke);ctx.fontKerning=stroke.autoKern===false?'none':'auto';ctx.textBaseline='top';ctx.textAlign='left';}
+ let minX=0,minY=0,maxX=width,maxY=height;
+ (stroke.text||'').split('\n').forEach((line,row)=>{
+  const chars=[...line],tracking=stroke.tracking||0,advance=ctx?(tracking?chars.reduce((n,c)=>n+ctx.measureText(c).width,0)+Math.max(0,chars.length-1)*tracking:ctx.measureText(line).width):chars.length*fontSize*.65+Math.max(0,chars.length-1)*tracking;
+  let x=anchor+(row===0?(stroke.indent||0):0)-(stroke.align==='center'?advance/2:stroke.align==='right'?advance:0);const y=row*fontSize*(stroke.lineSpacing||1.2);
+  const measure=(text:string)=>{const m=ctx?.measureText(text);minX=Math.min(minX,x-(m?.actualBoundingBoxLeft||0));maxX=Math.max(maxX,x+(m?.actualBoundingBoxRight??text.length*fontSize*.65));minY=Math.min(minY,y-(m?.actualBoundingBoxAscent||0));maxY=Math.max(maxY,y+(m?.actualBoundingBoxDescent??fontSize));};
+  if(tracking){for(const c of chars){measure(c);x+=(ctx?.measureText(c).width??fontSize*.65)+tracking;}}else measure(line);
+ });
+ return {x:minX*scale-3,y:minY-3,width:(maxX-minX)*scale+6,height:maxY-minY+6};
+}
 export function bounds(stroke: Stroke) {
+ if(stroke.tool==='text'){const b=textLocalBounds(stroke),a=stroke.points[0],angle=(stroke.rotation||0)*Math.PI/180,points=[[b.x,b.y],[b.x+b.width,b.y],[b.x+b.width,b.y+b.height],[b.x,b.y+b.height]].map(([x,y])=>[a[0]+x*Math.cos(angle)-y*Math.sin(angle),a[1]+x*Math.sin(angle)+y*Math.cos(angle)]);const xs=points.map(p=>p[0]),ys=points.map(p=>p[1]);return {x:Math.min(...xs),y:Math.min(...ys),width:Math.max(...xs)-Math.min(...xs),height:Math.max(...ys)-Math.min(...ys)};}
  let points=stroke.contours?.flat()||stroke.outline||stroke.points, pad=['brush','pencil','eraser','shape'].includes(stroke.tool)&&!stroke.contours?stroke.size/2:0;
  if(['text','image'].includes(stroke.tool)&&stroke.rotation){const [a,b]=stroke.points,angle=stroke.rotation*Math.PI/180;points=[[0,0],[b[0]-a[0],0],[b[0]-a[0],b[1]-a[1]],[0,b[1]-a[1]]].map(([x,y])=>[a[0]+x*Math.cos(angle)-y*Math.sin(angle),a[1]+x*Math.sin(angle)+y*Math.cos(angle),1]);}
  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;for(const p of points){minX=Math.min(minX,p[0]);minY=Math.min(minY,p[1]);maxX=Math.max(maxX,p[0]);maxY=Math.max(maxY,p[1]);}return {x:minX-pad,y:minY-pad,width:Math.max(1,maxX-minX+2*pad),height:Math.max(1,maxY-minY+2*pad)};
