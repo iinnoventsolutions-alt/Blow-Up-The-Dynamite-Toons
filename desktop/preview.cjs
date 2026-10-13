@@ -3,6 +3,10 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const root = path.resolve(__dirname, '../dist');
+if (!require('node:fs').existsSync(path.join(root, 'index.html'))) {
+  console.error('Preview files are missing. Run Launch-Preview.command, or run npm ci and npm run build first.');
+  process.exit(1);
+}
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.jpg': 'image/jpeg', '.png': 'image/png', '.json': 'application/json', '.svg': 'image/svg+xml', '.issb': 'application/json' };
 const server = http.createServer(async (request, response) => {
   try {

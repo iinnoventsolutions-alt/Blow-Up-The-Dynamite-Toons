@@ -2,23 +2,23 @@
 
 **Version 1 · Build 10122026.1627**
 
-This developer package includes the updated source, a prebuilt browser preview, a sample project, tests, and this startup guide. It is not yet a signed/notarized Mac installer.
+The GitHub download includes source, a sample project, tests, and this startup guide. The separately supplied developer ZIP also includes a prebuilt browser preview. It is not yet a signed/notarized Mac installer.
 
 ## Quick start: run the included preview
 
 1. Unzip the package.
 2. Install Node.js 24 LTS from https://nodejs.org if it is not already installed.
-3. Double-click `Launch-Preview.command` on your Mac.
+3. Double-click `Launch-Preview.command` on your Mac. For a GitHub source download, it installs dependencies and builds the preview on first launch; this requires internet access.
 4. Keep its Terminal window open while using the app. The local preview opens in your browser.
 5. Use **Open** and choose `examples/Welcome.issb` to try the sample storyboard.
 
 If double-click does not work, open Terminal in the unzipped folder and run:
 
 ```bash
-node desktop/preview.cjs
+bash Launch-Preview.command
 ```
 
-The preview requires no npm dependency installation and no account or activation. Its local address is http://127.0.0.1:4317. Close the previous preview before launching another copy. To stop it, press Control+C in Terminal.
+The prebuilt ZIP preview requires no npm dependency installation. A GitHub source download needs a one-time dependency installation and build, handled by the launcher. No account or activation is required. Its local address is http://127.0.0.1:4317. Close the previous preview before launching another copy. To stop it, press Control+C in Terminal.
 
 Preview Save downloads an `.issb` file. Open imports that file. Recent projects and recovery snapshots use browser storage, whose quota can vary; downloaded project files are the durable copies.
 
