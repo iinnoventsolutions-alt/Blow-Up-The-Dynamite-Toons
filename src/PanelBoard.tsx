@@ -29,24 +29,27 @@ export default function PanelBoard({ project, view, activeId, selectedIds, onSel
   const toggle = (id: string, checked: boolean) => onSelection(checked ? [...new Set([...selectedIds, id])] : selectedIds.filter(p => p !== id));
   const sceneMarker = (beforeId: string | null) => <div className={`scene-drop-marker ${cue?.kind === 'scene' && cue.beforeId === beforeId ? 'active' : ''}`} onDragOver={e => sceneCue(e, beforeId)} onDrop={drop} aria-label={`Insert scene ${beforeId ? 'before this scene' : 'at end'}`} />;
   const slot = (s: Scene, beforeId: string | null) => <div className={`panel-drop-slot ${cue?.kind === 'panels' && cue.sceneId === s.id && cue.beforeId === beforeId ? 'active' : ''}`} data-scene-id={s.id} data-before-panel={beforeId || 'end'} aria-label={`Insert panels ${beforeId ? `before ${s.panels.find(p => p.id === beforeId)?.name}` : 'at end'} in ${s.name}`} onDragOver={e => panelCue(e, s, beforeId)} onDrop={drop}><span>Insert here</span></div>;
-  return <div className={`${grid ? 'panel-overview' : 'filmstrip-scroll drawing-filmstrip'} ${dragging?.kind === 'scene' ? 'dragging-scenes' : ''}`} onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setCue(null); }}>
-    {project.scenes.map((s, sceneIndex) => <section className={grid ? 'scene-grid' : 'film-scene'} key={s.id} data-scene-id={s.id}>
-      {sceneMarker(s.id)}
-      <div className={grid ? 'scene-title' : 'film-scene-title'} onDragOver={e => { if (dragRef.current?.kind === 'scene') sceneCue(e, s.id); else panelCue(e, s, s.panels[0]?.id || null); }} onDrop={drop}>
+  const sceneHeading = (s: Scene, sceneIndex: number) => (<div className={grid ? 'scene-title' : 'film-scene-title'} onDragOver={e => { if (dragRef.current?.kind === 'scene') sceneCue(e, s.id); else panelCue(e, s, s.panels[0]?.id || null); }} onDrop={drop}>
         <button className="scene-drag-handle" draggable onDragStart={e => begin(e, { kind: 'scene', id: s.id })} onDragEnd={end} title={`Drag scene ${s.name}`} aria-label={`Drag scene ${s.name}`}>⠿</button><h2>{s.name}</h2><span>{s.panels.length} panels · {timecode(sceneFrames(s), project.fps)}</span>
         <button className="scene-order-button" disabled={sceneIndex === 0} title={`Move scene ${s.name} earlier`} onClick={() => onMoveScene(s.id, project.scenes[sceneIndex - 1].id)}>←</button>
         <button className="scene-order-button" disabled={sceneIndex === project.scenes.length - 1} title={`Move scene ${s.name} later`} onClick={() => onMoveScene(s.id, project.scenes[sceneIndex + 2]?.id || null)}>→</button>
-      </div>
+      </div>);
+  return <div className={`${grid ? 'panel-overview continuous-panels' : 'filmstrip-scroll drawing-filmstrip'} ${dragging?.kind === 'scene' ? 'dragging-scenes' : ''}`} onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setCue(null); }}>
+    {project.scenes.map((s, sceneIndex) => <section className={`${grid ? 'scene-grid' : 'film-scene'} ${project.scenes.length > 1 && sceneIndex % 2 === 1 ? 'scene-shaded' : ''}`} key={s.id} data-scene-id={s.id}>
+      {sceneMarker(s.id)}
+      {!grid && sceneHeading(s, sceneIndex)}
       <div className={grid ? 'panel-grid reorder-grid' : 'film-scene-panels'}>
         {s.panels.map((p, index) => <div className="panel-position" key={p.id}>
+          {grid && index === 0 && sceneHeading(s, sceneIndex)}
           {slot(s, p.id)}
           <article data-panel-id={p.id} title={`${s.name} / ${p.name} · Position ${index + 1}`} className={`panel-card ${activeId === p.id ? 'selected' : ''} ${grid ? 'grid-card' : ''} ${grid && selectedIds.includes(p.id) ? 'batch-selected' : ''} ${dragging?.kind === 'panels' && dragging.ids.includes(p.id) ? 'being-dragged' : ''}`} draggable onDragStart={e => { if ((e.target as HTMLElement).closest('.mini-layers, input')) { e.preventDefault(); return; } begin(e, { kind: 'panels', ids: grid && selectedIds.includes(p.id) ? allPanels(project).map(p => p.panel.id).filter(id => selectedIds.includes(id)) : [p.id] }); }} onDragEnd={end} onDragOver={e => { const rect = e.currentTarget.getBoundingClientRect(); panelCue(e, s, e.clientX < rect.left + rect.width / 2 ? p.id : s.panels[index + 1]?.id || null); }} onDrop={drop}>
             {grid && <label className="panel-batch-checkbox"><input type="checkbox" aria-label={`Select ${s.name} / ${p.name} for move`} checked={selectedIds.includes(p.id)} onChange={e => toggle(p.id, e.target.checked)} /></label>}
             <button className="panel-image-button" onClick={e => { if (grid && (e.ctrlKey || e.metaKey)) toggle(p.id, !selectedIds.includes(p.id)); else if (grid && e.shiftKey) { const ids = allPanels(project).map(p => p.panel.id), a = ids.indexOf(activeId), b = ids.indexOf(p.id); onSelection(ids.slice(Math.min(Math.max(a, 0), b), Math.max(a, b) + 1)); } onSelect(p.id); }} aria-label={`Select ${s.name}, ${p.name}`}><div className="panel-card-meta"><span>{s.name} / {p.name}</span><span>{timecode(p.duration, project.fps)}</span></div><Thumbnail panel={p} project={project} /></button>
             {renderLayers(p)}
           </article>
+          {grid && index === s.panels.length - 1 && <div className="continuous-scene-end" onDragOver={e => panelCue(e, s, null)} onDrop={drop} aria-label={`Move panels to end of ${s.name}`}>{slot(s, null)}</div>}
         </div>)}
-        <div className={`scene-end-drop ${s.panels.length === 0 ? 'empty-scene' : ''}`} onDragOver={e => panelCue(e, s, null)} onDrop={drop} aria-label={`Move panels to end of ${s.name}`}>{slot(s, null)}<span>{s.panels.length ? '+' : 'Drop panels here'}</span></div>
+        <div className={`scene-end-drop ${s.panels.length === 0 ? 'empty-scene' : ''}`} style={grid && s.panels.length ? { display: 'none' } : undefined} onDragOver={e => panelCue(e, s, null)} onDrop={drop} aria-label={`Move panels to end of ${s.name}`}>{grid && !s.panels.length && sceneHeading(s, sceneIndex)}{slot(s, null)}<span>{s.panels.length ? '+' : 'Drop panels here'}</span></div>
       </div>
     </section>)}
     <div className={`storyboard-end-drop ${dragging?.kind === 'scene' ? 'visible' : ''}`} onDragOver={e => sceneCue(e, null)} onDrop={drop}>{sceneMarker(null)}<span>Move scene to end</span></div>
