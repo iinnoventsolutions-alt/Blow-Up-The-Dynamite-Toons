@@ -1,6 +1,6 @@
 # Innovent Professional Storyboard
 
-**Version 1 · Build 10122026.1627**
+**Version 1 · Build 10122026.2044**
 
 The GitHub download includes source, a sample project, tests, and this startup guide. The separately supplied developer ZIP also includes a prebuilt browser preview. It is not yet a signed/notarized Mac installer.
 
@@ -37,7 +37,13 @@ The first installation downloads dependencies and Electron. Application operatio
 
 The current Electron runtime minimum is documented at https://www.electronjs.org/docs/latest/breaking-changes. Mac signing, notarization, and installer verification remain release tasks.
 
-## What changed in this build
+## Build 10122026.2044 changes
+
+- Drawing and Panel views shade every second scene group (2, 4, 6, …), based on current scene order.
+- Timeline uses its existing timing controls and tracks at the bottom, without a duplicate panel strip. The stage expands into the freed space.
+- Version remains 1. All other functionality is unchanged.
+
+## Earlier Build 10122026.1627 changes
 
 - Product name: **Innovent Professional Storyboard**.
 - Display version: **Version 1**. Build: **10122026.1627**.

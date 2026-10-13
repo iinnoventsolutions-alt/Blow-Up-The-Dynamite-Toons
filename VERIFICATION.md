@@ -1,3 +1,10 @@
+## Build 10122026.2044
+
+- Production build and all 14 model/filesystem tests pass.
+- Browser acceptance workflow passes, including alternating Drawing/Panel scene backdrops, no Timeline filmstrip, a larger Timeline stage, and controls fitting at 1500×1000 and 1100×740.
+- Existing panel/scene moves, duration resize, fixed thumbnail sizes, playback, scrubbing, undo, preferences, and save remain verified.
+- No new feature conflicts found. Native Mac validation remains outstanding.
+
 # Version 1 · Build 10122026.1627 verification
 
 Date: October 12, 2026.
