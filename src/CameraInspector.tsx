@@ -1,0 +1,20 @@
+import { useEffect, useState } from 'react';
+import { cameraAt, sceneFrames, timecode, type CameraKey, type Project, type Scene } from './model';
+function NumberField({ label, value, min, max, step = 'any', onChange }: { label: string; value: number; min: number; max: number; step?: string; onChange: (n: number) => void }) {
+  const display = String(Number(value.toFixed(4)));
+  const [text, setText] = useState(display); useEffect(()=>setText(display),[display]);
+  return <label className="field"><span>{label}</span><input aria-label={label} type="number" value={text} min={min} max={max} step={step} onChange={e=>setText(e.target.value)} onBlur={()=>{const n=Number(text);if(text !== display && text.trim() && Number.isFinite(n) && n>=min && n<=max && (step !== '1' || Number.isInteger(n))) onChange(n);setText(display);}} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}}/></label>;
+}
+export default function CameraInspector({ project, scene, frame, onSeek, onEdit, onKeyFrame, onDelete, onSetup, onClear, onExport }: { project: Project; scene: Scene; frame: number; onSeek: (n: number)=>void; onEdit: (values: Partial<CameraKey>)=>void; onKeyFrame: (id: string, frame: number)=>void; onDelete: ()=>void; onSetup: ()=>void; onClear: ()=>void; onExport: (mode: 'camera' | 'overlay')=>void }) {
+  const key=scene.camera.find(k=>k.frame===frame), segment=[...scene.camera].sort((a,b)=>a.frame-b.frame).filter(k=>k.frame<=frame).at(-1), pose=cameraAt(scene,frame,project), total=sceneFrames(scene), keys=[...scene.camera].sort((a,b)=>a.frame-b.frame);
+  return <section className="camera-inspector"><h3>Camera · {scene.name}</h3><p className="camera-help">Green IN / red OUT show this panel’s start and end. Camera keys belong to the scene.</p><label className="field"><span>Scene camera time · {timecode(frame,project.fps)}</span><input aria-label="Scene camera time" type="range" min="0" max={total-1} value={frame} onChange={e=>onSeek(Number(e.target.value))}/></label>
+    <div className="camera-buttons"><button onClick={onSetup}>Set scene IN / OUT</button><button onClick={()=>onEdit({})}>Add / update key</button></div>
+    <div className="camera-key-list" aria-label="Camera keyframes">{keys.map((k,i)=><button key={k.id} className={k.frame===frame?'active':''} onClick={()=>onSeek(k.frame)} aria-label={`Camera key at ${timecode(k.frame,project.fps)}`}><span style={{color:i===0?'#32c85b':i===keys.length-1?'#ef4d50':'#ff922c'}}>◆</span> {timecode(k.frame,project.fps)}</button>)}</div>
+    {key && <NumberField label="Key frame (scene)" value={key.frame} min={0} max={total-1} step="1" onChange={n=>onKeyFrame(key.id,n)}/>}
+    <div className="camera-numbers"><NumberField label="Camera X" value={pose.x} min={-8192} max={16384} onChange={x=>onEdit({x})}/><NumberField label="Camera Y" value={pose.y} min={-8192} max={16384} onChange={y=>onEdit({y})}/><NumberField label="Camera zoom" value={pose.zoom} min={.01} max={100} onChange={zoom=>onEdit({zoom})}/><NumberField label="Camera rotation" value={pose.rotation} min={-36000} max={36000} onChange={rotation=>onEdit({rotation})}/></div>
+    <label className="field"><span>Move to next key</span><select aria-label="Camera interpolation" value={key?.interpolation || segment?.interpolation || 'linear'} onChange={e=>onEdit({interpolation:e.target.value as CameraKey['interpolation']})}><option value="linear">Linear</option><option value="ease">Ease in / out</option><option value="hold">Hold</option></select></label>
+    <div className="camera-buttons"><button disabled={!key} onClick={onDelete}>Delete key</button><button disabled={!keys.length} onClick={onClear}>Clear scene camera</button></div>
+    <div className="camera-buttons"><button onClick={()=>onEdit({x:project.width/2,y:project.height/2,zoom:1,rotation:0})}>Reset current pose</button><button onClick={()=>onExport('camera')}>Export camera PNG</button><button onClick={()=>onExport('overlay')}>Export overlay PNG</button></div>
+    <small>Drag frame centers to pan; drag corner squares to zoom with the Camera tool. Rotation is set above. Changes create a key at the current scene time.</small>
+  </section>;
+}

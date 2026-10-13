@@ -1,6 +1,6 @@
 # Innovent Professional Storyboard
 
-**Version 1 · Build 10132026.1234**
+**Version 1 · Build 10132026.1302**
 
 The GitHub download includes source, a sample project, tests, and this startup guide. The separately supplied developer ZIP also includes a prebuilt browser preview. It is not yet a signed/notarized Mac installer.
 
@@ -36,6 +36,23 @@ npm run desktop
 The first installation downloads dependencies and Electron. Application operation is offline after installation. The Electron shell implements native Save/Open, File/Edit menus, recent files, recovery, and unsaved-close prompts. Those native interactions still need testing on a Mac. The shared model, filesystem persistence, and browser interface have automated checks.
 
 The current Electron runtime minimum is documented at https://www.electronjs.org/docs/latest/breaking-changes. Mac signing, notarization, and installer verification remain release tasks.
+
+## Build 10132026.1302 · Camera milestone
+
+The Camera tool (`C`, or the camera icon in the tool rail) edits scene-owned keyframes. Expand **Camera controls** in the inspector from any workspace.
+
+1. Open `examples/Camera_Demo.issb` to try a complete move, or choose **Set scene IN / OUT** to create keys at the first and last scene frames. Existing keys remain intact.
+2. Click a key time or scrub **Scene camera time**. Edit Camera X/Y (project pixels), zoom (1 = full project frame), rotation (degrees), and Linear / Ease in-out / Hold interpolation to the next key. Editing a pose between keys creates a new key there.
+3. With the Camera tool in Drawing view, drag a green IN or red OUT center to pan. Drag its corner squares toward the center to zoom in or away to zoom out. Escape cancels a drag; each completed drag is one undo step. The frames show the active panel’s first/last camera poses, including moves that span panels. The dashed orange frame shows the current pose.
+4. Use **Add / update key**, **Key frame (scene)**, **Delete key**, **Reset current pose**, and **Clear scene camera** to refine the move. All frame numbers are zero-based within the scene. Clearing keys requires confirmation and can be undone.
+5. Timeline’s camera lane shows key diamonds; click one to seek. Timeline and Pitch playback show the actual camera view with matching pan, zoom and rotation. Drawing/Panel thumbnails retain artwork with movement overlays.
+6. **Export camera PNG** exports the current camera view; **Export overlay PNG** includes panel IN/OUT frames and movement arrows. The existing toolbar PNG export remains a clean artwork export. PDF template exports follow in their milestone.
+
+Camera transforms never change drawing layers or stroke coordinates. Keys save in `.issb` files, recovery snapshots, and undo/redo using the existing project format. A scene without keys uses the original full-frame view.
+
+Changing panel duration scales keys inside that panel and shifts keys in later panels. If shrinking would merge keys onto one frame, the edit is rejected with a message; move/delete a key first. Duplicating a panel copies its artwork and shifts later keys to preserve their position relative to subsequent panels; it does not duplicate the scene camera track. Appending a panel holds the final authored pose until another key is added.
+
+Individual panel transfers involving camera-keyed scenes and panel deletion within those scenes remain guarded. Clear keys first, or move the whole scene to preserve its track. This build implements 2D camera transforms; audio, 3D camera depth, and PDF templates remain later milestones. See `docs/Build_10132026.1302_Conflicts.html` for conflicts and verification.
 
 ## Build 10132026.1234 changes
 
@@ -103,7 +120,7 @@ This updates display metadata, package metadata, and the lockfile together. Ordi
 
 ## Conflicts and safeguards
 
-Open `docs/Build_10122026.1627_Conflicts.html` for the HTML report. It describes the empty-scene format change, time quantization, name collisions, camera safeguards, fixes found during testing, and GitHub publication status.
+Open `docs/Build_10132026.1302_Conflicts.html` for the current HTML report. Earlier reports remain as build history. It describes the empty-scene format change, time quantization, name collisions, camera safeguards, fixes found during testing, and GitHub publication status.
 
 Individual panel moves involving a scene with camera keys remain blocked to avoid changing its scene camera timing silently. Whole-scene reorder preserves its keys. Reducing duration so a key would fall outside the scene is also blocked. Camera authoring/retiming UI is a later milestone.
 
@@ -147,7 +164,7 @@ Test screenshots are internal QA artifacts under `test-results` and are excluded
 
 Target: https://github.com/iinnoventsolutions-alt/IInovent-Storyboard-Pro
 
-Version 1 Build 10122026.1627 is published to this repository through the authenticated GitHub connection. The existing initial commit is preserved. Command-line Git on another computer requires its own authentication.
+Development builds are published to Working through the authenticated GitHub connection. The existing initial commit is preserved. Command-line Git on another computer requires its own authentication.
 For publishing, the connected GitHub account/app must have access to this exact repository and permission to write its contents. Protected branches can require a build branch and pull request instead of direct main-branch pushes. Commit attribution uses a configured name/email; authentication is separate from attribution. Never paste tokens into this chat or commit credentials into source.
 
 On your own computer, GitHub CLI (`gh auth login`) or Git Credential Manager can authenticate Git without embedding credentials in commands. Useful primary documentation:

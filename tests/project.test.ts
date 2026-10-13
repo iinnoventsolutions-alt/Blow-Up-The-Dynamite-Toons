@@ -35,12 +35,13 @@ test('panel duplication creates fresh IDs at every editable level', () => {
   assert.notEqual(copy.layers[0].strokes[0].id, panel.layers[0].strokes[0].id);
   p.scenes[0].panels.push(copy); assert.doesNotThrow(() => serializeProject(p));
 });
-test('scene camera interpolation spans a panel boundary, and unsafe duration edits fail', () => {
+test('scene camera interpolation spans a panel boundary, and duration edits retime downstream keys', () => {
   const p = makeProject(); const s = p.scenes[0]; s.panels.push(makePanel());
   s.camera = [{ id: uid(), frame: 0, x: 0, y: 0, zoom: 1, rotation: 0, interpolation: 'linear' }, { id: uid(), frame: 239, x: 239, y: 100, zoom: 2, rotation: 10, interpolation: 'linear' }];
   assert.equal(cameraAt(s, 120, p).x, 120);
-  assert.throws(() => changeDuration(s, s.panels[0], 1), /beyond the scene/);
-  assert.equal(s.panels[0].duration, 120);
+  changeDuration(s, s.panels[0], 1);
+  assert.equal(s.panels[0].duration, 1); assert.equal(s.camera[1].frame, 120);
+  assert.doesNotThrow(()=>serializeProject(p));
 });
 test('invalid/future documents, duplicate IDs and injected image URLs are rejected', () => {
   const p = makeProject(); assert.throws(() => parseProject('{bad'), /valid JSON/);

@@ -1,3 +1,12 @@
+## Build 10132026.1302 · Camera milestone
+
+- Production build and all 19 model/filesystem tests pass.
+- Camera browser acceptance covers scene IN/OUT setup, numeric pan/zoom/rotation, center and corner dragging, Escape cancellation, key retiming and collision rejection, undo/redo, thumbnail overlays, Timeline/Pitch camera rendering and playback, duration retiming, PNG export, save/reopen, and key deletion/clear.
+- Earlier drawing regression and Build 1/layout browser acceptance pass, including continuous Panel rows, alternating scene colors and the dedicated Timeline layout.
+- Visual review of Drawing, Panel and Timeline screenshots completed.
+- Existing individual panel moves/deletion within camera-keyed scenes remain guarded. Duration changes reject key collisions. See the HTML report.
+- Native Mac validation remains outstanding. Publish branch: Working; main is unchanged.
+
 ## Build 10132026.1234
 
 - Production build and all 14 model/filesystem tests pass.

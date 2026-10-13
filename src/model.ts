@@ -85,8 +85,11 @@ export function duplicatePanel(panel: Panel): Panel {
 }
 export function changeDuration(scene: Scene, panel: Panel, duration: number) {
   if (!Number.isInteger(duration) || duration < 1) throw new Error('Duration must be a positive whole number of frames.');
-  const nextTotal = sceneFrames(scene) - panel.duration + duration;
-  if (scene.camera.some(k => k.frame >= nextTotal)) throw new Error('This duration would leave a camera key beyond the scene. Move the key first.');
+  let start=0; for (const p of scene.panels) { if(p.id===panel.id)break;start+=p.duration; }
+  const delta=duration-panel.duration, end=start+panel.duration;
+  const frames=scene.camera.map(k=>k.frame<start?k.frame:k.frame>=end?k.frame+delta:start+Math.round((k.frame-start)/Math.max(1,panel.duration-1)*(duration-1)));
+  if(new Set(frames).size!==frames.length)throw new Error('Shortening this panel would merge camera keys. Move or delete a key first.');
+  scene.camera.forEach((k,i)=>{k.frame=frames[i];});
   panel.duration = duration;
 }
 export type History = { past: Project[]; present: Project; future: Project[] };
@@ -110,7 +113,7 @@ export function cameraAt(scene: Scene, frame: number, project: Project) {
   let a = keys[0], b = keys[keys.length - 1];
   if (frame <= a.frame) return a;
   if (frame >= b.frame) return b;
-  for (let i = 1; i < keys.length; i++) { if (keys[i].frame >= frame) { a = keys[i - 1]; b = keys[i]; break; } }
+  for (let i = 1; i < keys.length; i++) { if (keys[i].frame === frame) return keys[i]; if (keys[i].frame >= frame) { a = keys[i - 1]; b = keys[i]; break; } }
   let t = (frame - a.frame) / (b.frame - a.frame);
   if (a.interpolation === 'hold') t = 0;
   if (a.interpolation === 'ease') t = t * t * (3 - 2 * t);

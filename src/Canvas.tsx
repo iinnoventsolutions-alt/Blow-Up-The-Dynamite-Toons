@@ -1,14 +1,17 @@
+import CameraOverlay from './CameraOverlay';
+import { sceneStart, type CameraPose } from './camera';
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent } from 'react';
-import { uid, type Panel, type Project, type Stroke, type Point } from './model';
+import { uid, cameraAt, findPanel, type Panel, type Project, type Stroke, type Point } from './model';
 import { canDraw, drawPanel, preloadImages } from './render';
-export type Tool = 'brush' | 'eraser' | 'hand';
-export function Thumbnail({ panel, project }: { panel: Panel; project: Project }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => { let active = true; preloadImages(panel).then(() => { if (active && ref.current) drawPanel(ref.current, panel, project, { width: 320 }); }).catch(() => {}); return () => { active = false; }; }, [panel, project.width, project.height]);
-  return <canvas ref={ref} aria-label={`${panel.name} drawing preview`} />;
+export type Tool = 'brush' | 'eraser' | 'hand' | 'camera';
+export function Thumbnail({ panel, project, frame, cameraView = false }: { panel: Panel; project: Project; frame?: number; cameraView?: boolean }) {
+  const ref = useRef<HTMLCanvasElement>(null), scene = findPanel(project, panel.id)!.scene;
+  const localFrame = Math.max(0, Math.min(scene.panels.reduce((n,p)=>n+p.duration,0)-1, (frame ?? 0) - sceneStart(project,scene)));
+  useEffect(() => { let active = true; preloadImages(panel).then(() => { if (active && ref.current) drawPanel(ref.current, panel, project, { width: cameraView ? Math.min(project.width,1920) : 320, camera: cameraView ? cameraAt(scene,localFrame,project) : undefined }); }).catch(() => {}); return () => { active = false; }; }, [panel, project.width, project.height, scene.camera, localFrame, cameraView]);
+  return <div className={`thumbnail ${cameraView ? 'camera-preview' : ''}`}><canvas ref={ref} aria-label={`${panel.name} drawing preview`} />{!cameraView && scene.camera.length > 0 && <CameraOverlay scene={scene} panel={panel} project={project}/>}</div>;
 }
-export function DrawingCanvas({ panel, project, layerId, tool, color, size, zoom, guides, onStroke, onError }: { panel: Panel; project: Project; layerId: string; tool: Tool; color: string; size: number; zoom: number; guides: boolean; onStroke: (stroke: Stroke) => void; onError: (message: string) => void }) {
+export function DrawingCanvas({ panel, project, layerId, tool, color, size, zoom, guides, cameraFrame, onCameraChange, onStroke, onError }: { panel: Panel; project: Project; layerId: string; tool: Tool; color: string; size: number; zoom: number; guides: boolean; cameraFrame: number; onCameraChange: (frame: number, pose: CameraPose) => void; onStroke: (stroke: Stroke) => void; onError: (message: string) => void }) {
   const canvas = useRef<HTMLCanvasElement>(null), live = useRef<Stroke | null>(null), paintFrame = useRef(0);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const panStart = useRef<{ x: number; y: number; originX: number; originY: number } | null>(null);
@@ -18,11 +21,11 @@ export function DrawingCanvas({ panel, project, layerId, tool, color, size, zoom
   useEffect(() => { setPan({ x: 0, y: 0 }); }, [panel.id]);
   const point = (e: PointerEvent<HTMLCanvasElement>): Point => { const rect = e.currentTarget.getBoundingClientRect(); return [(e.clientX - rect.left) / rect.width * project.width, (e.clientY - rect.top) / rect.height * project.height, e.pointerType === 'pen' ? e.pressure || 0.1 : 1]; };
   const start = (e: PointerEvent<HTMLCanvasElement>) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || tool === 'camera') return;
     e.currentTarget.setPointerCapture(e.pointerId);
     if (tool === 'hand') { panStart.current = { x: e.clientX, y: e.clientY, originX: pan.x, originY: pan.y }; return; }
     if (!canDraw(layer)) { onError('Select a visible, unlocked layer to draw.'); return; }
-    live.current = { id: uid(), tool, color, size, points: [point(e)] }; draw();
+    live.current = { id: uid(), tool: tool === 'eraser' ? 'eraser' : 'brush', color, size, points: [point(e)] }; draw();
   };
   const move = (e: PointerEvent<HTMLCanvasElement>) => {
     if (panStart.current) { setPan({ x: panStart.current.originX + e.clientX - panStart.current.x, y: panStart.current.originY + e.clientY - panStart.current.y }); return; }
@@ -35,6 +38,7 @@ export function DrawingCanvas({ panel, project, layerId, tool, color, size, zoom
   const cancel = () => { live.current = null; panStart.current = null; cancelAnimationFrame(paintFrame.current); draw(); };
   return <div className="stage-area"><div className="stage-paper" style={{ aspectRatio: `${project.width}/${project.height}`, '--aspect': project.width / project.height, transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` } as CSSProperties}>
     <canvas ref={canvas} className={`drawing-surface tool-${tool}`} onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerCancel={cancel} onLostPointerCapture={() => { if (live.current) cancel(); }} aria-label="Drawing canvas" />
+    {(findPanel(project,panel.id)!.scene.camera.length > 0 || tool === 'camera') && <CameraOverlay scene={findPanel(project,panel.id)!.scene} panel={panel} project={project} frame={cameraFrame} editable={tool === 'camera'} onChange={onCameraChange}/>}
     {guides && <div className="safe-guide" aria-hidden="true"><span>Action safe · 10%</span></div>}
-  </div><span className="stage-hint">{tool === 'hand' ? 'Drag to pan · Fit resets zoom' : !canDraw(layer) ? 'Layer is hidden or locked' : `${tool === 'brush' ? 'Brush' : 'Eraser'} · ${size}px · ${layer?.name}`} </span></div>;
+  </div><span className="stage-hint">{tool === 'camera' ? 'Camera · Drag centers to pan and corner squares to zoom' : tool === 'hand' ? 'Drag to pan · Fit resets zoom' : !canDraw(layer) ? 'Layer is hidden or locked' : `${tool === 'brush' ? 'Brush' : 'Eraser'} · ${size}px · ${layer?.name}`} </span></div>;
 }
