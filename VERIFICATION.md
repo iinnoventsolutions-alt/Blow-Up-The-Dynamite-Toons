@@ -1,3 +1,13 @@
+## Build 10132026.1629 · Drawing tools milestone
+
+- Production build and all 25 model/filesystem tests pass.
+- New drawing-tool browser workflow verifies Brush contours, Pencil centerlines/textures, point edits, filled shapes, picker, selection resize/duplicate/delete, editable text, visible-layer scope/locks, Space panning, view rotation, vector bucket fill, Bitmap painting/selection/erasing and save/reopen.
+- Earlier drawing, layout/panel/timeline and camera browser workflows pass.
+- Visual review of Vector and Bitmap tool screenshots completed.
+- Schema 1 files upgrade in memory; schema 2 round-trip and malformed artwork rejection are tested.
+- Native Mac pen/tablet pressure, installer, signing and notarization remain unverified.
+- Working is the publication branch. See the current HTML report for format compatibility and Bitmap/fill limits.
+
 ## Build 10132026.1302 · Camera milestone
 
 - Production build and all 19 model/filesystem tests pass.

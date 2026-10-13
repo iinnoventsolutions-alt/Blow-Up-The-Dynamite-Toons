@@ -1,6 +1,6 @@
 # Innovent Professional Storyboard
 
-**Version 1 · Build 10132026.1302**
+**Version 1 · Build 10132026.1629**
 
 The GitHub download includes source, a sample project, tests, and this startup guide. The separately supplied developer ZIP also includes a prebuilt browser preview. It is not yet a signed/notarized Mac installer.
 
@@ -8,7 +8,7 @@ The GitHub download includes source, a sample project, tests, and this startup g
 
 1. Unzip the package.
 2. Install Node.js 24 LTS from https://nodejs.org if it is not already installed.
-3. Double-click `Launch-Preview.command` on your Mac. For a GitHub source download, it installs dependencies and builds the preview on first launch; this requires internet access.
+3. Double-click `Launch-Preview.command` on your Mac. For a GitHub source download, it installs dependencies and builds the preview on first launch; this requires internet access. The launcher also rebuilds when a new build number is detected.
 4. Keep its Terminal window open while using the app. The local preview opens in your browser.
 5. Use **Open** and choose `examples/Welcome.issb` to try the sample storyboard.
 
@@ -36,6 +36,28 @@ npm run desktop
 The first installation downloads dependencies and Electron. Application operation is offline after installation. The Electron shell implements native Save/Open, File/Edit menus, recent files, recovery, and unsaved-close prompts. Those native interactions still need testing on a Mac. The shared model, filesystem persistence, and browser interface have automated checks.
 
 The current Electron runtime minimum is documented at https://www.electronjs.org/docs/latest/breaking-changes. Mac signing, notarization, and installer verification remain release tasks.
+
+## Build 10132026.1629 · Drawing tools milestone
+
+Open `examples/Drawing_Tools_Demo.issb`. New layers are Vector by default; use **New layer type** in the Layers section to create Bitmap layers. **Flatten to Bitmap** rasterizes a Vector layer and can be undone. Imported images use Bitmap layers.
+
+- **Select (V):** Individual, Rectangle, or Lasso selection. **Selection scope** toggles Active layer / Visible unlocked layers. Shift adds to a selection. Drag the selection box to move, its four corners to resize, or the round handle to rotate. Shift constrains proportions. Duplicate/Delete artwork and Deselect are in properties; Delete/Backspace also removes selected artwork.
+- **Brush (B):** Stores filled, closed outlines on Vector layers. **Contour Editor** selects brush/fill contours and exposes edge points. Drag a point, double-click a segment to insert one, or Delete a selected point. Straight strokes are simplified while bends and pressure changes remain editable.
+- **Pencil (P):** Stores an editable centerline with width and pressure. **Pencil Editor** exposes the spine points. Its properties can change existing line width, color and texture with **Apply properties to selection**.
+- **Text (T):** Enter text in properties and click to place it. Click existing Vector text with the Text tool to load its settings; **Update selected text** applies edits. Select gives resize/rotation handles. Font, bold/italic, alignment, tracking, automatic kerning, indent and line spacing are available. Text on Bitmap layers flattens into pixels when placed.
+- **Eraser (E):** Size, pressure, minimum width, smoothing and cap controls. Erases only the active visible/unlocked layer. Vector erasing uses a mask stroke; Bitmap erasing updates pixel transparency.
+- **Paint Bucket (F):** Color tolerance, No/Small/Medium/Large gap closing, and Active/Visible fill reference. Fills go onto the active unlocked layer. On Vector layers they become editable contour regions; Bitmap layers flatten them. Gap closing affects the fill boundary and preserves source lines.
+- **Shape (U):** Rectangle, Ellipse, or Line with stroke width and optional fill color. Shift constrains squares/circles and line angles.
+- **Color Picker (I):** Samples the visible artwork. Color controls include opacity, HSV sliders, swatches and add/remove swatch actions.
+- **Hand (H):** Pan the drawing view. With any Drawing tool selected, **hold Space** to temporarily pan; releasing Space restores that tool. Space still controls playback in Timeline/Pitch.
+- **Rotate View (R):** Drag horizontally or use its rotation slider; **Fit** resets pan, zoom and view rotation. This changes the view, not the artwork.
+- **Select by Color:** Selects matching-color Vector objects in the chosen scope. Use ordinary Individual/Rectangle/Lasso selection for Bitmap pixels.
+
+Solid, Graphite and Chalk are built-in textures. Presets save tool settings on this device. Pencil textures remain procedural and can be changed on existing lines. Pressure is used when the pointing device supplies it; a mouse draws at full pressure. Native Mac pen/tablet hardware still needs testing.
+
+Bitmap edits and selections support project canvases up to 16 megapixels, including 4K. Bitmap selections transform pixel regions and flatten on commit; they have no vector control points. Bucket boundaries use a working grid up to 2048 pixels on the longest side, then convert into project-space contours. Text uses installed system fonts; custom font and custom texture import are not included in this build.
+
+**File compatibility:** This build saves schema 2 `.issb` projects and opens schema 1 files through an in-memory upgrade. Existing files are not modified until Save. Earlier builds cannot open newly saved schema 2 projects; preserve earlier files when testing. The application’s major version remains 1. See `docs/Build_10132026.1629_Conflicts.html` for safeguards and verification.
 
 ## Build 10132026.1302 · Camera milestone
 
@@ -120,7 +142,7 @@ This updates display metadata, package metadata, and the lockfile together. Ordi
 
 ## Conflicts and safeguards
 
-Open `docs/Build_10132026.1302_Conflicts.html` for the current HTML report. Earlier reports remain as build history. It describes the empty-scene format change, time quantization, name collisions, camera safeguards, fixes found during testing, and GitHub publication status.
+Open `docs/Build_10132026.1629_Conflicts.html` for the current HTML report. Earlier reports remain as build history. It describes the empty-scene format change, time quantization, name collisions, camera safeguards, fixes found during testing, and GitHub publication status.
 
 Individual panel moves involving a scene with camera keys remain blocked to avoid changing its scene camera timing silently. Whole-scene reorder preserves its keys. Reducing duration so a key would fall outside the scene is also blocked. Camera authoring/retiming UI is a later milestone.
 

@@ -1,17 +1,17 @@
 import { validateProject } from './project-format.js';
 export type Point = [number, number, number];
-export type Stroke = { id: string; tool: 'brush' | 'eraser'; color: string; size: number; points: Point[] };
-export type Layer = { id: string; name: string; visible: boolean; locked: boolean; opacity: number; strokes: Stroke[]; image?: string };
+export type Stroke = { id: string; tool: 'brush' | 'pencil' | 'eraser' | 'shape' | 'text' | 'fill' | 'image'; color: string; size: number; points: Point[]; contours?: Point[][]; outline?: Point[]; opacity?: number; texture?: 'solid' | 'graphite' | 'chalk'; cap?: 'round' | 'butt' | 'square'; capStart?: 'round' | 'butt' | 'square'; capEnd?: 'round' | 'butt' | 'square'; join?: 'round' | 'bevel' | 'miter'; shape?: 'rectangle' | 'ellipse' | 'line'; fill?: string; text?: string; font?: string; fontSize?: number; bold?: boolean; italic?: boolean; align?: 'left' | 'center' | 'right'; tracking?: number; lineSpacing?: number; indent?: number; autoKern?: boolean; textScaleX?: number; rotation?: number; source?: string };
+export type Layer = { id: string; name: string; visible: boolean; locked: boolean; opacity: number; strokes: Stroke[]; image?: string; kind?: 'vector' | 'bitmap' };
 export type Panel = { id: string; name: string; duration: number; dialogue: string; action: string; slugging: string; notes: string; layers: Layer[] };
 export type CameraKey = { id: string; frame: number; x: number; y: number; zoom: number; rotation: number; interpolation: 'linear' | 'hold' | 'ease' };
 export type Scene = { id: string; name: string; panels: Panel[]; camera: CameraKey[] };
-export type Project = { format: 'innovent-storyboard'; schemaVersion: 1; id: string; title: string; subtitle: string; width: number; height: number; fps: number; scenes: Scene[] };
+export type Project = { format: 'innovent-storyboard'; schemaVersion: 2; id: string; title: string; subtitle: string; width: number; height: number; fps: number; scenes: Scene[] };
 export const uid = () => crypto.randomUUID();
-export const makeLayer = (name = 'Drawing') : Layer => ({ id: uid(), name, visible: true, locked: false, opacity: 1, strokes: [] });
+export const makeLayer = (name = 'Drawing', kind: 'vector' | 'bitmap' = 'vector') : Layer => ({ id: uid(), name, kind, visible: true, locked: false, opacity: 1, strokes: [] });
 export const makePanel = (name = 'Panel 1', fps = 24): Panel => ({ id: uid(), name, duration: fps * 5, dialogue: '', action: '', slugging: '', notes: '', layers: [makeLayer()] });
 export const makeScene = (name = 'Scene 1', fps = 24): Scene => ({ id: uid(), name, panels: [makePanel('Panel 1', fps)], camera: [] });
 export function makeProject(title = 'Untitled storyboard', width = 1920, height = 1080, fps = 24, subtitle = ''): Project {
-  return validateProject({ format: 'innovent-storyboard', schemaVersion: 1, id: uid(), title, subtitle, width, height, fps, scenes: [makeScene('Scene 1', fps)] });
+  return validateProject({ format: 'innovent-storyboard', schemaVersion: 2, id: uid(), title, subtitle, width, height, fps, scenes: [makeScene('Scene 1', fps)] });
 }
 export function findPanel(project: Project, panelId: string) {
   for (const scene of project.scenes) { const panel = scene.panels.find(p => p.id === panelId); if (panel) return { scene, panel }; }

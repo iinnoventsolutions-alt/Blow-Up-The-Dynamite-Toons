@@ -45,7 +45,7 @@ test('scene camera interpolation spans a panel boundary, and duration edits reti
 });
 test('invalid/future documents, duplicate IDs and injected image URLs are rejected', () => {
   const p = makeProject(); assert.throws(() => parseProject('{bad'), /valid JSON/);
-  assert.throws(() => parseProject(JSON.stringify({ ...p, schemaVersion: 2 })), /Unsupported/);
+  assert.throws(() => parseProject(JSON.stringify({ ...p, schemaVersion: 99 })), /Unsupported/);
   const invalid = structuredClone(p); invalid.scenes[0].panels[0].id = invalid.id;
   assert.throws(() => serializeProject(invalid), /duplicate/);
   const image = structuredClone(p); image.scenes[0].panels[0].layers[0].image = 'https://example.com/remote.png';

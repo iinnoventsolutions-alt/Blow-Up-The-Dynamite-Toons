@@ -1,9 +1,10 @@
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 export const MAX_PROJECT_BYTES = 25 * 1024 * 1024;
 const fail = (message) => { throw new Error(message); };
 const record = (v) => v && typeof v === 'object' && !Array.isArray(v);
 export function validateProject(value) {
   if (!record(value) || value.format !== 'innovent-storyboard') fail('This is not an Innovent Professional Storyboard project.');
+  if (value.schemaVersion === 1) { value.schemaVersion = 2; for (const scene of value.scenes || []) for (const panel of scene.panels || []) for (const layer of panel.layers || []) layer.kind ||= layer.image ? 'bitmap' : 'vector'; }
   if (value.schemaVersion !== SCHEMA_VERSION) fail('Unsupported project version. Your file has not been changed.');
   const ids = new Set();
   const id = (v) => { if (typeof v !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(v) || ids.has(v)) fail('Invalid or duplicate object ID.'); ids.add(v); };
@@ -25,13 +26,33 @@ export function validateProject(value) {
       for (const layer of panel.layers) {
         if (!record(layer)) fail('Invalid layer.'); id(layer.id); str(layer.name, 200);
         if (typeof layer.visible !== 'boolean' || typeof layer.locked !== 'boolean') fail('Invalid layer state.');
+        if (layer.kind !== undefined && !['vector','bitmap'].includes(layer.kind)) fail('Invalid layer type.');
         num(layer.opacity, 0, 1); arr(layer.strokes, 0, 20000);
         if (layer.image !== undefined && (typeof layer.image !== 'string' || layer.image.length > 12 * 1024 * 1024 || !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(layer.image))) fail('Invalid embedded image.');
         for (const stroke of layer.strokes) {
-          if (!record(stroke) || !['brush', 'eraser'].includes(stroke.tool)) fail('Invalid stroke.'); id(stroke.id); color(stroke.color); num(stroke.size, 0.1, 1000);
+          if (!record(stroke) || !['brush', 'pencil', 'eraser', 'shape', 'text', 'fill', 'image'].includes(stroke.tool)) fail('Invalid stroke.'); id(stroke.id); color(stroke.color); num(stroke.size, 0.1, 1000);
           arr(stroke.points, 1, 100000); points += stroke.points.length;
           if (points > 1000000) fail('Drawing exceeds this developer build’s point limit.');
           for (const p of stroke.points) { if (!Array.isArray(p) || p.length !== 3) fail('Invalid stroke point.'); num(p[0], -8192, 16384); num(p[1], -8192, 16384); num(p[2], 0, 1); }
+          if (stroke.opacity !== undefined) num(stroke.opacity,0,1);
+          if (stroke.texture !== undefined && !['solid','graphite','chalk'].includes(stroke.texture)) fail('Invalid stroke texture.');
+          if (stroke.cap !== undefined && !['round','butt','square'].includes(stroke.cap)) fail('Invalid line cap.');
+          for(const cap of [stroke.capStart,stroke.capEnd])if(cap!==undefined&&!['round','butt','square'].includes(cap))fail('Invalid line cap.');
+          if (stroke.join !== undefined && !['round','bevel','miter'].includes(stroke.join)) fail('Invalid line join.');
+          if (stroke.fill !== undefined) color(stroke.fill);
+          if(stroke.contours!==undefined)arr(stroke.contours,1,20000);
+          for (const path of [...(stroke.contours || []), ...(stroke.outline ? [stroke.outline] : [])]) { arr(path,3,100000); points+=path.length; if(points>1000000)fail('Drawing exceeds this developer build’s point limit.'); for(const p of path){arr(p,3,3);num(p[0],-8192,16384);num(p[1],-8192,16384);num(p[2],0,1);} }
+          if(stroke.contours!==undefined)arr(stroke.contours,1,20000);
+          if(stroke.tool==='shape'){if(!['rectangle','ellipse','line'].includes(stroke.shape)||stroke.points.length!==2)fail('Invalid shape.');}
+          if(stroke.tool==='text'){str(stroke.text,10000);str(stroke.font,100);num(stroke.fontSize,1,1000);if(!['left','center','right'].includes(stroke.align))fail('Invalid text alignment.');num(stroke.tracking,-100,100);num(stroke.lineSpacing,.5,5);if(typeof stroke.bold!=='boolean'||typeof stroke.italic!=='boolean')fail('Invalid text style.');}
+          if(stroke.textScaleX!==undefined)num(stroke.textScaleX,.001,1000);
+          if(stroke.indent!==undefined)num(stroke.indent,0,1000);
+          if(stroke.autoKern!==undefined&&typeof stroke.autoKern!=='boolean')fail('Invalid kerning option.');
+          if(stroke.tool==='text'||stroke.tool==='image')arr(stroke.points,2,2);
+          if(stroke.tool==='fill'&&!stroke.contours)fail('Fill needs contour geometry.');
+          if(stroke.rotation!==undefined)num(stroke.rotation,-36000,36000);
+          if(stroke.tool==='image' && (typeof stroke.source!=='string'||stroke.source.length>12*1024*1024||!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(stroke.source)))fail('Invalid embedded image.');
+
         }
       }
     }

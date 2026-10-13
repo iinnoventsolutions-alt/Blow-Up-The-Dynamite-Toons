@@ -11,7 +11,12 @@ fi
 if ! node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 24 ? 0 : 1)'; then
   fail "This preview requires Node.js 24 or newer. Update Node.js, then try again."
 fi
-if [ ! -f dist/index.html ]; then
+current_build=$(node -p "const b=require('./src/build-info.json'); b.version + ':' + b.build") || fail "Build information could not be read. Download a complete source copy."
+preview_build=""
+if [ -f dist/.innovent-build ]; then
+  preview_build=$(cat dist/.innovent-build)
+fi
+if [ ! -f dist/index.html ] || [ "$preview_build" != "$current_build" ]; then
   command -v npm >/dev/null 2>&1 || fail "npm is missing. Reinstall Node.js, then try again."
   echo "Preparing the browser preview for this source download..."
   if [ ! -f node_modules/vite/bin/vite.js ]; then
@@ -19,6 +24,7 @@ if [ ! -f dist/index.html ]; then
     ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci || fail "Dependency installation failed. Check your internet connection and the error above, then try again."
   fi
   npm run build || fail "Preview build failed. Review the error above."
+  node -e "const fs=require('fs'),b=require('./src/build-info.json');fs.writeFileSync('dist/.innovent-build',b.version+':'+b.build)" || fail "Preview build stamp could not be written."
 fi
 node desktop/preview.cjs
 status=$?
