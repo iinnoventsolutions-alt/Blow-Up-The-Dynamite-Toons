@@ -6,8 +6,11 @@ const crypto = require('node:crypto');
 const { atomicWrite, readProject } = require('./persistence.cjs');
 const metadata = require('../src/build-info.json');
 const previousDataDirectory = app.getPath('userData');
+// Preserve packaged recovery/preferences across the display-name correction.
+const stableDataDirectory = path.basename(previousDataDirectory) === metadata.name
+  ? path.join(app.getPath('appData'), 'Innovent Professional Storyboard') : previousDataDirectory;
 app.setName(metadata.name);
-app.setPath('userData', previousDataDirectory);
+app.setPath('userData', stableDataDirectory);
 app.setAboutPanelOptions({ applicationName: metadata.name, applicationVersion: `Version ${metadata.version}`, version: `Build ${metadata.build}` });
 let win, currentPath = null, dirty = false, closePrompt = false, recentFiles = [], saveQueue = Promise.resolve();
 const pagePath = path.join(__dirname, '../dist/index.html');

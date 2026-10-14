@@ -2,7 +2,7 @@
 
 In Drawing, use **Onion skin** between playback and zoom controls. Set **Back** and **Forward** independently to 0–3 panels. Backward artwork is red; forward artwork is green, fading with distance. Skins stay within the current scene and are drawing-only guides. Settings persist on this device (initially off, one panel each way). White paper is suppressed in guides; active opaque artwork can cover them. Project artwork and exports remain unchanged.
 
-# Innovent Professional Storyboard
+# IInnovent Professional Storyboard
 
 **Version 1 · Build 10132026.2334**
 
@@ -113,7 +113,7 @@ Future development builds publish to `Working`. `main` is updated only when a te
 
 ## Earlier Build 10122026.1627 changes
 
-- Product name: **Innovent Professional Storyboard**.
+- Product name: **IInnovent Professional Storyboard**.
 - Display version: **Version 1**. Build: **10122026.1627**.
 - Two blue lowercase i letters with a crossing orange arrow: SVG for the UI, PNG and ICNS for packaging.
 - New project saves use `.issb`. Earlier `.innovent` files can still be opened. In the desktop app, saving an earlier-extension file offers a new `.issb` copy, preserving the original.

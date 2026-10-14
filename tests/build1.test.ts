@@ -7,7 +7,7 @@ test('display and package build metadata remain synchronized without a version b
   const info = JSON.parse(readFileSync(new URL('../src/build-info.json', import.meta.url), 'utf8'));
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   const lock = JSON.parse(readFileSync(new URL('../package-lock.json', import.meta.url), 'utf8'));
-  assert.equal(info.name, 'Innovent Professional Storyboard');
+  assert.equal(info.name, 'IInnovent Professional Storyboard');
   assert.match(info.build, /^\d{8}\.\d{4}$/); assert.equal(info.buildFormat, 'MMDDYYYY.HH24MI');
   assert.equal(pkg.issb.build, info.build); assert.equal(pkg.issb.version, info.version);
   assert.equal(pkg.version, `${info.version}.0.0`); assert.equal(lock.version, pkg.version);

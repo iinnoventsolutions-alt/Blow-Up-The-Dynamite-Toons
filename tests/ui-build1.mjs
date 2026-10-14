@@ -26,7 +26,7 @@ async function dragWithCue(source, target) {
   await page.mouse.up(); await paint();
 }
 try {
-  await page.goto(url); assert.equal(await page.title(), 'Innovent Professional Storyboard');
+  await page.goto(url); assert.equal(await page.title(), 'IInnovent Professional Storyboard');
   const p = fixture(), [s1, s2, s3] = p.scenes;
   await load(p, 'legacy.innovent');
   assert.deepEqual(await page.locator('.film-scene').evaluateAll(nodes => nodes.map(n => n.classList.contains('scene-shaded'))), [false, true, false]);

@@ -1,3 +1,9 @@
+## Build 10142026.1519 · Name correction
+
+- Display name corrected to IInnovent Professional Storyboard, including header, launch, window/page title, packaging metadata, and project error/filter labels. Logo assets unchanged.
+- Existing project identifiers, storage keys and legacy extensions retained. Packaged user-data directory preserved across the display-name change.
+- Production build, all 28 model/filesystem tests, desktop syntax check, and targeted workspace browser regression pass.
+
 ## Build 10142026.1510 · Onion Skinning
 
 - Production build and 28 model/filesystem tests pass.

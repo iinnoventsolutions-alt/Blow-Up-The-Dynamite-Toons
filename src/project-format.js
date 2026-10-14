@@ -3,7 +3,7 @@ export const MAX_PROJECT_BYTES = 25 * 1024 * 1024;
 const fail = (message) => { throw new Error(message); };
 const record = (v) => v && typeof v === 'object' && !Array.isArray(v);
 export function validateProject(value) {
-  if (!record(value) || value.format !== 'innovent-storyboard') fail('This is not an Innovent Professional Storyboard project.');
+  if (!record(value) || value.format !== 'innovent-storyboard') fail('This is not an IInnovent Professional Storyboard project.');
   if (value.schemaVersion === 1) { value.schemaVersion = 2; for (const scene of value.scenes || []) for (const panel of scene.panels || []) for (const layer of panel.layers || []) layer.kind ||= layer.image ? 'bitmap' : 'vector'; }
   if (value.schemaVersion !== SCHEMA_VERSION) fail('Unsupported project version. Your file has not been changed.');
   const ids = new Set();

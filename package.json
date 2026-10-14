@@ -2,7 +2,7 @@
   "name": "innovent-storyboard",
   "version": "1.0.0",
   "private": true,
-  "description": "Innovent Professional Storyboard",
+  "description": "IInnovent Professional Storyboard",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
@@ -18,7 +18,7 @@
   },
   "build": {
     "appId": "com.innoventsolutions.storyboard",
-    "productName": "Innovent Professional Storyboard",
+    "productName": "IInnovent Professional Storyboard",
     "files": [
       "dist/**/*",
       "desktop/**/*",
@@ -36,7 +36,7 @@
     "fileAssociations": [
       {
         "ext": "issb",
-        "name": "Innovent Professional Storyboard Project",
+        "name": "IInnovent Professional Storyboard Project",
         "role": "Editor"
       }
     ]
@@ -59,7 +59,7 @@
   },
   "issb": {
     "version": 1,
-    "build": "10142026.1510",
+    "build": "10142026.1519",
     "buildFormat": "MMDDYYYY.HH24MI",
     "buildTimezone": "America/New_York"
   }
