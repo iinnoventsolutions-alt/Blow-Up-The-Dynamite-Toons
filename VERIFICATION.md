@@ -1,3 +1,11 @@
+## Build 10142026.1510 · Onion Skinning
+
+- Production build and 28 model/filesystem tests pass.
+- All six earlier browser workflows and the new onion workflow pass.
+- Onion checks cover independent 0–3 counts, color/distance, scene isolation, Vector/Bitmap guides, white suppression, hidden layers, unchanged saved artwork, playback exclusion, device settings and compact toolbar fit.
+- Full-size and compact Drawing screenshots reviewed. Schema remains 2; no unrelated feature changes.
+- Native Mac/tablet/installer validation remains pending. See docs/Build_10142026.1510_Conflicts.html for rendering and compact-layout considerations.
+
 ## Build 10132026.2334 · On-canvas text and playback
 
 - Production build and all 27 model/filesystem tests pass.

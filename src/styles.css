@@ -100,3 +100,14 @@
 .inline-art-text{width:100%;height:100%;box-sizing:border-box;border:1px solid #ff922c;background:#fffffffa;padding:0;resize:none;outline:none;white-space:pre-wrap;border-radius:0}
 .drawing-playback-preview .thumbnail{height:100%;width:100%}
 @media(max-width:1050px){.stage-toolbar .stage-playback>span{display:none}.playback-toolbar .view-controls{gap:3px}.playback-toolbar .view-controls label{margin-left:3px}}
+
+/* Drawing-only onion guides sit below artwork and never receive input. */
+.onion-skin-surface{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.drawing-surface{position:relative}
+.stage-toolbar.onion-toolbar{grid-template-columns:minmax(0,1fr) auto auto auto;gap:8px}
+.onion-controls{display:flex;align-items:center;gap:8px;white-space:nowrap;font-size:10px}
+.onion-controls label{display:flex;align-items:center;gap:4px}
+.onion-controls select{padding:3px 4px;font-size:10px;width:37px}
+.onion-controls .backward{color:#ff8790}.onion-controls .forward{color:#6de28e}
+@media(max-width:1250px){.onion-toolbar .breadcrumbs{display:none}.stage-toolbar.onion-toolbar{grid-template-columns:auto auto auto;justify-content:space-between}.onion-toolbar .view-controls label{margin-left:0}.onion-controls{gap:4px}}
+@media(max-width:1050px){.onion-controls{font-size:9px}.onion-toolbar .view-controls button{padding:3px 5px}.stage-toolbar.onion-toolbar{padding:0 8px;gap:4px}}

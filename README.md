@@ -1,3 +1,7 @@
+## Onion Skinning · Build 10142026.1510
+
+In Drawing, use **Onion skin** between playback and zoom controls. Set **Back** and **Forward** independently to 0–3 panels. Backward artwork is red; forward artwork is green, fading with distance. Skins stay within the current scene and are drawing-only guides. Settings persist on this device (initially off, one panel each way). White paper is suppressed in guides; active opaque artwork can cover them. Project artwork and exports remain unchanged.
+
 # Innovent Professional Storyboard
 
 **Version 1 · Build 10132026.2334**
