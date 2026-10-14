@@ -1,3 +1,11 @@
+## Transitions · Build 10142026.1536
+
+Select the outgoing panel, then **+ Transition** in Drawing, Panel, or Timeline. Click the hourglass boundary marker to open its properties. Choose **Dissolve**, **Edge Wipe**, **Clock Wipe**, or **Slide**, set its duration, and choose direction where available. **Preview transition** seeks to its start; press Play to watch it. **− Transition** deletes the selected transition; Undo restores it.
+
+Transitions work within and between scenes. They use the outgoing panel’s final frames (default up to one second) without changing total runtime. The incoming artwork is previewed at its first camera pose; the outgoing camera continues moving. Shortening a panel clamps its transition, and a one-frame panel removes it. Reordering/duplicating/deleting panels that separate a transition’s pair removes that transition with a notice; Undo restores both in one step. Ordinary panel PNGs remain clean artwork.
+
+**Compatibility:** New saves use project schema 3. Schema 1/2 projects open through an in-memory upgrade; original files remain unchanged until Save. Earlier app builds cannot open schema 3 files. Keep an earlier copy if testing a rollback. Version stays 1.
+
 ## Onion Skinning · Build 10142026.1510
 
 In Drawing, use **Onion skin** between playback and zoom controls. Set **Back** and **Forward** independently to 0–3 panels. Backward artwork is red; forward artwork is green, fading with distance. Skins stay within the current scene and are drawing-only guides. Settings persist on this device (initially off, one panel each way). White paper is suppressed in guides; active opaque artwork can cover them. Project artwork and exports remain unchanged.
@@ -80,7 +88,7 @@ Solid, Graphite and Chalk are built-in textures. Presets save tool settings on t
 
 Bitmap edits and selections support project canvases up to 16 megapixels, including 4K. Bitmap selections transform pixel regions and flatten on commit; they have no vector control points. Bucket boundaries use a working grid up to 2048 pixels on the longest side, then convert into project-space contours. Text uses installed system fonts; custom font and custom texture import are not included in this build.
 
-**File compatibility:** This build saves schema 2 `.issb` projects and opens schema 1 files through an in-memory upgrade. Existing files are not modified until Save. Earlier builds cannot open newly saved schema 2 projects; preserve earlier files when testing. The application’s major version remains 1. See `docs/Build_10132026.1629_Conflicts.html` for safeguards and verification.
+**File compatibility:** This build saves schema 3 `.issb` projects and opens schema 1/2 files through an in-memory upgrade. Existing files are not modified until Save. Earlier builds cannot open newly saved schema 3 projects; preserve earlier files when testing. The application’s major version remains 1. See `docs/Build_10132026.1629_Conflicts.html` for safeguards and verification.
 
 ## Build 10132026.1302 · Camera milestone
 

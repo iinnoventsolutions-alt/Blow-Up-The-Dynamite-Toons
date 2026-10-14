@@ -111,3 +111,15 @@
 .onion-controls .backward{color:#ff8790}.onion-controls .forward{color:#6de28e}
 @media(max-width:1250px){.onion-toolbar .breadcrumbs{display:none}.stage-toolbar.onion-toolbar{grid-template-columns:auto auto auto;justify-content:space-between}.onion-toolbar .view-controls label{margin-left:0}.onion-controls{gap:4px}}
 @media(max-width:1050px){.onion-controls{font-size:9px}.onion-toolbar .view-controls button{padding:3px 5px}.stage-toolbar.onion-toolbar{padding:0 8px;gap:4px}}
+
+/* Boundary markers preserve continuous panel flow and existing drag slots. */
+.transition-toolbar{display:flex;gap:5px;align-items:center}
+.transition-toolbar button{font-size:10px;padding:4px 8px}
+.panel-position{position:relative}
+.transition-marker{position:absolute;left:-17px;top:80px;z-index:4;padding:2px;border:1px solid #597b95;background:#172a3c;color:#75baf0;border-radius:5px;width:28px;height:30px}
+.transition-marker.selected{color:#ff922c;border-color:#ff922c;background:#3c3025}
+.continuous-panels .transition-marker{left:-15px;top:95px}
+.timeline-clip>.transition-marker{left:-14px;top:70px;z-index:7}
+.transition-properties p{font-size:11px;overflow-wrap:anywhere}
+.transition-actions{display:flex;flex-wrap:wrap;gap:6px}.transition-actions button{font-size:11px;padding:5px 8px}
+.timeline-transition-toolbar{padding:6px 18px;background:#182430;border-bottom:1px solid #253240}

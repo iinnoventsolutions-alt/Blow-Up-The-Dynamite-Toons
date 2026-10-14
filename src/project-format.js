@@ -1,10 +1,11 @@
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 export const MAX_PROJECT_BYTES = 25 * 1024 * 1024;
 const fail = (message) => { throw new Error(message); };
 const record = (v) => v && typeof v === 'object' && !Array.isArray(v);
 export function validateProject(value) {
   if (!record(value) || value.format !== 'innovent-storyboard') fail('This is not an IInnovent Professional Storyboard project.');
   if (value.schemaVersion === 1) { value.schemaVersion = 2; for (const scene of value.scenes || []) for (const panel of scene.panels || []) for (const layer of panel.layers || []) layer.kind ||= layer.image ? 'bitmap' : 'vector'; }
+  if (value.schemaVersion === 2) { value.schemaVersion = 3; value.transitions ||= []; }
   if (value.schemaVersion !== SCHEMA_VERSION) fail('Unsupported project version. Your file has not been changed.');
   const ids = new Set();
   const id = (v) => { if (typeof v !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(v) || ids.has(v)) fail('Invalid or duplicate object ID.'); ids.add(v); };
@@ -65,6 +66,8 @@ export function validateProject(value) {
     }
   }
   if (panels < 1) fail('A storyboard must contain at least one panel.');
+  arr(value.transitions,0,1999); const ordered=value.scenes.flatMap(s=>s.panels),boundaries=new Set();
+  for(const t of value.transitions){if(!record(t))fail('Invalid transition.');id(t.id);const i=ordered.findIndex(p=>p.id===t.fromId);if(i<0||ordered[i+1]?.id!==t.toId||boundaries.has(t.fromId))fail('Transitions require unique adjacent panel boundaries.');boundaries.add(t.fromId);if(!['dissolve','edge-wipe','clock-wipe','slide'].includes(t.type))fail('Invalid transition type.');if(!['left','right','up','down'].includes(t.direction))fail('Invalid transition direction.');num(t.duration,2,ordered[i].duration,true);}
   return value;
 }
 export function parseProject(text) {

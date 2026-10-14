@@ -1,3 +1,12 @@
+## Build 10142026.1536 · Transitions
+
+- Production build and 33 model/filesystem tests pass.
+- All seven earlier browser workflows plus the new transition workflow pass.
+- Transition checks cover adjacent/cross-scene boundaries, properties, type/direction/duration, delete/undo, save/reopen, all four effects, shared Drawing/Timeline/Pitch renderer, duplication cleanup, invalid durations and compact UI.
+- Schema 1/2 upgrades to schema 3; malformed/dangling/duplicate transitions reject. Structural cleanup and timing clamps are undoable. Camera regression remains green.
+- Visual review of Panel/Timeline/compact Drawing screenshots completed. Native Mac/tablet/performance validation remains pending.
+- See docs/Build_10142026.1536_Conflicts.html for timing, format and boundary behavior.
+
 ## Build 10142026.1519 · Name correction
 
 - Display name corrected to IInnovent Professional Storyboard, including header, launch, window/page title, packaging metadata, and project error/filter labels. Logo assets unchanged.

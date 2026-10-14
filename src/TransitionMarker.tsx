@@ -1,0 +1,3 @@
+import { transitionNames } from './transitions';
+import type { Transition } from './model';
+export default function TransitionMarker({transition,selected,onSelect}:{transition:Transition;selected:boolean;onSelect:()=>void}){return <button className={`transition-marker ${selected?'selected':''}`} aria-label={`Select ${transitionNames[transition.type]} transition`} title={`${transitionNames[transition.type]} transition · Click for properties`} onClick={e=>{e.stopPropagation();onSelect();}} onPointerDown={e=>e.stopPropagation()} draggable={false}><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M3 3h18L3 21h18Z" fill="none" stroke="currentColor" strokeWidth="2"/><path d="M3 3l18 18" stroke="currentColor" strokeWidth="2"/></svg></button>}
