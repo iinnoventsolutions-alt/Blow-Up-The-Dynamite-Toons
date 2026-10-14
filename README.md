@@ -1,3 +1,7 @@
+## Audio button descriptions · Build 10142026.1855
+
+Hover over Import audio, + Audio track, New-track imports, or Export animatic in Timeline for a description of its function. Import guidance reflects the selected track. Button behavior is unchanged.
+
 ## Audio and Animatics · Build 10142026.1737
 
 In **Timeline**, import one or several audio files. With no track selected, each file creates its own track; selected-track imports go into that track. **New-track imports** clears the destination. Move clips by dragging their bodies, trim with their edges, or select them for precise start/source-in/duration and track controls. Use track volume, Mute and Solo while playing. Clip edits pause playback; audio positions stay at absolute project times when panels change.

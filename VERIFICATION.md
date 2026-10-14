@@ -1,3 +1,9 @@
+## Build 10142026.1855 · Audio button descriptions
+
+- Production TypeScript/Vite build passes.
+- All four screenshot buttons have native hover descriptions; import guidance reflects the current track selection.
+- Reviewed diff: only button titles, build metadata, and documentation changed. No audio behavior changes.
+
 ## Build 10142026.1737 · Audio and Animatics
 
 - Production build, 44 model/filesystem tests, and all 12 browser workflows pass.
