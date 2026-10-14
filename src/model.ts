@@ -6,13 +6,16 @@ export type Panel = { id: string; name: string; duration: number; dialogue: stri
 export type CameraKey = { id: string; frame: number; x: number; y: number; zoom: number; rotation: number; interpolation: 'linear' | 'hold' | 'ease' };
 export type Scene = { id: string; name: string; panels: Panel[]; camera: CameraKey[] };
 export type Transition = {id:string;fromId:string;toId:string;type:'dissolve'|'edge-wipe'|'clock-wipe'|'slide';duration:number;direction:'left'|'right'|'up'|'down'};
-export type Project = { format: 'innovent-storyboard'; schemaVersion: 3; id: string; title: string; subtitle: string; width: number; height: number; fps: number; scenes: Scene[]; transitions: Transition[] };
+export type AudioAsset={id:string;name:string;source:string;duration:number;sampleRate:number;channels:number;peaks:number[]};
+export type AudioClip={id:string;assetId:string;name:string;start:number;offset:number;duration:number;gain:number};
+export type AudioTrack={id:string;name:string;gain:number;mute:boolean;solo:boolean;clips:AudioClip[]};
+export type Project = { format: 'innovent-storyboard'; schemaVersion: 4; id: string; title: string; subtitle: string; width: number; height: number; fps: number; scenes: Scene[]; transitions: Transition[];audioAssets:AudioAsset[];audioTracks:AudioTrack[] };
 export const uid = () => crypto.randomUUID();
 export const makeLayer = (name = 'Drawing', kind: 'vector' | 'bitmap' = 'vector') : Layer => ({ id: uid(), name, kind, visible: true, locked: false, opacity: 1, strokes: [] });
 export const makePanel = (name = 'Panel 1', fps = 24): Panel => ({ id: uid(), name, duration: fps * 5, dialogue: '', action: '', slugging: '', notes: '', layers: [makeLayer()] });
 export const makeScene = (name = 'Scene 1', fps = 24): Scene => ({ id: uid(), name, panels: [makePanel('Panel 1', fps)], camera: [] });
 export function makeProject(title = 'Untitled storyboard', width = 1920, height = 1080, fps = 24, subtitle = ''): Project {
-  return validateProject({ format: 'innovent-storyboard', schemaVersion: 3, transitions: [], id: uid(), title, subtitle, width, height, fps, scenes: [makeScene('Scene 1', fps)] });
+  return validateProject({ format: 'innovent-storyboard', schemaVersion: 4, transitions: [], audioAssets:[], audioTracks:[], id: uid(), title, subtitle, width, height, fps, scenes: [makeScene('Scene 1', fps)] });
 }
 export function findPanel(project: Project, panelId: string) {
   for (const scene of project.scenes) { const panel = scene.panels.find(p => p.id === panelId); if (panel) return { scene, panel }; }

@@ -69,7 +69,7 @@ try {
   await page.locator('.grid-card').nth(1).dragTo(page.locator('.scene-grid .panel-drop-slot').first(), { targetPosition: { x: 8, y: 70 } });
   assert.match(await page.locator('.grid-card').first().innerText(), /Second shot/);
   await page.getByRole('button', { name: 'Drawing', exact: true }).click();
-  await page.locator('input[type=file]').nth(1).setInputFiles('public/innovent-logo.jpg');
+  await page.locator('input[accept="image/png,image/jpeg,image/webp"]').setInputFiles('public/innovent-logo.jpg');
   await page.waitForFunction(() => document.querySelectorAll('.layer-row').length === 3);
   await waitPaint(); assert(await strokesPixels() > both, 'Imported image is composited into its own layer');
   const portrait = structuredClone(project); portrait.width = 1080; portrait.height = 1920;

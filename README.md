@@ -1,3 +1,13 @@
+## Audio and Animatics · Build 10142026.1737
+
+In **Timeline**, import one or several audio files. With no track selected, each file creates its own track; selected-track imports go into that track. **New-track imports** clears the destination. Move clips by dragging their bodies, trim with their edges, or select them for precise start/source-in/duration and track controls. Use track volume, Mute and Solo while playing. Clip edits pause playback; audio positions stay at absolute project times when panels change.
+
+Audio is embedded in `.issb` files and plays with picture/camera/transitions in Drawing, Timeline and Pitch. **Export animatic** produces a WebM video with sound (HD, up to 1920 pixels on the longest edge). Recording runs in real time; keep the app visible. Audio beyond the storyboard end is excluded until you extend panel timing.
+
+**Compatibility:** Schema 4 saves contain audio. Schema 1/2/3 projects upgrade in memory; original files remain unchanged until saved. Older builds cannot open schema 4 projects. Projects support up to 128 MB; individual audio files up to 25 MB/30 minutes, 32 tracks, and a 512 MB decoded-audio budget. WAV/MP3 are verified; other accepted formats depend on the local decoder. Browser history/recovery uses IndexedDB for larger media projects.
+
+See `docs/Build_10142026.1737_Conflicts.html` for usage, timing rules, validation and limits.
+
 ## Drawing icon trial · Build 10142026.1716
 
 All Drawing tools now use an alternate silhouette icon set, including the color palette and image import/export controls. To revert instantly, open **Preferences → Drawing tool icons → Classic**. The choice persists on this device and does not affect projects. The full rollback baseline is **Version 1, Build 10142026.1701**, GitHub revision `8ff5f143299dd7ca3139461cda3ae7d49bb07504`. See `docs/Build_10142026.1716_Icon_Review.html` for a side-by-side comparison.
@@ -18,7 +28,7 @@ Select the outgoing panel, then **+ Transition** in Drawing, Panel, or Timeline.
 
 Transitions work within and between scenes. They use the outgoing panel’s final frames (default up to one second) without changing total runtime. The incoming artwork is previewed at its first camera pose; the outgoing camera continues moving. Shortening a panel clamps its transition, and a one-frame panel removes it. Reordering/duplicating/deleting panels that separate a transition’s pair removes that transition with a notice; Undo restores both in one step. Ordinary panel PNGs remain clean artwork.
 
-**Compatibility:** New saves use project schema 3. Schema 1/2 projects open through an in-memory upgrade; original files remain unchanged until Save. Earlier app builds cannot open schema 3 files. Keep an earlier copy if testing a rollback. Version stays 1.
+**Compatibility:** New saves use project schema 4. Schema 1/2/3 projects open through an in-memory upgrade; original files remain unchanged until Save. Earlier app builds cannot open schema 4 files. Keep an earlier copy if testing a rollback. Version stays 1.
 
 ## Onion Skinning · Build 10142026.1510
 
@@ -102,7 +112,7 @@ Solid, Graphite and Chalk are built-in textures. Presets save tool settings on t
 
 Bitmap edits and selections support project canvases up to 16 megapixels, including 4K. Bitmap selections transform pixel regions and flatten on commit; they have no vector control points. Bucket boundaries use a working grid up to 2048 pixels on the longest side, then convert into project-space contours. Text uses installed system fonts; custom font and custom texture import are not included in this build.
 
-**File compatibility:** This build saves schema 3 `.issb` projects and opens schema 1/2 files through an in-memory upgrade. Existing files are not modified until Save. Earlier builds cannot open newly saved schema 3 projects; preserve earlier files when testing. The application’s major version remains 1. See `docs/Build_10132026.1629_Conflicts.html` for safeguards and verification.
+**File compatibility:** This build saves schema 4 `.issb` projects and opens schema 1/2/3 files through an in-memory upgrade. Existing files are not modified until Save. Earlier builds cannot open newly saved schema 4 projects; preserve earlier files when testing. The application’s major version remains 1. See `docs/Build_10132026.1629_Conflicts.html` for safeguards and verification.
 
 ## Build 10132026.1302 · Camera milestone
 
@@ -119,7 +129,7 @@ Camera transforms never change drawing layers or stroke coordinates. Keys save i
 
 Changing panel duration scales keys inside that panel and shifts keys in later panels. If shrinking would merge keys onto one frame, the edit is rejected with a message; move/delete a key first. Duplicating a panel copies its artwork and shifts later keys to preserve their position relative to subsequent panels; it does not duplicate the scene camera track. Appending a panel holds the final authored pose until another key is added.
 
-Individual panel transfers involving camera-keyed scenes and panel deletion within those scenes remain guarded. Clear keys first, or move the whole scene to preserve its track. This build implements 2D camera transforms; audio, 3D camera depth, and PDF templates remain later milestones. See `docs/Build_10132026.1302_Conflicts.html` for conflicts and verification.
+Individual panel transfers involving camera-keyed scenes and panel deletion within those scenes remain guarded. Clear keys first, or move the whole scene to preserve its track. This build implements 2D camera transforms; 3D camera depth and PDF templates remain later milestones. See `docs/Build_10132026.1302_Conflicts.html` for conflicts and verification.
 
 ## Build 10132026.1234 changes
 
@@ -187,17 +197,17 @@ This updates display metadata, package metadata, and the lockfile together. Ordi
 
 ## Conflicts and safeguards
 
-Open `docs/Build_10132026.2334_Conflicts.html` for the current HTML report. Earlier reports remain as build history. It describes the empty-scene format change, time quantization, name collisions, camera safeguards, fixes found during testing, and GitHub publication status.
+Open `docs/Build_10142026.1737_Conflicts.html` for the current HTML report. Earlier reports remain as build history. It describes the empty-scene format change, time quantization, name collisions, camera safeguards, fixes found during testing, and GitHub publication status.
 
-Individual panel moves involving a scene with camera keys remain blocked to avoid changing its scene camera timing silently. Whole-scene reorder preserves its keys. Reducing duration so a key would fall outside the scene is also blocked. Camera authoring/retiming UI is a later milestone.
+Individual panel moves involving a scene with camera keys remain blocked to avoid changing its scene camera timing silently. Whole-scene reorder preserves its keys. Reducing duration so a key would fall outside the scene is also blocked. Camera authoring/retiming UI is available; timing collisions are rejected.
 
 ## Existing capabilities and remaining modules
 
 Working: layered brush/eraser drawing, color and size controls, stylus pressure input path, zoom/pan, safe guide, per-layer opacity/lock/visibility, thumbnail layer controls, panel duplication/deletion, dialogue/action/slugging/notes, undo/redo, image import as a layer, PNG export, save/open/recovery, and shared workspace state.
 
-Later: authored camera movement UI and overlays, camera-cropped playback, onion skin, multiple audio tracks/waveforms, PDF templates and dual logos, additional vector/bitmap tools, full preferences, and verified native packaging. No native Toon Boom `.sboard` compatibility is implemented. `.issb` is our portable versioned JSON format with embedded images; its internal format identifier stays stable for earlier-file compatibility.
+Also working: Vector/Bitmap tools and point editors, camera authoring/overlays/playback, onion skins, transitions, multiple audio tracks/waveforms and WebM animatic export. Later: PDF templates and dual logos, remaining preferences/workflow refinements, and verified native packaging. No native Toon Boom `.sboard` compatibility is implemented. `.issb` is our portable versioned JSON format with embedded images and audio; its internal format identifier stays stable for earlier-file compatibility.
 
-Developer limits remain 25 MB per project, 2,000 panels, 50 layers per panel, one million stroke points, 8 MB per imported image, dimensions 64–8192, and integer frame rates 12/24/25/30/48/50/60. Large-project performance and real tablet hardware still need validation. On-screen rendering is capped at 1920 pixels wide; PNG export uses the project width.
+Developer limits remain 128 MB per project, 2,000 panels, 50 layers per panel, one million stroke points, 8 MB per imported image, dimensions 64–8192, and integer frame rates 12/24/25/30/48/50/60. Large-project performance and real tablet hardware still need validation. On-screen rendering is capped at 1920 pixels wide; PNG export uses the project width.
 
 ## Tests
 
@@ -252,3 +262,5 @@ npm run package:mac
 ```
 
 Configured outputs are Intel and Apple Silicon DMGs under `release`, with the new name, icon, and `.issb` association. Native packaging and file double-click association still need Mac validation. Signing/notarization is separate from product activation; this app requires no license activation.
+
+Audio browser acceptance uses FFmpeg/ffprobe on PATH for independent media-file verification. These tools are not required to launch the application or export WebM.

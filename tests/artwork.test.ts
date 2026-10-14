@@ -4,8 +4,8 @@ import { makeProject,makeLayer,uid,type Stroke } from '../src/model.ts';
 import { bounds,textLocalBounds,simplifyStroke,contourFromPoints,eligibleLayers,hitStroke,pointInPolygon,transformStroke,editSelected } from '../src/artwork.ts';
 import { floodMask,maskContours } from '../src/flood.ts';
 import { parseProject,serializeProject } from '../src/project-format.js';
-test('legacy projects migrate as editable vector layers; schema 3 round trips all artwork types',()=>{
- const p=makeProject();const legacy=structuredClone(p) as unknown as {schemaVersion:number;scenes:typeof p.scenes};legacy.schemaVersion=1;delete legacy.scenes[0].panels[0].layers[0].kind;const migrated=parseProject(JSON.stringify(legacy));assert.equal(migrated.schemaVersion,3);assert.equal(migrated.scenes[0].panels[0].layers[0].kind,'vector');
+test('legacy projects migrate as editable vector layers; schema 4 round trips all artwork types',()=>{
+ const p=makeProject();const legacy=structuredClone(p) as unknown as {schemaVersion:number;scenes:typeof p.scenes};legacy.schemaVersion=1;delete legacy.scenes[0].panels[0].layers[0].kind;const migrated=parseProject(JSON.stringify(legacy));assert.equal(migrated.schemaVersion,4);assert.equal(migrated.scenes[0].panels[0].layers[0].kind,'vector');
  const layer=migrated.scenes[0].panels[0].layers[0];layer.strokes=[{id:uid(),tool:'brush',color:'#000000',size:10,points:[[10,10,1]],contours:[contourFromPoints([[10,10,1]],10)]},{id:uid(),tool:'pencil',color:'#ff0000',size:5,points:[[1,2,.5],[3,4,1]],texture:'graphite'},{id:uid(),tool:'shape',color:'#000000',size:2,points:[[10,20,1],[30,40,1]],shape:'rectangle',fill:'#ffff00'},{id:uid(),tool:'text',color:'#000000',size:1,points:[[1,2,1],[200,80,1]],text:'Hi',font:'Arial',fontSize:32,bold:false,italic:true,align:'left',tracking:0,lineSpacing:1.2}];assert.deepEqual(parseProject(serializeProject(migrated)),migrated);
 });
 test('brush outlines contain pressure-derived contours while pencil retains a centerline',()=>{

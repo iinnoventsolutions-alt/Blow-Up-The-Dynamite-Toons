@@ -12,7 +12,7 @@ async function atomicWrite(filePath, text) {
 }
 async function readProject(filePath) {
   const { parseProject, MAX_PROJECT_BYTES } = await import('../src/project-format.js');
-  const info = await fs.stat(filePath); if (info.size > MAX_PROJECT_BYTES) throw new Error('Project exceeds the 25 MB limit.');
+  const info = await fs.stat(filePath); if (info.size > MAX_PROJECT_BYTES) throw new Error('Project exceeds the 128 MB limit.');
   const text = await fs.readFile(filePath, 'utf8'); parseProject(text); return text;
 }
 module.exports = { atomicWrite, readProject };

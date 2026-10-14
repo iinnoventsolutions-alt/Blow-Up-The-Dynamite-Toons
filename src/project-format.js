@@ -1,11 +1,12 @@
-export const SCHEMA_VERSION = 3;
-export const MAX_PROJECT_BYTES = 25 * 1024 * 1024;
+export const SCHEMA_VERSION = 4;
+export const MAX_PROJECT_BYTES = 128 * 1024 * 1024;
 const fail = (message) => { throw new Error(message); };
 const record = (v) => v && typeof v === 'object' && !Array.isArray(v);
 export function validateProject(value) {
   if (!record(value) || value.format !== 'innovent-storyboard') fail('This is not an IInnovent Professional Storyboard project.');
   if (value.schemaVersion === 1) { value.schemaVersion = 2; for (const scene of value.scenes || []) for (const panel of scene.panels || []) for (const layer of panel.layers || []) layer.kind ||= layer.image ? 'bitmap' : 'vector'; }
   if (value.schemaVersion === 2) { value.schemaVersion = 3; value.transitions ||= []; }
+  if (value.schemaVersion === 3) { value.schemaVersion = 4; value.audioAssets ||= []; value.audioTracks ||= []; }
   if (value.schemaVersion !== SCHEMA_VERSION) fail('Unsupported project version. Your file has not been changed.');
   const ids = new Set();
   const id = (v) => { if (typeof v !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(v) || ids.has(v)) fail('Invalid or duplicate object ID.'); ids.add(v); };
@@ -68,10 +69,14 @@ export function validateProject(value) {
   if (panels < 1) fail('A storyboard must contain at least one panel.');
   arr(value.transitions,0,1999); const ordered=value.scenes.flatMap(s=>s.panels),boundaries=new Set();
   for(const t of value.transitions){if(!record(t))fail('Invalid transition.');id(t.id);const i=ordered.findIndex(p=>p.id===t.fromId);if(i<0||ordered[i+1]?.id!==t.toId||boundaries.has(t.fromId))fail('Transitions require unique adjacent panel boundaries.');boundaries.add(t.fromId);if(!['dissolve','edge-wipe','clock-wipe','slide'].includes(t.type))fail('Invalid transition type.');if(!['left','right','up','down'].includes(t.direction))fail('Invalid transition direction.');num(t.duration,2,ordered[i].duration,true);}
+  arr(value.audioAssets,0,200); const assets=new Map();
+  for(const asset of value.audioAssets){if(!record(asset))fail('Invalid audio asset.');id(asset.id);str(asset.name,200);num(asset.duration,1/60,1800);num(asset.sampleRate,8000,192000,true);num(asset.channels,1,8,true);arr(asset.peaks,1,2048);for(const peak of asset.peaks)num(peak,0,1);if(typeof asset.source!=='string'||asset.source.length>36*1024*1024||!/^data:audio\/(wav|mpeg|mp4|ogg|flac|aac|webm);base64,[A-Za-z0-9+/=]+$/.test(asset.source))fail('Invalid embedded audio.');assets.set(asset.id,asset);}
+  arr(value.audioTracks,0,32);let clips=0;
+  for(const track of value.audioTracks){if(!record(track))fail('Invalid audio track.');id(track.id);str(track.name,200);num(track.gain,0,2);if(typeof track.mute!=='boolean'||typeof track.solo!=='boolean')fail('Invalid audio track state.');arr(track.clips,0,2000);clips+=track.clips.length;if(clips>2000)fail('Too many audio clips.');for(const clip of track.clips){if(!record(clip))fail('Invalid audio clip.');id(clip.id);str(clip.name,200);const asset=assets.get(clip.assetId);if(!asset)fail('Audio clip references missing media.');num(clip.start,0,10800000000,true);num(clip.offset,0,Math.floor(asset.duration*value.fps)-1,true);num(clip.duration,1,Math.floor(asset.duration*value.fps)-clip.offset,true);num(clip.gain,0,2);}}
   return value;
 }
 export function parseProject(text) {
-  if (typeof text !== 'string' || new TextEncoder().encode(text).byteLength > MAX_PROJECT_BYTES) fail('Project must be smaller than 25 MB in this developer build.');
+  if (typeof text !== 'string' || new TextEncoder().encode(text).byteLength > MAX_PROJECT_BYTES) fail('Project must be smaller than 128 MB in this developer build.');
   let value; try { value = JSON.parse(text); } catch { fail('The project file is not valid JSON.'); }
   return validateProject(value);
 }

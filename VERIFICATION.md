@@ -1,3 +1,11 @@
+## Build 10142026.1737 · Audio and Animatics
+
+- Production build, 44 model/filesystem tests, and all 12 browser workflows pass.
+- Audio workflow verifies WAV/MP3 import, invalid-file rejection, waveforms, embedded saves, clip properties/drag/left-right trim/cross-track movement, volume/mute/solo, duplicate/delete/track deletion, Undo, source offsets and playback in Drawing/Timeline/Pitch.
+- Live mixer changes update gain without restarting sources. Absolute clip positions persist through panel reorders/retiming; project end limits playback/export.
+- WebM test contains HD video, audible audio mix, finite duration and dissolve imagery; cancellation produces no partial download. Large-media browser recovery (>5 MB) passes using IndexedDB.
+- Schema 1/2/3 migrates to 4. Project size limit is 128 MB; audio budgets and real-time export limits are documented in docs/Build_10142026.1737_Conflicts.html. Native Mac audio/performance/packaging validation remains pending.
+
 ## Build 10142026.1716 · Drawing icon trial
 
 - Production build and all 36 model/filesystem tests pass.
