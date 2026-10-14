@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeProject,makeLayer,uid,type Stroke } from '../src/model.ts';
-import { bounds,simplifyStroke,contourFromPoints,eligibleLayers,hitStroke,pointInPolygon,transformStroke,editSelected } from '../src/artwork.ts';
+import { bounds,textLocalBounds,simplifyStroke,contourFromPoints,eligibleLayers,hitStroke,pointInPolygon,transformStroke,editSelected } from '../src/artwork.ts';
 import { floodMask,maskContours } from '../src/flood.ts';
 import { parseProject,serializeProject } from '../src/project-format.js';
 test('legacy projects migrate as editable vector layers; schema 2 round trips all artwork types',()=>{
@@ -27,3 +27,5 @@ test('malformed artwork and unsafe embedded image sources are rejected',()=>{
 });
 
 test('stroke simplification preserves bends and pressure while keeping straight lines editable',()=>{const points=Array.from({length:101},(_,i)=>[i,10,1] as [number,number,number]);assert.equal(simplifyStroke(points,.5,10).length,2);points[50]=[50,30,.2];const simplified=simplifyStroke(points,.5,10);assert(simplified.some(p=>p[0]===50&&p[2]===.2));});
+
+test('text bounds follow content rather than stale stored rectangle dimensions',()=>{const stroke:Stroke={id:uid(),tool:'text',color:'#000000',size:1,points:[[400,300,1],[1800,1000,1]],text:'Introduction',font:'Arial',fontSize:100,bold:false,italic:false,align:'left',tracking:0,lineSpacing:1.2};const original=textLocalBounds(stroke);assert(original.width<1400);assert(original.height<200);stroke.text='I';const shortened=textLocalBounds(stroke);assert(shortened.width<original.width);stroke.text='I\nI';assert(textLocalBounds(stroke).height>shortened.height);});

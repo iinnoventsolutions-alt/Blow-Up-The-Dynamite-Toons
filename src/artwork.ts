@@ -17,12 +17,12 @@ export function textLocalBounds(stroke:Stroke) {
  const [a,b]=stroke.points,scale=stroke.textScaleX||1,fontSize=stroke.fontSize||48,width=Math.abs(b[0]-a[0])/scale,height=Math.abs(b[1]-a[1]),anchor=stroke.align==='center'?width/2:stroke.align==='right'?width:0;
  if(typeof document!=='undefined')textMeasure ||= document.createElement('canvas').getContext('2d');
  const ctx=textMeasure;if(ctx){ctx.font=textFont(stroke);ctx.fontKerning=stroke.autoKern===false?'none':'auto';ctx.textBaseline='top';ctx.textAlign='left';}
- let minX=0,minY=0,maxX=width,maxY=height;
+ let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
  (stroke.text||'').split('\n').forEach((line,row)=>{
   const chars=[...line],tracking=stroke.tracking||0,advance=ctx?(tracking?chars.reduce((n,c)=>n+ctx.measureText(c).width,0)+Math.max(0,chars.length-1)*tracking:ctx.measureText(line).width):chars.length*fontSize*.65+Math.max(0,chars.length-1)*tracking;
   let x=anchor+(row===0?(stroke.indent||0):0)-(stroke.align==='center'?advance/2:stroke.align==='right'?advance:0);const y=row*fontSize*(stroke.lineSpacing||1.2);
   const measure=(text:string)=>{const m=ctx?.measureText(text);minX=Math.min(minX,x-(m?.actualBoundingBoxLeft||0));maxX=Math.max(maxX,x+(m?.actualBoundingBoxRight??text.length*fontSize*.65));minY=Math.min(minY,y-(m?.actualBoundingBoxAscent||0));maxY=Math.max(maxY,y+(m?.actualBoundingBoxDescent??fontSize));};
-  if(tracking){for(const c of chars){measure(c);x+=(ctx?.measureText(c).width??fontSize*.65)+tracking;}}else measure(line);
+  if(!line.length){minX=Math.min(minX,anchor);maxX=Math.max(maxX,anchor);minY=Math.min(minY,y);maxY=Math.max(maxY,y+fontSize);}else if(tracking){for(const c of chars){measure(c);x+=(ctx?.measureText(c).width??fontSize*.65)+tracking;}}else measure(line);
  });
  return {x:minX*scale-3,y:minY-3,width:(maxX-minX)*scale+6,height:maxY-minY+6};
 }

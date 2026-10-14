@@ -1,6 +1,6 @@
 # Innovent Professional Storyboard
 
-**Version 1 · Build 10132026.1724**
+**Version 1 · Build 10132026.2334**
 
 The GitHub download includes source, a sample project, tests, and this startup guide. The separately supplied developer ZIP also includes a prebuilt browser preview. It is not yet a signed/notarized Mac installer.
 
@@ -36,6 +36,15 @@ npm run desktop
 The first installation downloads dependencies and Electron. Application operation is offline after installation. The Electron shell implements native Save/Open, File/Edit menus, recent files, recovery, and unsaved-close prompts. Those native interactions still need testing on a Mac. The shared model, filesystem persistence, and browser interface have automated checks.
 
 The current Electron runtime minimum is documented at https://www.electronjs.org/docs/latest/breaking-changes. Mac signing, notarization, and installer verification remain release tasks.
+
+## Build 10132026.2334 · On-canvas text and playback
+
+- With **Text (T)** selected, double-click editable Vector text on the stage to type directly into it. The cursor starts at the end. Click outside or press Cmd/Ctrl+Enter to commit; Escape cancels. Plain Enter adds a new line. The existing inspector text-edit option remains available. Each completed on-canvas edit is one undo step, and saving commits an active editor first.
+- Selection bounds now follow only the current rendered text, rather than including the object’s stale stored rectangle. Shortening text contracts the box; multiline/style/size changes update it without extra space from an earlier layout. Alignment anchors and artwork positions remain intact. Pixel text already flattened into Bitmap layers retains its existing raster behavior.
+- Drawing and Timeline share playback controls centered in the stage toolbar, between scene/panel breadcrumbs and view controls, matching the supplied reference. Drawing playback includes camera framing, follows project timing across panels, and supports pause, stop, start and frame stepping. Stop returns to the drawing tools. Selecting a drawing tool also returns to editing.
+- Drawing adds no timeline-style playhead or indicator to its panel strip. Timeline retains its existing playhead, scrubbing, key lane and clip resizing; only its transport controls move to the common toolbar.
+
+See `docs/Build_10132026.2334_Conflicts.html` for verification. File schema remains 2; the major version remains 1. Development builds continue to publish to Working.
 
 ## Build 10132026.1724 · Drawing adjustments
 
@@ -152,7 +161,7 @@ This updates display metadata, package metadata, and the lockfile together. Ordi
 
 ## Conflicts and safeguards
 
-Open `docs/Build_10132026.1724_Conflicts.html` for the current HTML report. Earlier reports remain as build history. It describes the empty-scene format change, time quantization, name collisions, camera safeguards, fixes found during testing, and GitHub publication status.
+Open `docs/Build_10132026.2334_Conflicts.html` for the current HTML report. Earlier reports remain as build history. It describes the empty-scene format change, time quantization, name collisions, camera safeguards, fixes found during testing, and GitHub publication status.
 
 Individual panel moves involving a scene with camera keys remain blocked to avoid changing its scene camera timing silently. Whole-scene reorder preserves its keys. Reducing duration so a key would fall outside the scene is also blocked. Camera authoring/retiming UI is a later milestone.
 

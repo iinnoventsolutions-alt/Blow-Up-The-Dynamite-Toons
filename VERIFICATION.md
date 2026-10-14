@@ -1,3 +1,11 @@
+## Build 10132026.2334 · On-canvas text and playback
+
+- Production build and all 27 model/filesystem tests pass.
+- New browser workflow verifies double-click edit/caret-at-end, commit/cancel/undo, bounds contraction, multiline expansion, Drawing playback across panels, shared toolbar placement, and unchanged Timeline playhead behavior.
+- All five previous browser workflows pass alongside the new workflow.
+- Toolbar placement is checked at 1500×1000 and 1100×740; text-bound and Drawing/Timeline screenshots visually reviewed.
+- Schema remains 2. Existing Bitmap text, camera safeguards and native Mac/tablet validation limits remain.
+
 ## Build 10132026.1724 · Drawing adjustments
 
 - Production build and all 26 model/filesystem tests pass.

@@ -20,7 +20,7 @@ export default function TimelineWorkspace({ project, activeId, playFrame, playin
   const ticks = Array.from({ length: Math.floor(maxTicks / tickStep) + 1 }, (_, i) => i * tickStep * project.fps).filter(f => f <= displayTotal);
   let offset = 0;
   return <div className="timeline-view">
-    <div className="timeline-transport" aria-label="Timeline playback controls"><button title="Go to start" onClick={() => onSeek(0)}>|‹</button><button title="Previous frame" onClick={() => onSeek(playFrame - 1)}>‹</button><button className="primary" onClick={onTogglePlay}>{playing ? 'Pause' : 'Play'}</button><button title="Stop playback" onClick={onStop}>■</button><button title="Next frame" onClick={() => onSeek(playFrame + 1)}>›</button><span>{timecode(playFrame, project.fps)} / {timecode(total, project.fps)}</span></div>
+
     <div className="timeline-preview"><Thumbnail panel={active.panel} project={project} frame={playFrame} cameraView/></div>
     <div className="timing-summary"><strong>{timecode(total, project.fps)}</strong><span>Drag a clip’s right edge to change its duration · {preview ? `${secondsText(preview.frames, project.fps)} seconds` : 'Timing stays connected across workspaces'}</span></div>
     <div className="timeline-layout"><div className="timeline-labels"><div>TIME</div><div>PANELS</div><div>CAMERA</div><div>AUDIO</div></div><div className="timeline-scroll" ref={scroll}><div className="timeline-timebody" ref={body} style={{ width }}>

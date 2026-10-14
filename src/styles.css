@@ -89,3 +89,14 @@
 .saved-preset{display:flex;gap:5px;margin:4px 0}
 .saved-preset button:first-child{flex:1;text-align:left}
 .drawing-properties input[type=color]{width:100%;height:30px;padding:2px}
+
+/* Text editing and shared playback controls in the stage toolbar. */
+.stage-toolbar.playback-toolbar{display:grid;grid-template-columns:minmax(70px,1fr) auto minmax(0,1fr);gap:10px}
+.stage-toolbar .stage-playback{padding:0;margin:0;gap:4px;min-width:0}
+.stage-toolbar .stage-playback button{padding:3px 7px;font-size:11px}
+.stage-toolbar .stage-playback>span{font-size:9px;margin-left:4px}
+.playback-toolbar .view-controls,.playback-toolbar>.muted{justify-self:end}
+.playback-toolbar>.muted{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.inline-art-text{width:100%;height:100%;box-sizing:border-box;border:1px solid #ff922c;background:#fffffffa;padding:0;resize:none;outline:none;white-space:pre-wrap;border-radius:0}
+.drawing-playback-preview .thumbnail{height:100%;width:100%}
+@media(max-width:1050px){.stage-toolbar .stage-playback>span{display:none}.playback-toolbar .view-controls{gap:3px}.playback-toolbar .view-controls label{margin-left:3px}}
