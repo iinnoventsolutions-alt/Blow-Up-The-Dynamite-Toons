@@ -8,7 +8,7 @@ export function simplifyStroke(points:Point[],tolerance:number,size:number):Poin
 export function contourFromPoints(points: Point[], size: number, startCap='round', endCap='round'): Point[] {
  if(points.length===1){const p=points[0],r=size*p[2]/2;return Array.from({length:16},(_,i)=>[p[0]+Math.cos(i*Math.PI/8)*r,p[1]+Math.sin(i*Math.PI/8)*r,1] as Point);}
  const left:Point[]=[],right:Point[]=[];points.forEach((p,i)=>{const a=points[Math.max(0,i-1)],b=points[Math.min(points.length-1,i+1)],angle=Math.atan2(b[1]-a[1],b[0]-a[0]),r=size*p[2]/2;left.push([p[0]-Math.sin(angle)*r,p[1]+Math.cos(angle)*r,1]);right.push([p[0]+Math.sin(angle)*r,p[1]-Math.cos(angle)*r,1]);});
- const cap=(p:Point,angle:number)=>Array.from({length:8},(_,i)=>[p[0]+Math.cos(angle+i*Math.PI/8)*size*p[2]/2,p[1]+Math.sin(angle+i*Math.PI/8)*size*p[2]/2,1] as Point);
+ const cap=(p:Point,angle:number)=>Array.from({length:8},(_,i)=>[p[0]+Math.cos(angle-i*Math.PI/8)*size*p[2]/2,p[1]+Math.sin(angle-i*Math.PI/8)*size*p[2]/2,1] as Point);
  const a=points[0],b=points[1],z=points.at(-1)!,y=points.at(-2)!,startAngle=Math.atan2(b[1]-a[1],b[0]-a[0]),endAngle=Math.atan2(z[1]-y[1],z[0]-y[0]);if(startCap==='square')for(const list of [left,right]){list[0][0]-=Math.cos(startAngle)*size*a[2]/2;list[0][1]-=Math.sin(startAngle)*size*a[2]/2;}if(endCap==='square')for(const list of [left,right]){list[list.length-1][0]+=Math.cos(endAngle)*size*z[2]/2;list[list.length-1][1]+=Math.sin(endAngle)*size*z[2]/2;}return [...left,...(endCap==='round'?cap(z,endAngle+Math.PI/2):[]),...right.reverse(),...(startCap==='round'?cap(a,startAngle-Math.PI/2):[])];
 }
 export const textFont = (s:Stroke) => `${s.italic?'italic ':''}${s.bold?'bold ':''}${s.fontSize||48}px "${(s.font||'Arial').replace(/["\\]/g,'')}"`;
@@ -33,9 +33,10 @@ export function bounds(stroke: Stroke) {
  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;for(const p of points){minX=Math.min(minX,p[0]);minY=Math.min(minY,p[1]);maxX=Math.max(maxX,p[0]);maxY=Math.max(maxY,p[1]);}return {x:minX-pad,y:minY-pad,width:Math.max(1,maxX-minX+2*pad),height:Math.max(1,maxY-minY+2*pad)};
 }
 export const pointInPolygon=(x:number,y:number,points:Point[])=>{let inside=false;for(let i=0,j=points.length-1;i<points.length;j=i++){const a=points[i],b=points[j];if((a[1]>y)!==(b[1]>y)&&x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])inside=!inside;}return inside;};
+const windingAt=(x:number,y:number,points:Point[])=>{let winding=0;for(let i=0;i<points.length;i++){const a=points[i],b=points[(i+1)%points.length],side=(b[0]-a[0])*(y-a[1])-(x-a[0])*(b[1]-a[1]);if(a[1]<=y&&b[1]>y&&side>0)winding++;else if(a[1]>y&&b[1]<=y&&side<0)winding--;}return winding;};
 export function hitStroke(stroke:Stroke,x:number,y:number,tolerance=8):boolean {
  if(stroke.tool==='eraser')return false;
- if(stroke.contours){let inside=false;stroke.contours.forEach(path=>{if(pointInPolygon(x,y,path))inside=!inside;});return inside;}
+ if(stroke.contours){if(stroke.tool!=='fill')return stroke.contours.reduce((n,path)=>n+windingAt(x,y,path),0)!==0;let inside=false;stroke.contours.forEach(path=>{if(pointInPolygon(x,y,path))inside=!inside;});return inside;}
  const r=bounds(stroke);if(x<r.x-tolerance||x>r.x+r.width+tolerance||y<r.y-tolerance||y>r.y+r.height+tolerance)return false;
  if(stroke.tool==='text'||stroke.tool==='image')return true;
  if(stroke.tool==='shape'&&stroke.shape!=='line') {const a=stroke.points[0],b=stroke.points[1],cx=(a[0]+b[0])/2,cy=(a[1]+b[1])/2,rx=Math.abs(a[0]-b[0])/2,ry=Math.abs(a[1]-b[1])/2;if(stroke.shape==='ellipse'){const d=Math.hypot((x-cx)/Math.max(1,rx),(y-cy)/Math.max(1,ry));return stroke.fill?d<=1:Math.abs(d-1)*Math.min(rx,ry)<=stroke.size/2+tolerance;}return !!stroke.fill||Math.min(Math.abs(x-r.x),Math.abs(x-r.x-r.width),Math.abs(y-r.y),Math.abs(y-r.y-r.height))<=stroke.size/2+tolerance;}

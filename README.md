@@ -1,3 +1,7 @@
+## Drawing fixes · Build 10142026.1633
+
+Brush/Pencil live endpoints now stay under the pointer while earlier samples are smoothed, including above 100% zoom. New round contour caps extend outward, and self-crossing brush paint no longer cancels at overlaps. Bucket-fill holes remain intact. Existing editable brush contours use the corrected overlap renderer; flattened Bitmap pixels and previously edited contour geometry are preserved.
+
 ## Transitions · Build 10142026.1536
 
 Select the outgoing panel, then **+ Transition** in Drawing, Panel, or Timeline. Click the hourglass boundary marker to open its properties. Choose **Dissolve**, **Edge Wipe**, **Clock Wipe**, or **Slide**, set its duration, and choose direction where available. **Preview transition** seeks to its start; press Play to watch it. **− Transition** deletes the selected transition; Undo restores it.

@@ -1,3 +1,10 @@
+## Build 10142026.1633 · Zoom and brush overlap fixes
+
+- Production build and 35 model/filesystem tests pass; all eight previous browser workflows and a new drawing regression pass.
+- New coverage verifies live/committed Brush/Pencil endpoint alignment at 100/150/200/300% on Vector/Bitmap layers, persisted coordinates, pan/rotation, round-cap direction, brush self-crossings at single opacity and selection, bucket holes and pressure Pencil.
+- Existing SVG coordinate transforms passed zoom checks; fixes target smoothing lag, inward round caps and even-odd brush cancellation.
+- Schema remains 3. Existing editable brush overlap rendering improves; previously flattened pixels and edited/stored cap geometry are not reconstructed. Native Mac/tablet checks remain pending.
+
 ## Build 10142026.1536 · Transitions
 
 - Production build and 33 model/filesystem tests pass.
