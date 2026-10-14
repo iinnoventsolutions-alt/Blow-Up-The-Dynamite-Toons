@@ -1,3 +1,9 @@
+## Zoom / Pencil Editor follow-up · Build 10142026.1701
+
+Drawing coordinates now come directly from the rendered canvas, including after zoom, pan and rotation; focusing the stage cannot scroll it. The regression suite includes drawing at 100%, zooming to 175%, then drawing again.
+
+For **Pencil Editor**, click a **Vector Pencil** stroke. Drag its square control points, or drag a hollow circle along a segment to add a point. Double-click a segment also inserts a point. Delete removes the selected point; Undo restores it. Point movement preserves pressure. Brush strokes use **Contour Editor**; flattened Bitmap artwork has no editable spine.
+
 ## Drawing fixes · Build 10142026.1633
 
 Brush/Pencil live endpoints now stay under the pointer while earlier samples are smoothed, including above 100% zoom. New round contour caps extend outward, and self-crossing brush paint no longer cancels at overlaps. Bucket-fill holes remain intact. Existing editable brush contours use the corrected overlap renderer; flattened Bitmap pixels and previously edited contour geometry are preserved.

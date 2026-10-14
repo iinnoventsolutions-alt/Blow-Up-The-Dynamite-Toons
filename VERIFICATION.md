@@ -1,3 +1,10 @@
+## Build 10142026.1701 · Exact zoom sequence and Pencil Editor
+
+- Production build, 36 model/filesystem tests and ten browser workflows pass.
+- Canvas-derived coordinates replace Drawing SVG screen-matrix dependence; pointer focus prevents scrolling. Exact draw100→zoom175→draw tests cover Vector/Bitmap Brush/Pencil origin and persisted coordinates, including a stale SVG matrix.
+- Pencil Editor tests cover select, move, pressure retention, segment-handle insertion, double-click insertion, delete, undo and save/reopen.
+- Existing overlap fixes remain. User's native offset was not reproduced in the test browser before the change; Mac confirmation remains required. Schema stays 3.
+
 ## Build 10142026.1633 · Zoom and brush overlap fixes
 
 - Production build and 35 model/filesystem tests pass; all eight previous browser workflows and a new drawing regression pass.
