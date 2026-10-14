@@ -123,3 +123,8 @@
 .transition-properties p{font-size:11px;overflow-wrap:anywhere}
 .transition-actions{display:flex;flex-wrap:wrap;gap:6px}.transition-actions button{font-size:11px;padding:5px 8px}
 .timeline-transition-toolbar{padding:6px 18px;background:#182430;border-bottom:1px solid #253240}
+
+/* Icon appearance only; button size and drawing behavior remain unchanged. */
+.tool-rail .tool-icon{display:block;flex-shrink:0}
+.color-button{position:relative}
+.color-button .tool-icon{position:absolute;left:6px;top:6px;width:23px;height:23px;pointer-events:none;color:#fff;filter:drop-shadow(0 1px 1px #000)}

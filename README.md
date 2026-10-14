@@ -1,3 +1,7 @@
+## Drawing icon trial · Build 10142026.1716
+
+All Drawing tools now use an alternate silhouette icon set, including the color palette and image import/export controls. To revert instantly, open **Preferences → Drawing tool icons → Classic**. The choice persists on this device and does not affect projects. The full rollback baseline is **Version 1, Build 10142026.1701**, GitHub revision `8ff5f143299dd7ca3139461cda3ae7d49bb07504`. See `docs/Build_10142026.1716_Icon_Review.html` for a side-by-side comparison.
+
 ## Zoom / Pencil Editor follow-up · Build 10142026.1701
 
 Drawing coordinates now come directly from the rendered canvas, including after zoom, pan and rotation; focusing the stage cannot scroll it. The regression suite includes drawing at 100%, zooming to 175%, then drawing again.

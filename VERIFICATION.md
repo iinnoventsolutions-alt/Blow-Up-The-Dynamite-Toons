@@ -1,3 +1,10 @@
+## Build 10142026.1716 · Drawing icon trial
+
+- Production build and all 36 model/filesystem tests pass.
+- Four relevant browser workflows pass: icon review, Drawing Tools, exact zoom/Pencil Editor and workspace/preferences regression.
+- Icon checks cover all 14 tools plus palette/import/export, active states, Classic/Updated switching, persistence, unchanged artwork and compact rail access.
+- Updated/Classic full-size and compact visuals reviewed. Original icons retained; rollback baseline 10142026.1701 (remote 8ff5f143299dd7ca3139461cda3ae7d49bb07504). Schema stays 3; logos and tool behavior unchanged.
+
 ## Build 10142026.1701 · Exact zoom sequence and Pencil Editor
 
 - Production build, 36 model/filesystem tests and ten browser workflows pass.
