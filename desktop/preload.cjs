@@ -1,5 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('desktop', {
+  exportPdf: (data, name, openAfter) => ipcRenderer.invoke('export:pdf', data, name, openAfter),
   save: (text, saveAs) => ipcRenderer.invoke('project:save', text, saveAs),
   open: () => ipcRenderer.invoke('project:open'),
   recent: () => ipcRenderer.invoke('project:recent'),

@@ -154,3 +154,27 @@
 progress{width:100%;height:18px;accent-color:#ff922c}
 
 .audio-tail-note{color:#ffbc78;font-size:10px}.audio-toolbar{flex-wrap:wrap}
+
+/* PDF export is isolated from the drawing and timeline layouts. */
+.pdf-dialog { width: min(1120px, 96vw); max-width: 96vw; padding: 22px; }
+.pdf-dialog-body { display: grid; grid-template-columns: minmax(280px, 380px) minmax(300px, 1fr); gap: 24px; height: min(68vh, 780px); }
+.pdf-options { overflow-y: auto; padding-right: 12px; }
+.pdf-options fieldset { border: 1px solid var(--border, #344353); border-radius: 10px; margin: 0 0 16px; padding: 14px; min-width: 0; }
+.pdf-options legend { padding: 0 6px; font-weight: 600; }
+.pdf-options .field { margin-bottom: 12px; }
+.pdf-options select { width: 100%; }
+.pdf-options .checkbox-field { margin: 10px 0; }
+.pdf-field-row { display: flex; gap: 10px; }
+.pdf-field-row > * { flex: 1; min-width: 0; }
+.pdf-profile-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.pdf-logo-swatch { width: 110px; height: 55px; object-fit: contain; background: white; border-radius: 5px; }
+.pdf-preview { display: flex; flex-direction: column; min-width: 0; overflow: auto; }
+.pdf-preview p { color: var(--muted, #a7b7c8); font-size: 13px; line-height: 1.5; }
+.pdf-preview iframe { width: 100%; flex: 1; min-height: 260px; border: 1px solid #526477; background: white; border-radius: 6px; }
+.pdf-preview a { color: #90c9ff; margin-top: 8px; }
+.pdf-error { color: #ffaaa2; padding: 8px; }
+.pdf-progress { display: flex; gap: 14px; align-items: center; padding: 10px 0; }
+.pdf-progress progress { flex: 1; }
+@media(max-width:760px) { .pdf-dialog-body { grid-template-columns: 1fr; overflow: auto; } .pdf-options { overflow: visible; } .pdf-preview { overflow: visible; } }
+
+.pdf-preview-fallback { padding: 28px; border: 1px dashed #526477; border-radius: 8px; line-height: 1.6; color: #b9ccdf; }

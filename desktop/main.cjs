@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
@@ -34,6 +34,7 @@ app.whenReady().then(async () => {
     if (result.canceled) return null;
     return queued(() => openPath(result.filePaths[0]));
   });
+  handle('export:pdf', (data, name, openAfter) => queued(() => require('./pdf-export.cjs').exportPdf(data, name, openAfter, { dialog, shell, win })));
   handle('project:new', () => queued(async () => { currentPath = null; }));
   handle('project:save', (text, saveAs) => queued(async () => {
     const { parseProject } = await import('../src/project-format.js'); const project = parseProject(text);
@@ -55,7 +56,7 @@ app.whenReady().then(async () => {
   const action = (name) => () => win?.webContents.send('app:action', name);
   const menus = [];
   if (process.platform === 'darwin') menus.push({ label: metadata.name, submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { type: 'separator' }, { label: 'Quit', accelerator: 'Cmd+Q', click: () => win?.close() }] });
-  menus.push({ label: 'File', submenu: [{ label: 'New Project', accelerator: 'CmdOrCtrl+N', click: action('new') }, { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: action('open') }, { type: 'separator' }, { label: 'Save', accelerator: 'CmdOrCtrl+S', click: action('save') }, { label: 'Save As…', accelerator: 'CmdOrCtrl+Shift+S', click: action('save-as') }, { type: 'separator' }, { label: 'Close', click: () => win?.close() }] });
+  menus.push({ label: 'File', submenu: [{ label: 'New Project', accelerator: 'CmdOrCtrl+N', click: action('new') }, { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: action('open') }, { type: 'separator' }, { label: 'Save', accelerator: 'CmdOrCtrl+S', click: action('save') }, { label: 'Save As…', accelerator: 'CmdOrCtrl+Shift+S', click: action('save-as') }, { type: 'separator' }, { label: 'Export PDF…', click: action('export-pdf') }, { type: 'separator' }, { label: 'Close', click: () => win?.close() }] });
   menus.push({ label: 'Edit', submenu: [{ label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: action('undo') }, { label: 'Redo', accelerator: 'CmdOrCtrl+Shift+Z', click: action('redo') }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }, { type: 'separator' }, { label: 'Preferences…', click: action('preferences') }] });
   menus.push({ label: 'View', submenu: [{ role: 'togglefullscreen' }] });
   Menu.setApplicationMenu(Menu.buildFromTemplate(menus));

@@ -1,3 +1,17 @@
+## PDF Export and Branding · Build 10152026.1206
+
+Click **Export PDF** in the project header (or **File → Export PDF…** in the desktop app). Choose a saved profile, range, page settings, caption fields, imagery and branding. **Preview PDF** generates the document; **Export PDF** downloads it in the browser or opens a native Save dialog on desktop. Desktop can open the saved PDF automatically. A browser without an embedded PDF viewer can review the exported file in its PDF reader.
+
+Four templates are included: **3 Panels Vertical** (artwork left, captions right, based on the supplied example), **3 Panels Horizontal**, **Full page**, and **Overview 2 × 4**. Letter/A4, portrait/landscape, margins, caption size, 150/300 DPI, cover page and scene page breaks are configurable. Long captions continue into additional panel slots/pages with repeated artwork and a continued label. Disable unneeded captions for a compact overview.
+
+Export all panels, selected scenes, the current scene/panel, or panels checked in Panel view. Hidden layers stay hidden; opacity is respected; onion guides and selection handles are excluded. Choose full artwork, camera framing at the panel start, or artwork with camera movement marks. Camera movement output expands to include outlying camera frames and marks IN/OUT in green/red.
+
+Company branding sits in the upper left; the IInnovent software mark sits in the upper right. Either can be hidden. Replace the company logo with PNG/JPEG/WebP (under 2 MB/16 megapixels). Use **Save profile** to retain changes; New, Duplicate and Delete manage up to 30 device-local profiles. Profiles/logos are not embedded in .issb projects. No project schema change.
+
+PDF captions are selectable text using an embedded font. Unsupported glyphs (including some emoji/CJK) produce an explicit message instead of silent substitution. Artwork is rasterized at the chosen print resolution (4096-pixel edge cap), not editable PDF vector artwork. Exports are limited to 500 pages/128 MB. Password protection, tracked-panel ranges and legacy XML profile import are not implemented. Native Mac PDF viewer/save/open behavior still needs hardware review.
+
+See [the build review](docs/Build_10152026.1206_Conflicts.html) for reference differences, validation and remaining milestones.
+
 ## Audio button descriptions · Build 10142026.1855
 
 Hover over Import audio, + Audio track, New-track imports, or Export animatic in Timeline for a description of its function. Import guidance reflects the selected track. Button behavior is unchanged.

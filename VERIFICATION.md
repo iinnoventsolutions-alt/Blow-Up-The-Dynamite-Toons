@@ -1,3 +1,13 @@
+## Build 10152026.1206 · PDF Export and Branding
+
+- Production TypeScript/Vite build and 47 model/filesystem tests pass.
+- All 13 browser workflows passed; final PDF-only changes were checked again with the PDF workflow.
+- PDF coverage: four layouts, Letter/A4 and both orientations, cover/no cover, scene breaks, ranges and empty selection, selected panels, field toggles, camera modes, 150/300 DPI, custom logo, profile save/duplicate/delete/reload, preview, cancellation, unsupported glyph feedback and unchanged project serialization.
+- Poppler text extraction verifies every line of a long caption, final sentinels, Unicode accents and transition descriptions. 18 pages across six output samples were rasterized and visually reviewed; revised camera labels were inspected again.
+- Native PDF helper tests verify binary-safe atomic output, extension handling, chosen-path opening, cancellation and malformed-payload rejection. Actual Electron/macOS dialogs/PDF viewer remain unverified.
+- Production dependency audit reports zero vulnerabilities. DejaVu and jsPDF license notices are included with public assets.
+- No blocking model or timing conflicts. Reference differences and limits are documented in docs/Build_10152026.1206_Conflicts.html. Schema stays 4; audio, Drawing tools and Timeline timing behavior are unchanged.
+
 ## Build 10142026.1855 · Audio button descriptions
 
 - Production TypeScript/Vite build passes.
