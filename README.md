@@ -1,3 +1,9 @@
+## PDF visual organization · Build 10152026.1249
+
+All PDF profiles now put Scene and Panel details in separate bordered cells and each enabled information section (Dialogue, Action, Notes, Slugging and Transition) in its own box. Headings use an embedded bold font; names, timing values and caption content remain regular weight. Continuation slots repeat the relevant section heading and show **(cont.)** next to the panel name. The extra box padding and repeated headings can increase page count.
+
+When a generated preview no longer matches the selected profile or settings, **Settings changed — refresh preview** appears in red. Regenerating the preview clears it. Export continues to generate from the current settings.
+
 ## PDF Export and Branding · Build 10152026.1206
 
 Click **Export PDF** in the project header (or **File → Export PDF…** in the desktop app). Choose a saved profile, range, page settings, caption fields, imagery and branding. **Preview PDF** generates the document; **Export PDF** downloads it in the browser or opens a native Save dialog on desktop. Desktop can open the saved PDF automatically. A browser without an embedded PDF viewer can review the exported file in its PDF reader.

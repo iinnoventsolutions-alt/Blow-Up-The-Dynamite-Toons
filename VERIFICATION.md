@@ -1,3 +1,11 @@
+## Build 10152026.1249 · PDF visual organization
+
+- Production build and all 47 model/filesystem tests pass.
+- PDF browser workflow passes for all four templates and profile/range/branding behavior, long-caption continuation, cancellation and unchanged project contents.
+- Actual embedded font weights and PDF text operations are inspected: section/Scene/Panel headings use the 700-weight face; tested caption content uses the 400-weight face. PDF QA requires Python pypdf/fontTools as well as Poppler.
+- Profile changes display a red stale-preview warning; refreshing clears it. Compact overview also passes at 14 pt captions / 54 pt margins / 300 DPI.
+- PDF pages were rendered and visually reviewed for borders, heading contrast, content spacing and continuation. No blocking conflicts; box padding and repeated section headings may add continuation slots/pages.
+
 ## Build 10152026.1206 · PDF Export and Branding
 
 - Production TypeScript/Vite build and 47 model/filesystem tests pass.
