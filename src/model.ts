@@ -45,10 +45,10 @@ export function movePanels(project: Project, moves: PanelMove[]): Project {
   const payload = moves.map(move => {
     const found = findPanel(project, move.panelId), target = project.scenes.find(s => s.id === move.sceneId);
     if (!found || !target) throw new Error('A source panel or destination scene no longer exists.');
-    if (found.scene.camera.length || target.camera.length) throw new Error('Panel moves involving camera-keyed scenes are blocked to preserve their camera timing. Move the whole scene instead, or use a scene without camera keys.');
     if (move.beforePanelId && (selected.has(move.beforePanelId) || !target.panels.some(p => p.id === move.beforePanelId))) throw new Error('Choose a destination anchor that is not one of the moving panels.');
     return { move, panel: found.panel };
   });
+  const affected=new Set(payload.flatMap(({move})=>[findPanel(project,move.panelId)!.scene.id,move.sceneId]));
   return editProject(project, draft => {
     const copies = new Map(allPanels(draft).filter(p => selected.has(p.panel.id)).map(p => [p.panel.id, p.panel]));
     for (const scene of draft.scenes) scene.panels = scene.panels.filter(p => !selected.has(p.id));
@@ -57,6 +57,7 @@ export function movePanels(project: Project, moves: PanelMove[]): Project {
       const index = move.beforePanelId ? target.panels.findIndex(p => p.id === move.beforePanelId) : target.panels.length;
       target.panels.splice(index, 0, copies.get(move.panelId)!);
     }
+    rebuildPanelCameras(project,draft,affected);
   });
 }
 export function moveScene(project: Project, sceneId: string, beforeSceneId: string | null): Project {
@@ -115,16 +116,68 @@ export function redo(h: History): History {
   if (!h.future.length) return h;
   return { past: [...h.past, h.present], present: h.future[0], future: h.future.slice(1) };
 }
-export function cameraAt(scene: Scene, frame: number, project: Project) {
-  const keys = [...scene.camera].sort((a, b) => a.frame - b.frame);
-  const base = { x: project.width / 2, y: project.height / 2, zoom: 1, rotation: 0 };
-  if (!keys.length) return base;
-  let a = keys[0], b = keys[keys.length - 1];
-  if (frame <= a.frame) return a;
-  if (frame >= b.frame) return b;
-  for (let i = 1; i < keys.length; i++) { if (keys[i].frame === frame) return keys[i]; if (keys[i].frame >= frame) { a = keys[i - 1]; b = keys[i]; break; } }
-  let t = (frame - a.frame) / (b.frame - a.frame);
-  if (a.interpolation === 'hold') t = 0;
-  if (a.interpolation === 'ease') t = t * t * (3 - 2 * t);
-  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, zoom: a.zoom + (b.zoom - a.zoom) * t, rotation: a.rotation + (b.rotation - a.rotation) * t };
+function cameraSegment(keys:CameraKey[],frame:number):[CameraKey|undefined,CameraKey|undefined]{
+ let lo=0,hi=keys.length;while(lo<hi){const mid=(lo+hi)>>>1;if(keys[mid].frame<=frame)lo=mid+1;else hi=mid;}
+ return [keys[lo-1],keys[lo]];
+}
+function cameraPose(a:CameraKey|undefined,b:CameraKey|undefined,frame:number,project:Project){
+ if(!a)return b||{x:project.width/2,y:project.height/2,zoom:1,rotation:0};
+ if(!b||a.frame===frame)return a;
+ let t=(frame-a.frame)/(b.frame-a.frame);
+ if(a.interpolation==='hold')t=0;if(a.interpolation==='ease')t=t*t*(3-2*t);
+ return {x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t,zoom:a.zoom+(b.zoom-a.zoom)*t,rotation:a.rotation+(b.rotation-a.rotation)*t};
+}
+export function cameraAt(scene:Scene,frame:number,project:Project){
+ const keys=[...scene.camera].sort((a,b)=>a.frame-b.frame),[a,b]=cameraSegment(keys,frame);
+ return cameraPose(a,b,frame,project);
+}
+
+// Rebuild only structurally affected scenes. Boundary poses isolate each panel,
+// so moving a neutral panel into a keyed scene never inherits its neighbor's move.
+// Clipped ease segments are sampled at project frames; intact ease segments retain
+// their original keys/interpolation. No change to absolute audio positions.
+export function rebuildPanelCameras(before:Project,after:Project,affected:Set<string>,duplicates=new Map<string,string>()){
+ const origins=new Map(allPanels(before).map(e=>[e.panel.id,e]));
+ for(const target of after.scenes){
+  if(!affected.has(target.id))continue;
+  const previous=before.scenes.find(s=>s.id===target.id);if(previous&&previous.panels.map(p=>p.id).join(',')===target.panels.map(p=>p.id).join(','))continue;
+  const keyed=before.scenes.find(s=>s.id===target.id)?.camera.length||target.panels.some(p=>origins.get(duplicates.get(p.id)||p.id)?.scene.camera.length);
+  if(!keyed){target.camera=[];continue;}
+  const keys:CameraKey[]=[];let destination=0;
+  for(const panel of target.panels){
+   const origin=origins.get(duplicates.get(panel.id)||panel.id);
+   if(!origin)throw new Error('Cannot locate original camera timing for this panel.');
+   let start=0;for(const p of origin.scene.panels){if(p.id===origin.panel.id)break;start+=p.duration;}
+   const sourceKeys=[...origin.scene.camera].sort((a,b)=>a.frame-b.frame);
+   const end=start+origin.panel.duration-1,frames=new Set([start,end]);
+   for(const key of sourceKeys)if(key.frame>=start&&key.frame<=end)frames.add(key.frame);
+   for(let i=0;i<sourceKeys.length-1;i++){
+    const a=sourceKeys[i],b=sourceKeys[i+1];
+    if(a.interpolation==='ease'&&(a.frame<start||b.frame>end)){
+     const lo=Math.max(start,a.frame),hi=Math.min(end,b.frame);
+     if(hi-lo>10000)throw new Error('This edit needs more than 10,000 camera samples to preserve a cross-panel ease. Shorten that move or split it with camera keys first.');
+     for(let frame=lo;frame<=hi;frame++)frames.add(frame);
+    }
+   }
+   for(const frame of [...frames].sort((a,b)=>a-b)){
+    const [a,b]=cameraSegment(sourceKeys,frame),exact=a?.frame===frame?a:undefined,pose=cameraPose(a,b,frame,before);
+    const interpolation=a?.interpolation==='ease'&&b&&(a.frame<start||b.frame>end)?'linear':a?.interpolation||'linear';
+    keys.push({id:exact&&!duplicates.has(panel.id)?exact.id:uid(),frame:destination+frame-start,x:pose.x,y:pose.y,zoom:pose.zoom,rotation:pose.rotation,interpolation});
+    if(keys.length>10000)throw new Error('This edit would exceed 10,000 camera keys in a scene. Reduce camera complexity first. No panels were changed.');
+   }
+   destination+=panel.duration;
+  }
+  target.camera=keys;
+ }
+}
+export function removeStoryboardPanel(project:Project,panelId:string){
+ const found=findPanel(project,panelId);if(!found)throw new Error('Panel no longer exists.');
+ if(found.scene.panels.length<=1)throw new Error('Keep at least one panel per scene.');
+ return editProject(project,draft=>{const s=draft.scenes.find(s=>s.id===found.scene.id)!;s.panels=s.panels.filter(p=>p.id!==panelId);rebuildPanelCameras(project,draft,new Set([s.id]));});
+}
+export function duplicateStoryboardPanel(project:Project,panelId:string){
+ const found=findPanel(project,panelId);if(!found)throw new Error('Panel no longer exists.');
+ const copy=duplicatePanel(found.panel);
+ const next=editProject(project,draft=>{const scene=draft.scenes.find(s=>s.id===found.scene.id)!;scene.panels.splice(scene.panels.findIndex(p=>p.id===panelId)+1,0,copy);rebuildPanelCameras(project,draft,new Set([scene.id]),new Map([[copy.id,panelId]]));});
+ return {project:next,panelId:copy.id};
 }

@@ -1,3 +1,13 @@
+## Build 10152026.1310 · Preferences and Workflow Completion
+
+- Production TypeScript/Vite build and all 54 model/filesystem tests pass.
+- All 14 browser workflows pass. Final camera and workflow runs also pass after the camera lookup refinement and full-screen error handling.
+- Camera tests compare every whole frame of Linear/Ease/Hold motion across moves, copies and deletion; cover neutral panels, intact easing, batch moves, unsorted imported keys, no-op edits, global IDs, audio anchoring, Undo and atomic rejection at the 10,000-key limit.
+- Workflow browser checks cover legacy/new preferences, defaults, Cancel, persistence, naming, dimensions/fps/layer/selection defaults, aspect-preserving PNG sizing, invalid signatures/corrupt image rejection before mutation, workspace restoration, Pitch captions/fullscreen, recovery suppression/enabling in Pitch, camera structural edits and compact Preferences.
+- Existing drawing/text/zoom/editor/icon/onion/transition/audio/PDF workflows remain passing. Preferences and compact UI were visually inspected.
+- Camera boundary keys and sampled cross-panel easing can increase key count and affect later shortening when keys collide. The explicit policy and complete reference checklist are in docs/Build_10152026.1310_Conflicts.html.
+- Schema stays 4. Native Mac dialogs/fullscreen/tablet/performance/packaging remain for final integration testing.
+
 ## Build 10152026.1249 · PDF visual organization
 
 - Production build and all 47 model/filesystem tests pass.

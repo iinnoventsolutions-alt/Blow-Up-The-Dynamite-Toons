@@ -1,3 +1,17 @@
+## Preferences and Workflow Completion · Build 10152026.1310
+
+**Preferences** now groups General, Drawing, Naming, Import / Export, Pitch and Shortcuts. Existing device preferences migrate automatically. **Done** keeps changes; **Cancel**, Escape or the close button restores the preferences present when the dialog opened. **Restore defaults** remains reversible until Done.
+
+New defaults include project dimensions/frame rate, Vector/Bitmap layers, selection mode, bucket gap, zero-padded Scene/Panel names and scene-number increments. Optional workspace restoration, audio-track deletion warnings, recovery in Pitch and Pitch captions are configurable. Existing project dimensions, timing, names and artwork are not rewritten by preference changes. PNG exports can have a configurable longest-edge limit while retaining aspect ratio.
+
+Panels in camera-keyed scenes can now be moved, copied and deleted. Camera motion follows the panel, including across scenes; unkeyed panels keep their neutral camera pose. Boundary keys isolate neighboring panels. Intact easing stays intact; ease curves clipped by panel boundaries are sampled at project frames to preserve the original poses. Audio remains at absolute project times. Structural edits remain one Undo step; transitions that lose adjacency are removed with a notice, as before.
+
+**Camera limits:** extra boundary/sample keys can increase key count. Edits exceeding 10,000 keys per scene reject atomically. Dense sampled keys can also trigger the existing collision check when shortening panel duration; adjust/remove keys before shortening. Deleting the final panel of a scene remains blocked; moves may leave an empty scene.
+
+Image import now checks actual PNG/JPEG/WebP content and decode success before adding a layer. Imported files remain embedded; limits are 8 MB and 16 megapixels. Pitch full screen presents the Pitch stage and transport, and captions can be hidden. Recovery is an emergency snapshot after editing stops, not an automatic overwrite of your project file.
+
+See [the reference audit and build review](docs/Build_10152026.1310_Conflicts.html) for implemented, fixed, deferred and unsupported reference settings, known limits, and review steps. Project schema stays 4.
+
 ## PDF visual organization · Build 10152026.1249
 
 All PDF profiles now put Scene and Panel details in separate bordered cells and each enabled information section (Dialogue, Action, Notes, Slugging and Transition) in its own box. Headings use an embedded bold font; names, timing values and caption content remain regular weight. Continuation slots repeat the relevant section heading and show **(cont.)** next to the panel name. The extra box padding and repeated headings can increase page count.
