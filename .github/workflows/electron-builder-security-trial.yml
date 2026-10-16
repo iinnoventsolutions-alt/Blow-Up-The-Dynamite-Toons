@@ -33,10 +33,7 @@ jobs:
           const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
           manifest.overrides = {
             ...manifest.overrides,
-            'app-builder-lib': {
-              ...(manifest.overrides?.['app-builder-lib'] ?? {}),
-              '@electron/get': '5.1.0'
-            }
+            '@electron/get': '5.1.0'
           };
           fs.writeFileSync(file, JSON.stringify(manifest, null, 2) + '\n');
           NODE
