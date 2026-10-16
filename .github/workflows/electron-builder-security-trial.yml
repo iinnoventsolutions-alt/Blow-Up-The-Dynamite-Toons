@@ -25,10 +25,11 @@ jobs:
           npm audit --json > baseline-audit.json || true
       - name: Install candidate in isolated CI checkout
         run: |
-          npm install --save-dev --save-exact electron-builder@latest
+          npm install --save-dev --save-exact electron-builder@26.17.0
           npm ls electron-builder
           npm audit --json > candidate-audit.json || true
           npm audit --omit=dev
+          node -p "'Trial builder: ' + require('electron-builder/package.json').version"
       - name: Model tests and production build
         run: |
           npm test
@@ -36,7 +37,7 @@ jobs:
       - name: Package both Mac architectures without signing
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npm run package:mac
+        run: npm run build && npx electron-builder --mac dmg --arm64 --x64 --publish never
       - name: Show package output
         if: always()
         run: ls -lah release/ || true
