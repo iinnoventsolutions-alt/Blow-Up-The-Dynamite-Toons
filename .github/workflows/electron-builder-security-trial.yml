@@ -27,6 +27,32 @@ jobs:
         run: |
           npm install --save-dev --save-exact electron-builder@26.17.0
           npm ls electron-builder
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const file = 'package.json';
+          const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+          manifest.overrides = {
+            ...manifest.overrides,
+            'app-builder-lib': {
+              ...(manifest.overrides?.['app-builder-lib'] ?? {}),
+              '@electron/get': '5.1.0'
+            }
+          };
+          fs.writeFileSync(file, JSON.stringify(manifest, null, 2) + '\n');
+          NODE
+          npm install --package-lock-only --ignore-scripts
+          npm ci
+          npm ls '@electron/get' || true
+          npm ls sprintf-js roarr global-agent || true
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          const offenders = Object.entries(lock.packages)
+            .filter(([name]) => /node_modules\/(sprintf-js|roarr|global-agent)$/.test(name))
+            .map(([name, pkg]) => name + '@' + pkg.version);
+          console.log('Remaining vulnerable-chain packages:', offenders);
+          if (offenders.length) process.exitCode = 1;
+          NODE
           npm audit --json > candidate-audit.json || true
           npm audit --omit=dev
           node -p "'Trial builder: ' + require('electron-builder/package.json').version"
