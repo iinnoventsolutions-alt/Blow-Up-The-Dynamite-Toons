@@ -5,7 +5,7 @@ on:
     branches:
       - Security-Audit-W
 permissions:
-  contents: read
+  contents: write
 jobs:
   builder-trial:
     runs-on: macos-15
@@ -91,6 +91,35 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run build && npx electron-builder --mac dmg --arm64 --x64 --publish never
+      - name: Verify and commit reproducible dependency fix
+        if: github.event_name == 'push' && github.ref == 'refs/heads/Security-Audit-W'
+        run: |
+          # Confirm the security fix survives a clean lockfile install.
+          npm ci
+          npm audit --audit-level=low
+          npm audit --omit=dev
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const manifest = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          if (manifest.devDependencies['electron-builder'] !== '26.17.0'
+              || manifest.overrides?.['@electron/get'] !== '5.1.0'
+              || lock.packages['node_modules/electron-builder']?.version !== '26.17.0'
+              || lock.packages['']?.overrides?.['@electron/get'] !== '5.1.0') {
+            throw new Error('Security fix versions are not reproducibly locked.');
+          }
+          const bad = Object.keys(lock.packages).filter(p => /node_modules\/(sprintf-js|roarr|global-agent)$/.test(p));
+          if (bad.length) throw new Error('Vulnerable dependency chain remains: ' + bad.join(', '));
+          NODE
+          git add -- package.json package-lock.json
+          if git diff --cached --quiet; then
+            echo "Dependency fix already committed."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "fix(security): lock builder 26.17.0 and @electron/get 5.1.0 override [skip ci]"
+            git push origin HEAD:Security-Audit-W
+          fi
       - name: Show package output
         if: always()
         run: ls -lah release/ || true
