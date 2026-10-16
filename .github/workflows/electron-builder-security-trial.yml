@@ -30,6 +30,36 @@ jobs:
           npm audit --json > candidate-audit.json || true
           npm audit --omit=dev
           node -p "'Trial builder: ' + require('electron-builder/package.json').version"
+      - name: Compare dependency vulnerabilities
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const baseline = JSON.parse(fs.readFileSync('baseline-audit.json', 'utf8'));
+          const candidate = JSON.parse(fs.readFileSync('candidate-audit.json', 'utf8'));
+          const count = (audit) => audit.metadata?.vulnerabilities ?? {};
+          const ids = (audit) => Object.entries(audit.vulnerabilities ?? {})
+            .filter(([, details]) => JSON.stringify(details.via).includes('GHSA-hp3w-g68c-fv3c'))
+            .map(([name]) => name).sort();
+          const base = count(baseline);
+          const next = count(candidate);
+          const text = [
+            '## Electron Builder vulnerability comparison',
+            '',
+            '| Severity | Baseline | Trial |',
+            '| --- | ---: | ---: |',
+            ...['info', 'low', 'moderate', 'high', 'critical', 'total'].map(k => `| ${k} | ${base[k] ?? 0} | ${next[k] ?? 0} |`),
+            '',
+            'Advisory: GHSA-hp3w-g68c-fv3c (sprintf-js; no published patched version as of 2026-10-16)',
+            '',
+            `Baseline affected package names: ${ids(baseline).join(', ') || 'none'}`,
+            `Trial affected package names: ${ids(candidate).join(', ') || 'none'}`,
+            '',
+            'Audit counts alone do not establish exploitability or whether a bundled application ships an affected package.'
+          ].join('\n');
+          fs.writeFileSync('security-audit-comparison.md', text + '\n');
+          if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, text + '\n');
+          console.log(text);
+          NODE
       - name: Model tests and production build
         run: |
           npm test
@@ -49,6 +79,7 @@ jobs:
           path: |
             baseline-audit.json
             candidate-audit.json
+            security-audit-comparison.md
             release/*.dmg
           if-no-files-found: warn
           retention-days: 7
