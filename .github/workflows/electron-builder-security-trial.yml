@@ -90,9 +90,20 @@ jobs:
       - name: Prepare browser regression dependencies
         run: |
           npx playwright install chromium
+          missing=()
           if ! command -v pdftotext >/dev/null || ! command -v pdfinfo >/dev/null; then
-            brew install poppler
+            missing+=(poppler)
           fi
+          if ! command -v ffprobe >/dev/null || ! command -v ffmpeg >/dev/null; then
+            missing+=(ffmpeg)
+          fi
+          if [ "${#missing[@]}" -gt 0 ]; then
+            brew install "${missing[@]}"
+          fi
+          command -v ffprobe
+          command -v ffmpeg
+          command -v pdftotext
+          command -v pdfinfo
           python3 -m venv .pdf-test-venv
           .pdf-test-venv/bin/python -m pip install pypdf fonttools
           echo "$PWD/.pdf-test-venv/bin" >> "$GITHUB_PATH"
