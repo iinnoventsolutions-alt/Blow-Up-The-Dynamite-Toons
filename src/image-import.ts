@@ -6,7 +6,16 @@ export async function readEmbeddedImage(file:File){
  if(!mime)throw new Error('This file is not a valid PNG, JPEG or WebP image.');
  let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
  const source='data:'+mime+';base64,'+btoa(binary),image=new Image();image.src=source;
- try{await image.decode();}catch{throw new Error('This image could not be decoded. No layer was added.');}
+ let timer:ReturnType<typeof setTimeout>|undefined;
+ try{
+  await Promise.race([
+   image.decode(),
+   new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('Image decode timed out.')),6000);})
+  ]);
+ }catch{
+  image.src='';
+  throw new Error('This image could not be decoded. No layer was added.');
+ }finally{if(timer!==undefined)clearTimeout(timer);}
  if(image.width*image.height>16777216)throw new Error('Imported images support up to 16 megapixels. Resize this image first.');
  return source;
 }
