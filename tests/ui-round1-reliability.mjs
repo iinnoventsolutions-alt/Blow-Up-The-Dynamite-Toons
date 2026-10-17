@@ -87,6 +87,8 @@ const selectInkCenter=async () => {
 try {
   await mkdir('test-results',{recursive:true});
   await page.goto('http://127.0.0.1:4317');
+  const project=makeProject('Round 1 reliable artwork');
+  await load(project);
   await page.locator('.art-interaction').waitFor({state:'attached'});
   // Browser-side frame latency: isolates UI scheduling from Playwright's mouse/send overhead.
   await page.evaluate(() => {
@@ -98,9 +100,6 @@ try {
       requestAnimationFrame(() => window.__drawingFrameSamples.push(performance.now() - start));
     }, {capture: true});
   });
-  const project=makeProject('Round 1 reliable artwork');
-  await load(project);
-
   // Rapid sequential vector strokes must persist in model and roundtrip.
   const start=performance.now();
   await choose('brush (B)');
