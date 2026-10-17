@@ -87,6 +87,16 @@ const selectInkCenter=async () => {
 try {
   await mkdir('test-results',{recursive:true});
   await page.goto('http://127.0.0.1:4317');
+  // Browser-side frame latency: isolates UI scheduling from Playwright's mouse/send overhead.
+  await page.evaluate(() => {
+    window.__drawingFrameSamples = [];
+    const surface = document.querySelector('.art-interaction');
+    surface.addEventListener('pointermove', () => {
+      if ((window.__drawingFrameSamples.length || 0) >= 2000) return;
+      const start = performance.now();
+      requestAnimationFrame(() => window.__drawingFrameSamples.push(performance.now() - start));
+    }, {capture: true});
+  });
   const project=makeProject('Round 1 reliable artwork');
   await load(project);
 
@@ -158,7 +168,11 @@ try {
 
   assert.deepEqual(errors,[],'No uncaught browser errors');
   console.log('PASS Round 1 reliability: consecutive Brush/Pencil strokes, repeat erasers, text resize, Pencil and Contour point movement, and save/reopen.');
-  console.log('Round 1 browser gesture duration (informational, includes Playwright latency):',Math.round(performance.now()-start),'ms');
+  const samples = await page.evaluate(() => window.__drawingFrameSamples || []);
+  const sorted = samples.slice().sort((a,b)=>a-b);
+  const p95 = sorted[Math.min(sorted.length-1,Math.floor(sorted.length*.95))] ?? 0;
+  console.log('Drawing pointer-to-frame scheduling (browser, informational):',JSON.stringify({samples:samples.length,p95Ms:Math.round(p95*10)/10,maxMs:Math.round((sorted.at(-1)||0)*10)/10}));
+  console.log('Round 1 browser gesture duration (includes Playwright latency):',Math.round(performance.now()-start),'ms');
 } catch (error) {
   await page.screenshot({path:'test-results/round1-reliability-failure.png'}).catch(()=>{});
   console.error('Round 1 browser errors:',errors);
