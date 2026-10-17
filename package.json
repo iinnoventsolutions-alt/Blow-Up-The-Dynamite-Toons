@@ -31,7 +31,8 @@
     },
     "mac": {
       "category": "public.app-category.graphics-design",
-      "icon": "public/innovent-icon.icns"
+      "icon": "public/innovent-icon.icns",
+      "identity": "-"
     },
     "fileAssociations": [
       {
