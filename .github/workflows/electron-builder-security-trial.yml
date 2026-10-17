@@ -108,9 +108,19 @@ jobs:
           .pdf-test-venv/bin/python -m pip install pypdf fonttools
           echo "$PWD/.pdf-test-venv/bin" >> "$GITHUB_PATH"
       - name: Full browser regression suite
+        id: browser_regression
+        continue-on-error: true
         run: npm run test:ui
       - name: Round 1 drawing reliability regression
+        id: drawing_reliability
+        continue-on-error: true
         run: node --experimental-strip-types tests/ui-round1-reliability.mjs
+      - name: Require all browser regressions to pass
+        if: steps.browser_regression.outcome == 'failure' || steps.drawing_reliability.outcome == 'failure'
+        run: |
+          echo "Browser suite: ${{ steps.browser_regression.outcome }}"
+          echo "Round 1 drawing reliability: ${{ steps.drawing_reliability.outcome }}"
+          exit 1
       - name: Upload browser regression diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
