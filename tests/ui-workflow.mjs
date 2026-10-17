@@ -20,7 +20,9 @@ const installImportDiagnostics=async () => page.evaluate(() => {
 });
 const expectImageImportError=async (phrase) => {
  try {
-  await page.getByRole('status').filter({hasText:phrase}).waitFor();
+  // Verify the notification was actually rendered, even if the 7-second toast expires
+  // before a CI-loaded browser polls the live status locator.
+  await page.waitForFunction(expected => window.__importTrace?.notifications.some(message => message.includes(expected)),phrase,{timeout:12000});
  } catch (error) {
   const status=await page.locator('[role=status]').allTextContents().catch(()=>[]);
   const trace=await page.evaluate(()=>window.__importTrace).catch(()=>null);
