@@ -133,6 +133,27 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run build && npx electron-builder --mac dmg --arm64 --x64 --publish never
+      - name: Verify native macOS app bundle signatures
+        run: |
+          apps=()
+          while IFS= read -r -d '' app; do
+            apps+=("$app")
+          done < <(find release -name '*.app' -type d -prune -print0)
+          if [ "${#apps[@]}" -lt 2 ]; then
+            echo "Expected both ARM64 and Intel unpacked macOS application bundles."
+            exit 1
+          fi
+          for app in "${apps[@]}"; do
+            echo "Verifying: $app"
+            codesign --verify --deep --strict --verbose=2 "$app"
+            details="$(codesign -dv --verbose=4 "$app" 2>&1)"
+            echo "$details"
+            if echo "$details" | grep -q 'Sealed Resources=none'; then
+              echo "Application bundle lacks a resource seal: $app"
+              exit 1
+            fi
+            file "$app/Contents/MacOS/IInnovent Professional Storyboard"
+          done
       - name: Verify and commit reproducible dependency fix
         if: github.event_name == 'push' && github.ref == 'refs/heads/Security-Audit-W'
         run: |
