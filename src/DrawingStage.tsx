@@ -20,7 +20,7 @@ export default function DrawingStage({onion,panel,project,layerId,tool,color,siz
  const layer=panel.layers.find(l=>l.id===layerId),editable=canDraw(layer),effective=temporaryHand?'hand':tool;
  const working=()=>draft.current||panel;
  const select=(items:Selected[])=>{selectionRef.current=items;setSelected(items);selectedPoint.current=null;onSelection(items);};
- const redraw=()=>{if(canvas.current)drawPanel(canvas.current,working(),project,{transparent:onion.enabled,live:live.current?{layerId,stroke:live.current}:undefined});setTick(n=>n+1);};
+ const redraw=()=>{if(canvas.current)drawPanel(canvas.current,working(),project,{transparent:onion.enabled,live:live.current?{layerId,stroke:live.current}:undefined});if(gesture.current?.kind==='transform'||gesture.current?.kind==='point')setTick(n=>n+1);};
  const schedule=()=>{cancelAnimationFrame(frame.current);frame.current=requestAnimationFrame(redraw);};
  const localPoint=(x:number,y:number)=>{const c=canvas.current!,style=getComputedStyle(c);return drawingPoint(x,y,c.getBoundingClientRect(),parseFloat(style.width)/parseFloat(style.height),rotation,project.width,project.height);};
  const point=(e:PointerEvent<SVGSVGElement>):Point=>{const p=localPoint(e.clientX,e.clientY);return [Math.max(-8192,Math.min(16384,p.x)),Math.max(-8192,Math.min(16384,p.y)),e.pointerType==='pen'&&options.pressure?Math.max(options.minSize,e.pressure||options.minSize):1];};
