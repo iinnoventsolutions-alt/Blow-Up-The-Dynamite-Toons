@@ -87,6 +87,7 @@ const selectInkCenter=async () => {
 try {
   await mkdir('test-results',{recursive:true});
   await page.goto('http://127.0.0.1:4317');
+  await page.locator('.art-interaction').waitFor({state:'attached'});
   // Browser-side frame latency: isolates UI scheduling from Playwright's mouse/send overhead.
   await page.evaluate(() => {
     window.__drawingFrameSamples = [];
