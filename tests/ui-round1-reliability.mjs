@@ -54,6 +54,22 @@ const dragHandle = async (selector,dx,dy) => {
   await waitReady();
 };
 const selectAt = async(x,y) => {const p=await at(x,y);await page.mouse.click(p.x,p.y);await waitReady();};
+const selectInkCenter=async () => {
+  const center=await page.getByLabel('Drawing canvas',{exact:true}).evaluate(canvas=>{
+    const {data}=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height);
+    let minX=canvas.width,minY=canvas.height,maxX=-1,maxY=-1;
+    for(let i=0;i<data.length;i+=4){
+      if(data[i]<180&&data[i+1]<180&&data[i+2]<180){
+        const x=(i/4)%canvas.width,y=Math.floor(i/4/canvas.width);
+        minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);
+      }
+    }
+    if(maxX<0) return null;
+    return {x:(minX+maxX)/2/canvas.width,y:(minY+maxY)/2/canvas.height};
+  });
+  assert(center,'Text must be visibly rendered before selection');
+  await selectAt(center.x,center.y);
+};
 
 try {
   await mkdir('test-results',{recursive:true});
@@ -89,7 +105,7 @@ try {
   panelOf(text).layers[0].strokes=[{id:uid(),tool:'text',color:'#172b43',size:1,text:'Resize persists',font:'Arial',fontSize:80,align:'left',lineSpacing:1.2,points:[[600,300,1],[1000,400,1]]}];
   await load(text);
   await choose('Select (V)');
-  await selectAt(700/1920,345/1080);
+  await selectInkCenter();
   assert.equal(await page.locator('[data-mode=resize]').count(),4);
   const oldBox=await page.locator('[data-mode=move]').first().evaluate(n=>({width:Number(n.getAttribute('width')),height:Number(n.getAttribute('height'))}));
   await dragHandle('[data-mode=resize][data-corner=se]',40,24);
@@ -98,7 +114,7 @@ try {
   saved=await save();
   await load(saved);
   await choose('Select (V)');
-  await selectAt(700/1920,345/1080);
+  await selectInkCenter();
   const reloaded=await page.locator('[data-mode=move]').first().evaluate(n=>({width:Number(n.getAttribute('width')),height:Number(n.getAttribute('height'))}));
   assert(Math.abs(reloaded.width-newBox.width)<2 && Math.abs(reloaded.height-newBox.height)<2,'Text resize remains after reload');
 
