@@ -5,14 +5,28 @@ import {mkdir,readFile} from 'node:fs/promises';
 import {makeProject,makeScene,makePanel,uid,cameraAt,findPanel} from '../src/model.ts';
 const server=spawn(process.execPath,['desktop/preview.cjs'],{stdio:'ignore'});for(let i=0;i<100;i++){try{if((await fetch('http://127.0.0.1:4317')).ok)break;}catch{}await new Promise(r=>setTimeout(r,100));}
 const browser=await chromium.launch({headless:true,...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{})}),page=await browser.newPage({viewport:{width:1500,height:1000},acceptDownloads:true});page.setDefaultTimeout(12000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
+const installImportDiagnostics=async () => page.evaluate(() => {
+  window.__importTrace = {changes:0,notifications:[],lastFile:null};
+  const selector='input[accept="image/png,image/jpeg,image/webp"]';
+  const field=document.querySelector(selector);
+  field?.addEventListener('change',event=>{
+    const file=event.target.files?.[0];
+    window.__importTrace.changes++;
+    window.__importTrace.lastFile=file?{name:file.name,size:file.size,type:file.type}:null;
+  },{capture:true});
+  const watch=()=>{const items=[...document.querySelectorAll('[role="status"]')].map(n=>n.textContent?.trim()).filter(Boolean);for(const message of items)if(!window.__importTrace.notifications.includes(message))window.__importTrace.notifications.push(message);};
+  new MutationObserver(watch).observe(document.body,{subtree:true,childList:true,characterData:true});
+  watch();
+});
 const expectImageImportError=async (phrase) => {
  try {
   await page.getByRole('status').filter({hasText:phrase}).waitFor();
  } catch (error) {
   const status=await page.locator('[role=status]').allTextContents().catch(()=>[]);
+  const trace=await page.evaluate(()=>window.__importTrace).catch(()=>null);
   const inputs=await page.locator('input[accept="image/png,image/jpeg,image/webp"]').evaluateAll(nodes=>nodes.map(n=>({value:n.value,files:n.files?.length}))).catch(()=>[]);
   const layers=await page.locator('.layer-row').count().catch(()=>null);
-  console.error('Image import diagnostic:',JSON.stringify({expected:phrase,status,inputs,layers,pageErrors:errors,url:page.url()}));
+  console.error('Image import diagnostic:',JSON.stringify({expected:phrase,status,trace,inputs,layers,pageErrors:errors,url:page.url()}));
   throw error;
  }
 };
@@ -32,7 +46,7 @@ try{
  await page.getByTitle('Select (V)',{exact:true}).click();assert.equal(await label('Selection mode').inputValue(),'lasso');
  await button('+ Panel').first().click();p=await save();assert.equal(p.scenes[0].panels[1].name,'Panel 02');await button('+ Scene').first().click();p=await save();assert.equal(p.scenes[1].name,'Scene 020');
  const png=page.waitForEvent('download');await page.getByTitle('Export current panel as PNG',{exact:true}).click();const data=await readFile(await(await png).path());assert.equal(data.readUInt32BE(16),256);assert.equal(data.readUInt32BE(20),144);
- const before=await save();await page.locator('input[accept="image/png,image/jpeg,image/webp"]').setInputFiles({name:'broken.png',mimeType:'image/png',buffer:Buffer.from('broken')});await expectImageImportError('not a valid');assert.deepEqual(await save(),before);
+ const before=await save();await installImportDiagnostics();await page.locator('input[accept="image/png,image/jpeg,image/webp"]').setInputFiles({name:'broken.png',mimeType:'image/png',buffer:Buffer.from('broken')});await expectImageImportError('not a valid');assert.deepEqual(await save(),before);
  await page.locator('input[accept="image/png,image/jpeg,image/webp"]').setInputFiles({name:'bad-decode.png',mimeType:'image/png',buffer:Buffer.from([137,80,78,71,13,10,26,10,0,0])});await expectImageImportError('could not be decoded');assert.deepEqual(await save(),before);
  await prefs('General');await number('Default panel duration · seconds',9);await button('Cancel').click();await prefs('General');assert.equal(await label('Default panel duration · seconds').inputValue(),'3');await button('Done').click();
  await button('Pitch').click();assert.equal(await page.locator('.pitch-caption').count(),0);await button('Full screen').click();await page.waitForFunction(()=>document.fullscreenElement?.classList.contains('pitch-view'));await page.evaluate(()=>document.exitFullscreen());
