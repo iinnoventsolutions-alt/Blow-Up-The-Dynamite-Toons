@@ -65,10 +65,23 @@ const selectInkCenter=async () => {
       }
     }
     if(maxX<0) return null;
-    return {x:(minX+maxX)/2/canvas.width,y:(minY+maxY)/2/canvas.height};
+    // The midpoint of a text bounding box often lands on whitespace.
+    // Pick an actual dark glyph pixel near its center instead.
+    const targetX=(minX+maxX)/2,targetY=(minY+maxY)/2;
+    let closest=null,distance=Infinity;
+    for(let y=minY;y<=maxY;y++)for(let x=minX;x<=maxX;x++){
+      const i=(y*canvas.width+x)*4;
+      if(data[i]<120&&data[i+1]<120&&data[i+2]<120){
+        const score=(x-targetX)**2+(y-targetY)**2;
+        if(score<distance){distance=score;closest={x:(x+.5)/canvas.width,y:(y+.5)/canvas.height};}
+      }
+    }
+    return closest;
   });
   assert(center,'Text must be visibly rendered before selection');
   await selectAt(center.x,center.y);
+  try { await page.locator('[data-mode=resize]').first().waitFor({timeout:1500}); }
+  catch { console.error('Text-selection diagnostics:',JSON.stringify({point:center,mode:await page.getByLabel('Selection mode',{exact:true}).inputValue(),tool:await page.locator('.stage-hint').innerText(),handles:await page.locator('[data-mode=resize]').count()})); }
 };
 
 try {
