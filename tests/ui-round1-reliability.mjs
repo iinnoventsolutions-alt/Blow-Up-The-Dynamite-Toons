@@ -132,6 +132,33 @@ try {
   assert.equal(panelOf(saved).layers[0].strokes.filter(s=>s.tool==='brush').length,8);
   assert.equal(panelOf(saved).layers[0].strokes.filter(s=>s.tool==='pencil').length,8);
 
+  // User reproduction: a quick stroke on either Vector or Bitmap must persist
+  // without a 1-2 second hold before the pointer is released.
+  for(const kind of ['vector','bitmap']){
+    const quick=makeProject('Immediate release '+kind);
+    panelOf(quick).layers[0].kind=kind;
+    await load(quick);
+    for(const name of ['brush (B)','Pencil (P)']){
+      await choose(name);
+      const from=await at(name.startsWith('brush')?.12:.55,.35);
+      const to=await at(name.startsWith('brush')?.40:.83,.35);
+      await page.mouse.move(from.x,from.y);
+      await page.mouse.down();
+      await page.mouse.move(to.x,to.y,{steps:1});
+      await page.mouse.up();
+      await waitReady();
+    }
+    // Bitmap layers are flattened after each edit, so inspect persisted pixels
+    // rather than requiring their vector stroke arrays to remain populated.
+    saved=await save();
+    const active=panelOf(saved).layers[0];
+    if(kind==='vector'){
+      assert.equal(active.strokes.length,2,'Immediate-release Vector strokes must both persist');
+    }else{
+      assert(active.image&&active.image.startsWith('data:image/png'),'Immediate-release Bitmap strokes must persist in a flattened image');
+    }
+  }
+
   // The desktop can lose pointer capture during a gesture. Keep the last valid
   // brush geometry instead of dropping the entire unfinished stroke.
   const interrupted=makeProject('Interrupted gesture retention');
@@ -193,6 +220,22 @@ try {
   assert(panelOf(saved).layers[0].strokes[0].points[1][1]>585,'Both consecutive Pencil Editor point movements persist');
   await load(saved);
   assert.deepEqual(panelOf(await save()).layers[0].strokes[0].points,panelOf(saved).layers[0].strokes[0].points);
+
+  // Fast release: move only at pointer-up; no intermediate pointermove is required
+  // for the final point coordinate to be committed.
+  await load(edit);
+  await choose('Pencil Editor');
+  await selectAt(960/1920,560/1080);
+  const fastHandle=await page.locator('[data-mode=point][data-index="1"]').first().boundingBox();
+  assert(fastHandle,'Fast-release Pencil point handle must exist');
+  await page.mouse.move(fastHandle.x+fastHandle.width/2,fastHandle.y+fastHandle.height/2);
+  await page.mouse.down();
+  await page.locator('.art-interaction').evaluate((el,pos)=>{
+    el.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:1,pointerType:'mouse',isPrimary:true,button:0,clientX:pos.x,clientY:pos.y}));
+  },{x:fastHandle.x+fastHandle.width/2,y:fastHandle.y+fastHandle.height/2+42});
+  await page.mouse.up();
+  saved=await save();
+  assert(panelOf(saved).layers[0].strokes[0].points[1][1]>560,'Pencil point release must commit the final coordinate without pointermove');
 
   // Verify that pointer cancellation cannot revert an already moved Pencil point.
   await load(edit);
