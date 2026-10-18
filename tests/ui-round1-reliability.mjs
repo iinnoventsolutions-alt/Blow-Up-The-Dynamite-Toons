@@ -132,6 +132,20 @@ try {
   assert.equal(panelOf(saved).layers[0].strokes.filter(s=>s.tool==='brush').length,8);
   assert.equal(panelOf(saved).layers[0].strokes.filter(s=>s.tool==='pencil').length,8);
 
+  // The desktop can lose pointer capture during a gesture. Keep the last valid
+  // brush geometry instead of dropping the entire unfinished stroke.
+  const interrupted=makeProject('Interrupted gesture retention');
+  await load(interrupted);
+  await choose('brush (B)');
+  const interruptedStart=await at(.15,.2),interruptedEnd=await at(.47,.2);
+  await page.mouse.move(interruptedStart.x,interruptedStart.y);
+  await page.mouse.down();
+  await page.mouse.move(interruptedEnd.x,interruptedEnd.y,{steps:8});
+  await page.locator('.art-interaction').evaluate(el=>el.dispatchEvent(new PointerEvent('pointercancel',{bubbles:true,pointerId:1,pointerType:'mouse'})));
+  await page.mouse.up();
+  saved=await save();
+  assert.equal(panelOf(saved).layers[0].strokes.length,1,'Interrupted Brush gesture must preserve last sampled stroke');
+
   // Repeated erasing must persist and survive redraw and reload.
   await choose('eraser (E)');
   await page.getByLabel('Stroke width',{exact:true}).fill('80');
@@ -180,6 +194,24 @@ try {
   await load(saved);
   assert.deepEqual(panelOf(await save()).layers[0].strokes[0].points,panelOf(saved).layers[0].strokes[0].points);
 
+  // Verify that pointer cancellation cannot revert an already moved Pencil point.
+  await load(edit);
+  await choose('Pencil Editor');
+  await selectAt(960/1920,560/1080);
+  const interruptedPoint=await page.locator('[data-mode=point][data-index="1"]').first().boundingBox();
+  assert(interruptedPoint,'Pencil point handle must exist before interrupted drag');
+  await page.mouse.move(interruptedPoint.x+interruptedPoint.width/2,interruptedPoint.y+interruptedPoint.height/2);
+  await page.mouse.down();
+  await page.mouse.move(interruptedPoint.x+interruptedPoint.width/2,interruptedPoint.y+interruptedPoint.height/2+45,{steps:9});
+  await page.locator('.art-interaction').evaluate(el=>el.dispatchEvent(new PointerEvent('pointercancel',{bubbles:true,pointerId:1,pointerType:'mouse'})));
+  await page.mouse.up();
+  saved=await save();
+  assert(panelOf(saved).layers[0].strokes[0].points[1][1]>560,'Interrupted Pencil Editor drag preserves moved point');
+  await load(saved);
+  assert.deepEqual(panelOf(await save()).layers[0].strokes[0].points,panelOf(saved).layers[0].strokes[0].points);
+
+  // Continue with the contour test on the original editor fixture.
+  await load(edit);
   await choose('Contour Editor');
   await selectAt(400/1920,330/1080);
   const original=panelOf(await save()).layers[0].strokes[1].contours[0];
@@ -190,7 +222,7 @@ try {
   assert.deepEqual(panelOf(await save()).layers[0].strokes[1].contours,panelOf(saved).layers[0].strokes[1].contours);
 
   assert.deepEqual(errors,[],'No uncaught browser errors');
-  console.log('PASS Round 1 reliability: burst and consecutive Brush/Pencil strokes, repeat erasers, text resize, Pencil and Contour point movement, and save/reopen.');
+  console.log('PASS Round 1 reliability: burst, interrupted, and consecutive Brush/Pencil strokes, repeat erasers, text resize, Pencil and Contour point movement, and save/reopen.');
   const samples = await page.evaluate(() => window.__drawingFrameSamples || []);
   const sorted = samples.slice().sort((a,b)=>a-b);
   const p95 = sorted[Math.min(sorted.length-1,Math.floor(sorted.length*.95))] ?? 0;
