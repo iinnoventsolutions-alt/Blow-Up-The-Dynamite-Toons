@@ -113,6 +113,25 @@ try {
   await load(saved);
   assert.equal(panelOf(await save()).layers[0].strokes.length,8,'Strokes survive file roundtrip');
 
+  // Do not await stage readiness between gestures: reproduce fast consecutive inputs.
+  const burst=makeProject('Rapid vector gestures');
+  await load(burst);
+  const burstDrag=async(a,b,c,d)=>{
+    const start=await at(a,b),end=await at(c,d);
+    await page.mouse.move(start.x,start.y);
+    await page.mouse.down();
+    await page.mouse.move(end.x,end.y,{steps:3});
+    await page.mouse.up();
+  };
+  await choose('brush (B)');
+  for(let i=0;i<8;i++)await burstDrag(.1,.12+i*.055,.4,.12+i*.055);
+  await choose('Pencil (P)');
+  for(let i=0;i<8;i++)await burstDrag(.55,.12+i*.055,.85,.12+i*.055);
+  saved=await save();
+  assert.equal(panelOf(saved).layers[0].strokes.length,16,'Rapid brush/pencil gestures must not overwrite earlier strokes');
+  assert.equal(panelOf(saved).layers[0].strokes.filter(s=>s.tool==='brush').length,8);
+  assert.equal(panelOf(saved).layers[0].strokes.filter(s=>s.tool==='pencil').length,8);
+
   // Repeated erasing must persist and survive redraw and reload.
   await choose('eraser (E)');
   await page.getByLabel('Stroke width',{exact:true}).fill('80');
@@ -152,8 +171,12 @@ try {
   await choose('Pencil Editor');
   await selectAt(960/1920,560/1080);
   await dragHandle('[data-mode=point][data-index="1"]',0,35);
+  // Repeat the point gesture immediately, without saving or reloading in between.
+  const secondHandle=await page.locator('[data-mode=point][data-index="1"]').first().boundingBox();
+  assert(secondHandle,'Pencil Editor handle remains available for a second move');
+  await dragHandle('[data-mode=point][data-index="1"]',0,25);
   saved=await save();
-  assert(panelOf(saved).layers[0].strokes[0].points[1][1]>560,'Pencil point movement persisted');
+  assert(panelOf(saved).layers[0].strokes[0].points[1][1]>585,'Both consecutive Pencil Editor point movements persist');
   await load(saved);
   assert.deepEqual(panelOf(await save()).layers[0].strokes[0].points,panelOf(saved).layers[0].strokes[0].points);
 
@@ -167,7 +190,7 @@ try {
   assert.deepEqual(panelOf(await save()).layers[0].strokes[1].contours,panelOf(saved).layers[0].strokes[1].contours);
 
   assert.deepEqual(errors,[],'No uncaught browser errors');
-  console.log('PASS Round 1 reliability: consecutive Brush/Pencil strokes, repeat erasers, text resize, Pencil and Contour point movement, and save/reopen.');
+  console.log('PASS Round 1 reliability: burst and consecutive Brush/Pencil strokes, repeat erasers, text resize, Pencil and Contour point movement, and save/reopen.');
   const samples = await page.evaluate(() => window.__drawingFrameSamples || []);
   const sorted = samples.slice().sort((a,b)=>a-b);
   const p95 = sorted[Math.min(sorted.length-1,Math.floor(sorted.length*.95))] ?? 0;
