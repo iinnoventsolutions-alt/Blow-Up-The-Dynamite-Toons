@@ -19,7 +19,11 @@ for page in reader.pages:
         if not text.strip() or font is None:
             return
         weight = weights[font.indirect_reference.idnum]
-        if text.strip() in ('Scene', 'Panel', 'Dialogue', 'Notes', 'Action', 'Slugging', 'Transition'):
+        if text.strip() == 'PDF_SCENE_HEADING':
+            assert weight >= 700, ('scene title must be bold', text, weight)
+        elif text.strip() == 'PDF_PANEL_HEADING':
+            assert weight == 400, ('panel title must be regular', text, weight)
+        elif text.strip() in ('Scene', 'Panel', 'Dialogue', 'Notes', 'Action', 'Slugging', 'Transition'):
             assert weight >= 700, (text, weight)
             seen_bold = True
         elif 'Introduction' in text or 'LINE_' in text or 'NOTES_SENTINEL' in text:
