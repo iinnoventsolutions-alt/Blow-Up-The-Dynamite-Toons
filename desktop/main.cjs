@@ -13,7 +13,7 @@ const stableDataDirectory = path.basename(previousDataDirectory) === metadata.na
 app.setName(metadata.name);
 app.setPath('userData', stableDataDirectory);
 app.setAboutPanelOptions({ applicationName: metadata.name, applicationVersion: `Version ${metadata.version}`, version: `Build ${metadata.build}` });
-let win, currentPath = null, dirty = false, closePrompt = false, recentFiles = [], saveQueue = Promise.resolve();
+let win, currentPath = null, dirty = false, closePrompt = false, quitRequested = false, recentFiles = [], saveQueue = Promise.resolve();
 const pagePath = path.join(__dirname, '../dist/index.html');
 const pageURL = pathToFileURL(pagePath).href;
 const dataPath = (name) => path.join(app.getPath('userData'), name);
@@ -55,8 +55,9 @@ app.whenReady().then(async () => {
   ipcMain.on('project:dirty', (event, value) => { trusted(event); if (typeof value === 'boolean') dirty = value; });
   ipcMain.on('project:close-after-save', (event) => { trusted(event); if (!dirty) closeWindow(win); });
   const action = (name) => () => sendToWindow(win, 'app:action', name);
+  const requestQuit = () => { quitRequested = true; if (windowIsUsable(win)) closeWindow(win); else app.quit(); };
   const menus = [];
-  if (process.platform === 'darwin') menus.push({ label: metadata.name, submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { type: 'separator' }, { label: 'Quit', accelerator: 'Cmd+Q', click: () => closeWindow(win) }] });
+  if (process.platform === 'darwin') menus.push({ label: metadata.name, submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { type: 'separator' }, { label: 'Quit', accelerator: 'Cmd+Q', click: requestQuit }] });
   menus.push({ label: 'File', submenu: [{ label: 'New Project', accelerator: 'CmdOrCtrl+N', click: action('new') }, { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: action('open') }, { type: 'separator' }, { label: 'Save', accelerator: 'CmdOrCtrl+S', click: action('save') }, { label: 'Save As…', accelerator: 'CmdOrCtrl+Shift+S', click: action('save-as') }, { type: 'separator' }, { label: 'Export PDF…', click: action('export-pdf') }, { type: 'separator' }, { label: 'Close', click: () => closeWindow(win) }] });
   menus.push({ label: 'Edit', submenu: [{ label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: action('undo') }, { label: 'Redo', accelerator: 'CmdOrCtrl+Shift+Z', click: action('redo') }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }, { type: 'separator' }, { label: 'Preferences…', click: action('preferences') }] });
   menus.push({ label: 'View', submenu: [{ role: 'togglefullscreen' }] });
@@ -70,6 +71,7 @@ app.whenReady().then(async () => {
     thisWindow.on('closed', () => {
       if (win === thisWindow) win = null;
       closePrompt = false;
+      if (quitRequested) app.quit();
     });
     thisWindow.on('close', (event) => {
       if (!dirty) return;
@@ -80,6 +82,7 @@ app.whenReady().then(async () => {
         try {
           const result = await dialog.showMessageBox(thisWindow, { type: 'question', message: 'Save changes before closing?', detail: 'Your project has unsaved changes.', buttons: ['Save', 'Discard', 'Cancel'], defaultId: 0, cancelId: 2 });
           if (win !== thisWindow || !windowIsUsable(thisWindow)) return;
+          if (result.response === 2) quitRequested = false;
           if (result.response === 0) sendToWindow(thisWindow, 'app:action', 'save-and-close');
           if (result.response === 1) {
             await queued(() => fs.rm(dataPath('recovery.innovent'), { force: true }));
@@ -88,6 +91,7 @@ app.whenReady().then(async () => {
             closeWindow(thisWindow);
           }
         } catch (error) {
+          quitRequested = false;
           if (windowIsUsable(thisWindow)) dialog.showErrorBox('Unable to close project', error.message || String(error));
         } finally {
           closePrompt = false;
