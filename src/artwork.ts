@@ -6,11 +6,35 @@ export type Selected = { layerId: string; id: string };
 export const eligibleLayers = (panel: Panel, active: string, scope: ToolOptions['selectionScope']) => panel.layers.filter(l=>l.visible&&!l.locked&&(scope==='visible'||l.id===active));
 export function simplifyStroke(points:Point[],tolerance:number,size:number):Point[]{if(points.length<3)return points;const keep=new Set([0,points.length-1]),stack:[[number,number]]=[[0,points.length-1]];while(stack.length){const [first,last]=stack.pop()!,a=points[first],b=points[last],dx=b[0]-a[0],dy=b[1]-a[1];let far=-1,distance=tolerance;for(let i=first+1;i<last;i++){const p=points[i],t=Math.max(0,Math.min(1,((p[0]-a[0])*dx+(p[1]-a[1])*dy)/(dx*dx+dy*dy||1))),d=Math.max(Math.hypot(p[0]-a[0]-t*dx,p[1]-a[1]-t*dy),Math.abs(p[2]-a[2]-(b[2]-a[2])*t)*size/2);if(d>distance){distance=d;far=i;}}if(far>=0){keep.add(far);stack.push([first,far],[far,last]);}}return points.filter((_,i)=>keep.has(i));}
 export function contourFromPoints(points: Point[], size: number, startCap='round', endCap='round'): Point[] {
+ if(points.length===0)return [];
  if(points.length===1){const p=points[0],r=size*p[2]/2;return Array.from({length:16},(_,i)=>[p[0]+Math.cos(i*Math.PI/8)*r,p[1]+Math.sin(i*Math.PI/8)*r,1] as Point);}
- const left:Point[]=[],right:Point[]=[];points.forEach((p,i)=>{const a=points[Math.max(0,i-1)],b=points[Math.min(points.length-1,i+1)],angle=Math.atan2(b[1]-a[1],b[0]-a[0]),r=size*p[2]/2;left.push([p[0]-Math.sin(angle)*r,p[1]+Math.cos(angle)*r,1]);right.push([p[0]+Math.sin(angle)*r,p[1]-Math.cos(angle)*r,1]);});
+ // Offset each segment, then bevel sharp turns instead of joining both sides
+ // through a long miter. At a W-shaped cusp that miter can fold the filled
+ // outline across itself and produce triangular spikes.
+ const segments=points.slice(1).map((p,i)=>{const a=points[i],dx=p[0]-a[0],dy=p[1]-a[1],length=Math.hypot(dx,dy)||1;return [-dy/length,dx/length] as [number,number];});
+ const left:Point[]=[],right:Point[]=[];
+ const add=(list:Point[],p:Point,n:[number,number],sign:number)=>list.push([p[0]+n[0]*size*p[2]/2*sign,p[1]+n[1]*size*p[2]/2*sign,1]);
+ for(let i=0;i<points.length;i++){
+  const p=points[i];
+  if(i===0||i===points.length-1){const normal=segments[i===0?0:segments.length-1];add(left,p,normal,1);add(right,p,normal,-1);continue;}
+  const before=segments[i-1],after=segments[i],dot=before[0]*after[0]+before[1]*after[1];
+  if(dot<0.7){ // Sharp corners need a bevel, not a long miter or a flipped normal.
+   add(left,p,before,1);add(left,p,after,1);
+   add(right,p,before,-1);add(right,p,after,-1);
+  }else{
+   const nx=before[0]+after[0],ny=before[1]+after[1],denom=nx*after[0]+ny*after[1],factor=1/Math.max(0.7,denom);
+   const offset:[number,number]=[nx*factor,ny*factor];
+   add(left,p,offset,1);add(right,p,offset,-1);
+  }
+ }
+ const a=points[0],b=points[1],z=points.at(-1)!,y=points.at(-2)!;
+ const startAngle=Math.atan2(b[1]-a[1],b[0]-a[0]),endAngle=Math.atan2(z[1]-y[1],z[0]-y[0]);
  const cap=(p:Point,angle:number)=>Array.from({length:8},(_,i)=>[p[0]+Math.cos(angle-i*Math.PI/8)*size*p[2]/2,p[1]+Math.sin(angle-i*Math.PI/8)*size*p[2]/2,1] as Point);
- const a=points[0],b=points[1],z=points.at(-1)!,y=points.at(-2)!,startAngle=Math.atan2(b[1]-a[1],b[0]-a[0]),endAngle=Math.atan2(z[1]-y[1],z[0]-y[0]);if(startCap==='square')for(const list of [left,right]){list[0][0]-=Math.cos(startAngle)*size*a[2]/2;list[0][1]-=Math.sin(startAngle)*size*a[2]/2;}if(endCap==='square')for(const list of [left,right]){list[list.length-1][0]+=Math.cos(endAngle)*size*z[2]/2;list[list.length-1][1]+=Math.sin(endAngle)*size*z[2]/2;}return [...left,...(endCap==='round'?cap(z,endAngle+Math.PI/2):[]),...right.reverse(),...(startCap==='round'?cap(a,startAngle-Math.PI/2):[])];
+ if(startCap==='square')for(const list of [left,right]){list[0][0]-=Math.cos(startAngle)*size*a[2]/2;list[0][1]-=Math.sin(startAngle)*size*a[2]/2;}
+ if(endCap==='square')for(const list of [left,right]){list[list.length-1][0]+=Math.cos(endAngle)*size*z[2]/2;list[list.length-1][1]+=Math.sin(endAngle)*size*z[2]/2;}
+ return [...left,...(endCap==='round'?cap(z,endAngle+Math.PI/2):[]),...right.reverse(),...(startCap==='round'?cap(a,startAngle-Math.PI/2):[])];
 }
+
 export const textFont = (s:Stroke) => `${s.italic?'italic ':''}${s.bold?'bold ':''}${s.fontSize||48}px "${(s.font||'Arial').replace(/["\\]/g,'')}"`;
 let textMeasure:CanvasRenderingContext2D|null=null;
 export function textLocalBounds(stroke:Stroke) {
