@@ -16,6 +16,7 @@ declare global {
       setDirty(dirty: boolean): void;
       closeAfterSave(): void;
       cancelClose(): void;
+      rendererReady(): void;
       onAction(callback: (action: string) => void): () => void;
     }
   }
