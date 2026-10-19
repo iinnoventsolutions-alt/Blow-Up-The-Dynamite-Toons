@@ -116,11 +116,11 @@ export default function App() {
   const install = (value: Project, name: string, clean: boolean) => { setAudioSelection(null); setTransitionId(''); const h = newHistory(value); historyRef.current = h; latest.current = value; savedRef.current = clean ? serializeProject(value) : ''; setHistory(h); setSelectedId(allPanels(value)[0].panel.id); setSelectedPanels([]); setShowMove(false); setLayerSelection({}); setSavedText(clean ? serializeProject(value) : ''); setFileName(name); let restored='Drawing';if(preferences.rememberWorkspace)try{const v=localStorage.getItem('iinnovent.workspace');if(['Drawing','Panel','Timeline','Pitch'].includes(v||''))restored=v!;}catch{}setWorkspace(restored as Workspace); setDrawingPreview(false); setPlaying(false); setPlayFrame(0); setRecovery(null); setZoom(1); };
   const save = async (saveAs = false, closeAfter = false): Promise<boolean> => {
     if(document.activeElement instanceof HTMLElement&&document.activeElement.matches('.inline-art-text'))document.activeElement.blur();
-    const value = latest.current; if (!value || busyRef.current) return false;
+    const value = latest.current; if (!value || busyRef.current) { if(closeAfter) window.desktop?.cancelClose(); return false; }
     busyRef.current = true; setBusy(true);
     try {
       const text = projectText(value);
-      if (window.desktop) { const result = resultValue(await window.desktop.save(text, saveAs)); if (!result) return false; setFileName(result.name); }
+      if (window.desktop) { const result = resultValue(await window.desktop.save(text, saveAs)); if (!result) { if(closeAfter) window.desktop.cancelClose(); return false; } setFileName(result.name); }
       else {
         const name = `${value.title.replace(/[^a-zA-Z0-9 _-]/g, '').slice(0, 100) || 'Storyboard'}.issb`; fileDownload(text, name); setFileName(name);
         try { await rememberBrowserProject({id:value.id,name,text}); } catch { report('File downloaded. Browser project storage is full.'); }
@@ -131,7 +131,7 @@ export default function App() {
       report(window.desktop ? 'Project saved.' : 'Project file downloaded.');
       if (closeAfter && window.desktop) window.desktop.closeAfterSave();
       return true;
-    } catch (e) { report((e as Error).message); return false; } finally { busyRef.current = false; setBusy(false); }
+    } catch (e) { if(closeAfter) window.desktop?.cancelClose(); report((e as Error).message); return false; } finally { busyRef.current = false; setBusy(false); }
   };
   const open = async (recentId?: string) => {
     if (busyRef.current || !await confirmDiscard()) return;
