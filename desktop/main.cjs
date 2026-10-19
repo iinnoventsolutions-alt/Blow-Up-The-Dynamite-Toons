@@ -4,6 +4,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const crypto = require('node:crypto');
 const { atomicWrite, readProject } = require('./persistence.cjs');
+const { windowIsUsable, sendToWindow, closeWindow } = require('./window-lifecycle.cjs');
 const metadata = require('../src/build-info.json');
 const previousDataDirectory = app.getPath('userData');
 // Preserve packaged recovery/preferences across the display-name correction.
@@ -16,7 +17,7 @@ let win, currentPath = null, dirty = false, closePrompt = false, recentFiles = [
 const pagePath = path.join(__dirname, '../dist/index.html');
 const pageURL = pathToFileURL(pagePath).href;
 const dataPath = (name) => path.join(app.getPath('userData'), name);
-function trusted(event) { if (event.sender !== win?.webContents || event.senderFrame !== win.webContents.mainFrame || event.senderFrame.url !== pageURL) throw new Error('Unauthorized application request.'); }
+function trusted(event) { if (!windowIsUsable(win) || event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame || event.senderFrame.url !== pageURL) throw new Error('Unauthorized application request.'); }
 function handle(channel, fn) { ipcMain.handle(channel, async (event, ...args) => { trusted(event); try { return { ok: true, value: await fn(...args) }; } catch (error) { return { ok: false, error: error.message || 'Operation failed.' }; } }); }
 const queued = (fn) => { const result = saveQueue.then(fn); saveQueue = result.catch(() => {}); return result; };
 async function remember(filePath) {
@@ -52,11 +53,11 @@ app.whenReady().then(async () => {
   handle('project:recover', () => queued(async () => { const text = await readProject(dataPath('recovery.innovent')); currentPath = null; return { text, name: 'Recovered project — save a copy' }; }));
   handle('project:discard-recovery', () => queued(() => fs.rm(dataPath('recovery.innovent'), { force: true })));
   ipcMain.on('project:dirty', (event, value) => { trusted(event); if (typeof value === 'boolean') dirty = value; });
-  ipcMain.on('project:close-after-save', (event) => { trusted(event); if (!dirty) win.close(); });
-  const action = (name) => () => win?.webContents.send('app:action', name);
+  ipcMain.on('project:close-after-save', (event) => { trusted(event); if (!dirty) closeWindow(win); });
+  const action = (name) => () => sendToWindow(win, 'app:action', name);
   const menus = [];
-  if (process.platform === 'darwin') menus.push({ label: metadata.name, submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { type: 'separator' }, { label: 'Quit', accelerator: 'Cmd+Q', click: () => win?.close() }] });
-  menus.push({ label: 'File', submenu: [{ label: 'New Project', accelerator: 'CmdOrCtrl+N', click: action('new') }, { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: action('open') }, { type: 'separator' }, { label: 'Save', accelerator: 'CmdOrCtrl+S', click: action('save') }, { label: 'Save As…', accelerator: 'CmdOrCtrl+Shift+S', click: action('save-as') }, { type: 'separator' }, { label: 'Export PDF…', click: action('export-pdf') }, { type: 'separator' }, { label: 'Close', click: () => win?.close() }] });
+  if (process.platform === 'darwin') menus.push({ label: metadata.name, submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { type: 'separator' }, { label: 'Quit', accelerator: 'Cmd+Q', click: () => closeWindow(win) }] });
+  menus.push({ label: 'File', submenu: [{ label: 'New Project', accelerator: 'CmdOrCtrl+N', click: action('new') }, { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: action('open') }, { type: 'separator' }, { label: 'Save', accelerator: 'CmdOrCtrl+S', click: action('save') }, { label: 'Save As…', accelerator: 'CmdOrCtrl+Shift+S', click: action('save-as') }, { type: 'separator' }, { label: 'Export PDF…', click: action('export-pdf') }, { type: 'separator' }, { label: 'Close', click: () => closeWindow(win) }] });
   menus.push({ label: 'Edit', submenu: [{ label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: action('undo') }, { label: 'Redo', accelerator: 'CmdOrCtrl+Shift+Z', click: action('redo') }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }, { type: 'separator' }, { label: 'Preferences…', click: action('preferences') }] });
   menus.push({ label: 'View', submenu: [{ role: 'togglefullscreen' }] });
   Menu.setApplicationMenu(Menu.buildFromTemplate(menus));
@@ -65,13 +66,33 @@ app.whenReady().then(async () => {
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     win.webContents.on('will-navigate', (event) => event.preventDefault());
     win.loadFile(pagePath);
-    win.on('close', async (event) => {
-      if (!dirty) return;
-      event.preventDefault(); if (closePrompt) return; closePrompt = true;
-      const result = await dialog.showMessageBox(win, { type: 'question', message: 'Save changes before closing?', detail: 'Your project has unsaved changes.', buttons: ['Save', 'Discard', 'Cancel'], defaultId: 0, cancelId: 2 });
+    const thisWindow = win;
+    thisWindow.on('closed', () => {
+      if (win === thisWindow) win = null;
       closePrompt = false;
-      if (result.response === 0) win.webContents.send('app:action', 'save-and-close');
-      if (result.response === 1) { await queued(() => fs.rm(dataPath('recovery.innovent'), { force: true })); dirty = false; win.close(); }
+    });
+    thisWindow.on('close', (event) => {
+      if (!dirty) return;
+      event.preventDefault();
+      if (closePrompt) return;
+      closePrompt = true;
+      void (async () => {
+        try {
+          const result = await dialog.showMessageBox(thisWindow, { type: 'question', message: 'Save changes before closing?', detail: 'Your project has unsaved changes.', buttons: ['Save', 'Discard', 'Cancel'], defaultId: 0, cancelId: 2 });
+          if (win !== thisWindow || !windowIsUsable(thisWindow)) return;
+          if (result.response === 0) sendToWindow(thisWindow, 'app:action', 'save-and-close');
+          if (result.response === 1) {
+            await queued(() => fs.rm(dataPath('recovery.innovent'), { force: true }));
+            if (win !== thisWindow || !windowIsUsable(thisWindow)) return;
+            dirty = false;
+            closeWindow(thisWindow);
+          }
+        } catch (error) {
+          if (windowIsUsable(thisWindow)) dialog.showErrorBox('Unable to close project', error.message || String(error));
+        } finally {
+          closePrompt = false;
+        }
+      })();
     });
   }
   createWindow();
