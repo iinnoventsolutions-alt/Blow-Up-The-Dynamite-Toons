@@ -15,6 +15,7 @@ declare global {
       discardRecovery(): Promise<Result<void>>;
       setDirty(dirty: boolean): void;
       closeAfterSave(): void;
+      cancelClose(): void;
       onAction(callback: (action: string) => void): () => void;
     }
   }
