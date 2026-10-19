@@ -1,4 +1,5 @@
 import { drawingPoint } from './drawing-coordinates';
+import {recordPerformance} from './performance-diagnostics';
 import OnionSkin from './OnionSkin';
 import type { OnionSettings } from './onion';
 import { useEffect, useRef, useState } from 'react';
@@ -48,7 +49,25 @@ export default function DrawingStage({onion,panel,project,layerId,tool,color,siz
  if(keepPrevious){const old=l.strokes.filter(s=>selectionRef.current.some(item=>item.layerId===l.id&&item.id===s.id));if(old.length){const oldPixels=layerCanvas({...l,image:undefined,strokes:old},project).getContext('2d')!.getImageData(0,0,c.width,c.height).data;for(let i=0;i<mask.length;i++)if(oldPixels[i*4+3])mask[i]=1;}}
  const patch=document.createElement('canvas');patch.width=c.width;patch.height=c.height;const out=new ImageData(c.width,c.height);let minX=c.width,minY=c.height,maxX=0,maxY=0;for(let i=0;i<mask.length;i++){if(!mask[i]||data.data[i*4+3]===0)continue;const x=i%c.width,y=Math.floor(i/c.width);minX=Math.min(minX,x);minY=Math.min(minY,y);maxX=Math.max(maxX,x);maxY=Math.max(maxY,y);out.data.set(data.data.subarray(i*4,i*4+4),i*4);data.data[i*4+3]=0;}if(minX>maxX)continue;patch.getContext('2d')!.putImageData(out,0,0);ctx.putImageData(data,0,0);const crop=document.createElement('canvas');crop.width=maxX-minX+1;crop.height=maxY-minY+1;crop.getContext('2d')!.drawImage(patch,minX,minY,crop.width,crop.height,0,0,crop.width,crop.height);const stroke:Stroke={id:uid(),tool:'image',source:crop.toDataURL('image/png'),color:'#000000',size:1,points:[[minX,minY,1],[maxX+1,maxY+1,1]]};l.image=c.toDataURL('image/png');l.strokes=[stroke];items.push({layerId:l.id,id:stroke.id});}await preloadImages(next);return{next,items};};
  const finishSelection=async(polygon:Point[],click?:Point,shift=false)=>{let items:Selected[]=[];const base=working();for(const l of eligibleLayers(base,layerId,options.selectionScope)){if(l.kind==='bitmap')continue;for(const s of l.strokes){if(s.tool==='eraser')continue;const b=bounds(s);if(click?hitStroke(s,click[0],click[1],project.width/(svg.current?.clientWidth||500)*4):s.points.some(p=>pointInPolygon(p[0],p[1],polygon))||pointInPolygon(b.x+b.width/2,b.y+b.height/2,polygon)||polygon.some(p=>hitStroke(s,p[0],p[1],0)))items.push({layerId:l.id,id:s.id});}}if(click&&items.length)items=items.slice(-1);setBusy(true);try{let onlyLayer:string|undefined;if(click){let highest=items.length?base.layers.findIndex(l=>l.id===items[0].layerId):-1;for(const l of eligibleLayers(base,layerId,options.selectionScope)){const index=base.layers.findIndex(x=>x.id===l.id);if(l.kind==='bitmap'&&index>highest){if(project.width*project.height>16777216)continue;await preloadImages({layers:[l]} as Panel);const c=layerCanvas(l,project),x=Math.floor(click[0]),y=Math.floor(click[1]);if(x>=0&&y>=0&&x<c.width&&y<c.height&&c.getContext('2d')!.getImageData(x,y,1,1).data[3]){onlyLayer=l.id;highest=index;items=[];}}}if(items.length)onlyLayer='none';}const raster=await rasterSelection(base,polygon,click,onlyLayer,shift);draft.current=raster.next;if(raster.items.length)items.push(...raster.items);select(shift?[...selectionRef.current.filter(item=>raster.next.layers.some(l=>l.id===item.layerId&&l.strokes.some(s=>s.id===item.id))),...items.filter(s=>!selectionRef.current.some(x=>x.id===s.id))]:items);redraw();}catch(e){onError((e as Error).message);}finally{setBusy(false);}};
- const fill=async(p:Point)=>{if(!layer)return;setBusy(true);try{const ref=options.fillReference==='active'?{...panel,layers:[{...layer,opacity:1}]}:panel;await preloadImages(ref);const c=document.createElement('canvas'),width=Math.min(project.width,Math.round(2048*project.width/Math.max(project.width,project.height)));drawPanel(c,ref,project,{width,transparent:true});const mask=floodMask(c.getContext('2d')!.getImageData(0,0,c.width,c.height).data,c.width,c.height,p[0]/project.width*c.width,p[1]/project.height*c.height,options.tolerance,options.gap),contours=maskContours(mask,c.width,c.height,project.width/c.width,project.height/c.height);if(!contours.length){onError('No fillable area at this point. Adjust tolerance or gap closing.');return;}const next=structuredClone(panel),l=next.layers.find(l=>l.id===layerId)!;l.strokes.push({id:uid(),tool:'fill',color,size:1,opacity:options.opacity,points:[p],contours});await commit(next);}catch(e){onError((e as Error).message);}finally{setBusy(false);}};
+ const fill=async(p:Point)=>{
+  if(!layer)return;
+  const started=performance.now();let stage=started;
+  const measured=(label:string)=>{const now=performance.now();recordPerformance('Bucket '+label,now-stage);stage=now;};
+  setBusy(true);
+  try{
+   const ref=options.fillReference==='active'?{...panel,layers:[{...layer,opacity:1}]}:panel;
+   await preloadImages(ref);measured('preload images');
+   const c=document.createElement('canvas'),width=Math.min(project.width,Math.round(2048*project.width/Math.max(project.width,project.height)));
+   drawPanel(c,ref,project,{width,transparent:true});
+   const pixels=c.getContext('2d')!.getImageData(0,0,c.width,c.height);measured('render and pixel readback');
+   const mask=floodMask(pixels.data,c.width,c.height,p[0]/project.width*c.width,p[1]/project.height*c.height,options.tolerance,options.gap);measured('flood mask');
+   const contours=maskContours(mask,c.width,c.height,project.width/c.width,project.height/c.height);measured('trace contours');
+   if(!contours.length){onError('No fillable area at this point. Adjust tolerance or gap closing.');return;}
+   const next=structuredClone(panel),l=next.layers.find(l=>l.id===layerId)!;
+   l.strokes.push({id:uid(),tool:'fill',color,size:1,opacity:options.opacity,points:[p],contours});
+   await commit(next);measured('commit');
+  }catch(e){onError((e as Error).message);}finally{recordPerformance('Bucket total',performance.now()-started);setBusy(false);}
+ };
  const begin=(e:PointerEvent<SVGSVGElement>)=>{if(e.button!==0||busy||committing.current||inlineRef.current)return;e.preventDefault();e.currentTarget.focus({preventScroll:true});const p=point(e),target=e.target as SVGElement,mode=target.dataset.mode;e.currentTarget.setPointerCapture(e.pointerId);
   if(space.current||tool==='hand'){gesture.current={kind:'pan',start:p,screen:[e.clientX,e.clientY],originPan:pan};return;}
   if(tool==='rotate-view'){gesture.current={kind:'rotate',start:p,screen:[e.clientX,e.clientY],originPan:pan,rotation};return;}
