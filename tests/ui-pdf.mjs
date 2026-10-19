@@ -27,7 +27,11 @@ try{
  await label('PDF export range').selectOption('scenes');assert(await page.getByRole('button',{name:'Export PDF',exact:true}).last().isDisabled());await label('Scene 2 (1)').check();await label('Cover page').uncheck();await label('Notes').uncheck();const e=await exportPdf('pdf-range');assert(!e.text.includes('NOTES_SENTINEL'));assert(!e.text.includes('SECOND_SCENE_SENTINEL'));assert(!e.text.includes('LINE_'));
  await page.getByRole('button',{name:'Duplicate profile',exact:true}).click();await label('PDF profile name').fill('Saved review');await label('PDF margin').fill('36');await page.getByRole('button',{name:'Save profile',exact:true}).click();await page.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('button',{name:'Export PDF',exact:true}).click();await label('Saved PDF profile').selectOption('4');assert.equal(await label('PDF margin').inputValue(),'36');
  await page.getByRole('button',{name:'Delete profile',exact:true}).click();assert.equal(await label('Saved PDF profile').locator('option').count(),4);
- await page.getByRole('button',{name:'Close',exact:true}).click();const save=page.waitForEvent('download');await page.getByRole('button',{name:'Save project',exact:true}).click();const saved=JSON.parse(await readFile(await(await save).path(),'utf8'));assert.deepEqual(saved,p,'PDF export does not mutate the project');
+ const closeStarted=performance.now();
+ await page.getByRole('button',{name:'Close',exact:true}).click();
+ await page.getByRole('heading',{name:'Export storyboard PDF'}).waitFor({state:'detached'});
+ console.log('PDF dialog close response (browser, informational): '+(performance.now()-closeStarted).toFixed(1)+'ms');
+ const save=page.waitForEvent('download');await page.getByRole('button',{name:'Save project',exact:true}).click();const saved=JSON.parse(await readFile(await(await save).path(),'utf8'));assert.deepEqual(saved,p,'PDF export does not mutate the project');
 
  // Branding replacement, selected panels, 300 DPI, cancellation and unsupported glyph feedback.
  await page.getByRole('button',{name:'Panel',exact:true}).click();
