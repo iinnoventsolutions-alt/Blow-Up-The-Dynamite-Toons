@@ -150,7 +150,7 @@ export default function App() {
   useEffect(() => { if (!project) return; if (!findPanel(project, selectedId)) setSelectedId(allPanels(project)[0].panel.id); if (panel && !panel.layers.some(l => l.id === layerId)) setLayerSelection(prev => ({ ...prev, [panel.id]: panel.layers.at(-1)!.id })); }, [project, selectedId, layerId]);
   const actions = useRef<(action: string) => void>(() => {});
   actions.current = (action) => { if (document.querySelector('dialog[open]')) return; if (action === 'new') void beginNew(); if (action === 'open') void open(); if (action === 'save') void save(); if(action==='export-pdf'&&project){setPlaying(false);setShowPdf(true);} if (action === 'save-as') void save(true); if (action === 'save-and-close') void save(false, true); if (action === 'undo' || action === 'redo') historyAction(action); if (action === 'preferences') setShowPreferences(true); if (action === 'toggle-play') togglePlay(); };
-  useEffect(() => window.desktop?.onAction(action => actions.current(action)), []);
+  useEffect(() => { const unsubscribe = window.desktop?.onAction(action => actions.current(action)); window.desktop?.rendererReady(); return unsubscribe; }, []);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLElement && (e.target.matches('input, textarea, select') || e.target.isContentEditable)) { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') { e.preventDefault(); (e.target as HTMLElement).blur(); actions.current(e.shiftKey ? 'save-as' : 'save'); } return; }
