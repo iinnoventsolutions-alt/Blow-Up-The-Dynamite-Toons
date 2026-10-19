@@ -108,8 +108,12 @@ export async function createStoryboardPdf(project:Project,raw:PdfSettings,range:
     const hx=b.header.x+index*half;
     doc.rect(hx,b.header.y,half,b.header.h);
     doc.setFont('Storyboard','bold');doc.setFontSize(8);doc.text(index?'Panel':'Scene',hx+4,b.header.y+10);
-    doc.setFont('Storyboard','normal');const suffix=index&&slot.continued?' (cont.)':'';doc.text(short(name,half-8-doc.getTextWidth(suffix))+suffix,hx+4,b.header.y+21);
-    if(s.timing){doc.setFontSize(7);doc.text(timecode(index?entry.panel.duration:sceneFrames(entry.scene),project.fps),hx+4,b.header.y+32);}
+    // Scene title is the primary heading; panel title is secondary.
+    // Keep the label distinct and restore a readable font before timing.
+    doc.setFont('Storyboard',index?'normal':'bold');doc.setFontSize(index?8:9);
+    const suffix=index&&slot.continued?' (cont.)':'';
+    doc.text(short(name,half-8-doc.getTextWidth(suffix))+suffix,hx+4,b.header.y+22);
+    if(s.timing){doc.setFont('Storyboard','normal');doc.setFontSize(7);doc.text(timecode(index?entry.panel.duration:sceneFrames(entry.scene),project.fps),hx+4,b.header.y+33);}
    });
    await preloadImages(entry.panel);check(signal);const canvas=pictureCanvas(entry,project,s,{...b.picture,w:b.picture.w-8,h:b.picture.h-8}),f=fit(canvas.width,canvas.height,{x:b.picture.x+4,y:b.picture.y+4,w:b.picture.w-8,h:b.picture.h-8});
    doc.addImage(canvas.toDataURL('image/jpeg',.94),'JPEG',f.x,f.y,f.w,f.h);
