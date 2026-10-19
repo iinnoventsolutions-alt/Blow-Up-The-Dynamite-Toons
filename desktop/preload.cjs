@@ -12,5 +12,6 @@ contextBridge.exposeInMainWorld('desktop', {
   snapshot: (text) => ipcRenderer.invoke('project:snapshot', text),
   setDirty: (dirty) => ipcRenderer.send('project:dirty', dirty),
   closeAfterSave: () => ipcRenderer.send('project:close-after-save'),
+  cancelClose: () => ipcRenderer.send('project:cancel-close'),
   onAction: (callback) => { const handler = (_, action) => callback(action); ipcRenderer.on('app:action', handler); return () => ipcRenderer.removeListener('app:action', handler); }
 });
