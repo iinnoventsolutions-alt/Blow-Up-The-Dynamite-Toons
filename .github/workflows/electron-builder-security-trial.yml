@@ -86,7 +86,7 @@ jobs:
       - name: Model tests and production build
         run: |
           npm test
-          node --test tests/electron-lifecycle.test.cjs
+          node --test tests/electron-lifecycle.test.cjs tests/electron-persistence.test.cjs
           npm run build
       - name: Prepare browser regression dependencies
         run: |
