@@ -13,5 +13,6 @@ contextBridge.exposeInMainWorld('desktop', {
   setDirty: (dirty) => ipcRenderer.send('project:dirty', dirty),
   closeAfterSave: () => ipcRenderer.send('project:close-after-save'),
   cancelClose: () => ipcRenderer.send('project:cancel-close'),
+  rendererReady: () => ipcRenderer.send('app:renderer-ready'),
   onAction: (callback) => { const handler = (_, action) => callback(action); ipcRenderer.on('app:action', handler); return () => ipcRenderer.removeListener('app:action', handler); }
 });
