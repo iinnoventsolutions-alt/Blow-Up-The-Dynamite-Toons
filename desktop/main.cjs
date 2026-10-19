@@ -13,7 +13,7 @@ const stableDataDirectory = path.basename(previousDataDirectory) === metadata.na
 app.setName(metadata.name);
 app.setPath('userData', stableDataDirectory);
 app.setAboutPanelOptions({ applicationName: metadata.name, applicationVersion: `Version ${metadata.version}`, version: `Build ${metadata.build}` });
-let win, currentPath = null, dirty = false, closePrompt = false, quitRequested = false, recentFiles = [], saveQueue = Promise.resolve();
+let win, currentPath = null, dirty = false, closePrompt = false, quitRequested = false, pendingAction = null, recentFiles = [], saveQueue = Promise.resolve();
 const pagePath = path.join(__dirname, '../dist/index.html');
 const pageURL = pathToFileURL(pagePath).href;
 const dataPath = (name) => path.join(app.getPath('userData'), name);
@@ -55,7 +55,12 @@ app.whenReady().then(async () => {
   ipcMain.on('project:dirty', (event, value) => { trusted(event); if (typeof value === 'boolean') dirty = value; });
   ipcMain.on('project:close-after-save', (event) => { trusted(event); if (!dirty) closeWindow(win); });
   ipcMain.on('project:cancel-close', (event) => { trusted(event); quitRequested = false; });
-  const action = (name) => () => sendToWindow(win, 'app:action', name);
+  ipcMain.on('app:renderer-ready', (event) => { trusted(event); if (pendingAction) { const name = pendingAction; pendingAction = null; sendToWindow(win, 'app:action', name); } });
+  const action = (name) => () => {
+    if (windowIsUsable(win)) { sendToWindow(win, 'app:action', name); return; }
+    pendingAction = name;
+    createWindow();
+  };
   const requestQuit = () => { quitRequested = true; if (windowIsUsable(win)) closeWindow(win); else app.quit(); };
   const menus = [];
   if (process.platform === 'darwin') menus.push({ label: metadata.name, submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { type: 'separator' }, { label: 'Quit', accelerator: 'Cmd+Q', click: requestQuit }] });
