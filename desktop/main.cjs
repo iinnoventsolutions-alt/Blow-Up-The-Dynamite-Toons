@@ -54,6 +54,7 @@ app.whenReady().then(async () => {
   handle('project:discard-recovery', () => queued(() => fs.rm(dataPath('recovery.innovent'), { force: true })));
   ipcMain.on('project:dirty', (event, value) => { trusted(event); if (typeof value === 'boolean') dirty = value; });
   ipcMain.on('project:close-after-save', (event) => { trusted(event); if (!dirty) closeWindow(win); });
+  ipcMain.on('project:cancel-close', (event) => { trusted(event); quitRequested = false; });
   const action = (name) => () => sendToWindow(win, 'app:action', name);
   const requestQuit = () => { quitRequested = true; if (windowIsUsable(win)) closeWindow(win); else app.quit(); };
   const menus = [];
