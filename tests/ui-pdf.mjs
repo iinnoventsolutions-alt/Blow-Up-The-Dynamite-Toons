@@ -6,6 +6,7 @@ import {makeProject,makePanel,makeScene,uid} from '../src/model.ts';
 const server=spawn(process.execPath,['desktop/preview.cjs'],{stdio:'ignore'});for(let i=0;i<100;i++){try{if((await fetch('http://127.0.0.1:4317')).ok)break;}catch{}await new Promise(r=>setTimeout(r,100));}
 const browser=await chromium.launch({headless:true,...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{})});const page=await browser.newPage({viewport:{width:1500,height:1000},acceptDownloads:true});page.setDefaultTimeout(15000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
 const p=makeProject('PDF acceptance — café','1920'*1,1080,24,'Export and branding review');
+p.scenes[0].name='PDF_SCENE_HEADING';p.scenes[0].panels[0].name='PDF_PANEL_HEADING';
 const first=p.scenes[0].panels[0];first.dialogue='MAYA\nIntroduction — café and naïve.\nA new story begins.';first.action='Camera moves toward the subject.';first.notes='NOTES_SENTINEL';first.slugging='SLUG_SENTINEL';
 first.layers[0].strokes=[{id:uid(),tool:'shape',shape:'rectangle',fill:'#76b3dc',color:'#172b43',size:4,points:[[200,200,1],[1700,900,1]]}];
 first.layers.push({id:uid(),name:'Hidden',visible:false,locked:false,opacity:1,strokes:[{id:uid(),tool:'shape',shape:'rectangle',fill:'#ff0000',color:'#ff0000',size:1,points:[[0,0,1],[1920,1080,1]]}]});
