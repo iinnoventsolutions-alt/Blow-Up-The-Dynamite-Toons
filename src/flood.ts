@@ -6,7 +6,19 @@ export function floodMask(data: Uint8ClampedArray, width: number, height: number
  for(let pass=0;pass<gap;pass++){const out=wall.slice();for(let yy=1;yy<height-1;yy++)for(let xx=1;xx<width-1;xx++){const i=yy*width+xx;out[i]=wall[i]||wall[i-1]||wall[i+1]||wall[i-width]||wall[i+width]||wall[i-width-1]||wall[i-width+1]||wall[i+width-1]||wall[i+width+1]?1:0;}wall=out;}
  for(let pass=0;pass<gap;pass++){const out=wall.slice();for(let yy=1;yy<height-1;yy++)for(let xx=1;xx<width-1;xx++){const i=yy*width+xx;out[i]=wall[i]&&wall[i-1]&&wall[i+1]&&wall[i-width]&&wall[i+width]&&wall[i-width-1]&&wall[i-width+1]&&wall[i+width-1]&&wall[i+width+1]?1:0;}wall=out;}
  const mask=new Uint8Array(n),queue=new Int32Array(n);let head=0,tail=0,index=y*width+x;if(wall[index])return mask;mask[index]=1;queue[tail++]=index;
- while(head<tail){const i=queue[head++],xx=i%width;for(const j of [xx?i-1:-1,xx<width-1?i+1:-1,i>=width?i-width:-1,i<n-width?i+width:-1])if(j>=0&&!mask[j]&&!wall[j]){mask[j]=1;queue[tail++]=j;}}
+ // Avoid allocating a neighbor array for every visited pixel.
+ // Every pixel enters the queue at most once because it is marked on enqueue.
+ while(head<tail){
+  const i=queue[head++],xx=i%width;
+  let j=i-1;
+  if(xx>0&&!mask[j]&&!wall[j]){mask[j]=1;queue[tail++]=j;}
+  j=i+1;
+  if(xx<width-1&&!mask[j]&&!wall[j]){mask[j]=1;queue[tail++]=j;}
+  j=i-width;
+  if(j>=0&&!mask[j]&&!wall[j]){mask[j]=1;queue[tail++]=j;}
+  j=i+width;
+  if(j<n&&!mask[j]&&!wall[j]){mask[j]=1;queue[tail++]=j;}
+ }
  return mask;
 }
 export function maskContours(mask: Uint8Array,width:number,height:number,scaleX:number,scaleY:number):Point[][] {
