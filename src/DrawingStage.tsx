@@ -8,13 +8,15 @@ import CameraOverlay from './CameraOverlay';
 import { findPanel, uid, type Layer, type Panel, type Point, type Project, type Stroke } from './model';
 import { bounds, textLocalBounds, simplifyStroke, cloneArtwork, contourFromPoints, defaultToolOptions, editSelected, eligibleLayers, hitStroke, pointInPolygon, selectionBounds, transformStroke, type Selected, type Tool, type ToolOptions } from './artwork';
 import { canDraw, drawPanel, flattenLayer, layerCanvas, preloadImages } from './render';
-import { floodMask, maskContours } from './flood';
+import { floodMask } from './flood';
+import {calculateFill} from './fill-compute';
 import type { CameraPose } from './camera';
 type Command={seq:number;op:string};
 type Props={onion:OnionSettings;panel:Panel;project:Project;layerId:string;tool:Tool;color:string;size:number;zoom:number;guides:boolean;rotation:number;options:ToolOptions;cameraFrame:number;command:Command;onCameraChange:(frame:number,pose:CameraPose)=>void;onLayers:(layers:Layer[])=>void;onColor:(color:string)=>void;onSize:(size:number)=>void;onSelection:(selected:Selected[])=>void;onRotation:(n:number)=>void;onOptions:(p:Partial<ToolOptions>)=>void;onError:(message:string)=>void};
 type Gesture={kind:'stroke'|'shape'|'region'|'transform'|'point'|'pan'|'rotate';start:Point;screen:[number,number];originPan:{x:number;y:number};mode?:string;original?:Panel;pointIndex?:number;pathIndex?:number;box?:{x:number;y:number;width:number;height:number};rotation?:number;};
 export default function DrawingStage({onion,panel,project,layerId,tool,color,size,zoom,guides,rotation,options=oDefault,cameraFrame,command,onCameraChange,onLayers,onColor,onSize,onSelection,onRotation,onOptions,onError}:Props){
  const insertedPoint=useRef<{time:number;x:number;y:number}|null>(null);
+ const fillPending=useRef(false);
  const textInput=useRef<HTMLTextAreaElement>(null),inlineRef=useRef<{id:string;layerId:string;value:string}|null>(null),[inline,setInline]=useState<{id:string;layerId:string;value:string}|null>(null);
  const latestPanel=useRef(panel),committing=useRef(false),canvas=useRef<HTMLCanvasElement>(null),svg=useRef<SVGSVGElement>(null),live=useRef<Stroke|null>(null),gesture=useRef<Gesture|null>(null),frame=useRef(0),draft=useRef<Panel|null>(null),selectionRef=useRef<Selected[]>([]),selectedPoint=useRef<{path:number;index:number}|null>(null),space=useRef(false);
  const [selected,setSelected]=useState<Selected[]>([]),[region,setRegion]=useState<Point[]>([]),[pan,setPan]=useState({x:0,y:0}),[temporaryHand,setTemporaryHand]=useState(false),[tick,setTick]=useState(0),[busy,setBusy]=useState(false);
@@ -50,7 +52,8 @@ export default function DrawingStage({onion,panel,project,layerId,tool,color,siz
  const patch=document.createElement('canvas');patch.width=c.width;patch.height=c.height;const out=new ImageData(c.width,c.height);let minX=c.width,minY=c.height,maxX=0,maxY=0;for(let i=0;i<mask.length;i++){if(!mask[i]||data.data[i*4+3]===0)continue;const x=i%c.width,y=Math.floor(i/c.width);minX=Math.min(minX,x);minY=Math.min(minY,y);maxX=Math.max(maxX,x);maxY=Math.max(maxY,y);out.data.set(data.data.subarray(i*4,i*4+4),i*4);data.data[i*4+3]=0;}if(minX>maxX)continue;patch.getContext('2d')!.putImageData(out,0,0);ctx.putImageData(data,0,0);const crop=document.createElement('canvas');crop.width=maxX-minX+1;crop.height=maxY-minY+1;crop.getContext('2d')!.drawImage(patch,minX,minY,crop.width,crop.height,0,0,crop.width,crop.height);const stroke:Stroke={id:uid(),tool:'image',source:crop.toDataURL('image/png'),color:'#000000',size:1,points:[[minX,minY,1],[maxX+1,maxY+1,1]]};l.image=c.toDataURL('image/png');l.strokes=[stroke];items.push({layerId:l.id,id:stroke.id});}await preloadImages(next);return{next,items};};
  const finishSelection=async(polygon:Point[],click?:Point,shift=false)=>{let items:Selected[]=[];const base=working();for(const l of eligibleLayers(base,layerId,options.selectionScope)){if(l.kind==='bitmap')continue;for(const s of l.strokes){if(s.tool==='eraser')continue;const b=bounds(s);if(click?hitStroke(s,click[0],click[1],project.width/(svg.current?.clientWidth||500)*4):s.points.some(p=>pointInPolygon(p[0],p[1],polygon))||pointInPolygon(b.x+b.width/2,b.y+b.height/2,polygon)||polygon.some(p=>hitStroke(s,p[0],p[1],0)))items.push({layerId:l.id,id:s.id});}}if(click&&items.length)items=items.slice(-1);setBusy(true);try{let onlyLayer:string|undefined;if(click){let highest=items.length?base.layers.findIndex(l=>l.id===items[0].layerId):-1;for(const l of eligibleLayers(base,layerId,options.selectionScope)){const index=base.layers.findIndex(x=>x.id===l.id);if(l.kind==='bitmap'&&index>highest){if(project.width*project.height>16777216)continue;await preloadImages({layers:[l]} as Panel);const c=layerCanvas(l,project),x=Math.floor(click[0]),y=Math.floor(click[1]);if(x>=0&&y>=0&&x<c.width&&y<c.height&&c.getContext('2d')!.getImageData(x,y,1,1).data[3]){onlyLayer=l.id;highest=index;items=[];}}}if(items.length)onlyLayer='none';}const raster=await rasterSelection(base,polygon,click,onlyLayer,shift);draft.current=raster.next;if(raster.items.length)items.push(...raster.items);select(shift?[...selectionRef.current.filter(item=>raster.next.layers.some(l=>l.id===item.layerId&&l.strokes.some(s=>s.id===item.id))),...items.filter(s=>!selectionRef.current.some(x=>x.id===s.id))]:items);redraw();}catch(e){onError((e as Error).message);}finally{setBusy(false);}};
  const fill=async(p:Point)=>{
-  if(!layer)return;
+  if(!layer||fillPending.current)return;
+  fillPending.current=true;
   const started=performance.now();let stage=started;
   const measured=(label:string)=>{const now=performance.now();recordPerformance('Bucket '+label,now-stage);stage=now;};
   setBusy(true);
@@ -60,13 +63,16 @@ export default function DrawingStage({onion,panel,project,layerId,tool,color,siz
    const c=document.createElement('canvas'),width=Math.min(project.width,Math.round(2048*project.width/Math.max(project.width,project.height)));
    drawPanel(c,ref,project,{width,transparent:true});
    const pixels=c.getContext('2d')!.getImageData(0,0,c.width,c.height);measured('render and pixel readback');
-   const mask=floodMask(pixels.data,c.width,c.height,p[0]/project.width*c.width,p[1]/project.height*c.height,options.tolerance,options.gap);measured('flood mask');
-   const contours=maskContours(mask,c.width,c.height,project.width/c.width,project.height/c.height);measured('trace contours');
-   if(!contours.length){onError('No fillable area at this point. Adjust tolerance or gap closing.');return;}
+   const result=await calculateFill(pixels.data,c.width,c.height,p[0]/project.width*c.width,p[1]/project.height*c.height,options.tolerance,options.gap,project.width/c.width,project.height/c.height);
+   recordPerformance('Bucket flood mask',result.maskMs);
+   recordPerformance('Bucket trace contours',result.contourMs);
+   recordPerformance(result.worker?'Bucket background worker elapsed':'Bucket calculation elapsed',result.worker?result.waitMs:result.maskMs+result.contourMs);
+   stage=performance.now();
+   if(!result.contours.length){onError('No fillable area at this point. Adjust tolerance or gap closing.');return;}
    const next=structuredClone(panel),l=next.layers.find(l=>l.id===layerId)!;
-   l.strokes.push({id:uid(),tool:'fill',color,size:1,opacity:options.opacity,points:[p],contours});
+   l.strokes.push({id:uid(),tool:'fill',color,size:1,opacity:options.opacity,points:[p],contours:result.contours});
    await commit(next);measured('commit');
-  }catch(e){onError((e as Error).message);}finally{recordPerformance('Bucket total',performance.now()-started);setBusy(false);}
+  }catch(e){onError((e as Error).message);}finally{recordPerformance('Bucket total',performance.now()-started);fillPending.current=false;setBusy(false);}
  };
  const begin=(e:PointerEvent<SVGSVGElement>)=>{if(e.button!==0||busy||committing.current||inlineRef.current)return;e.preventDefault();e.currentTarget.focus({preventScroll:true});const p=point(e),target=e.target as SVGElement,mode=target.dataset.mode;e.currentTarget.setPointerCapture(e.pointerId);
   if(space.current||tool==='hand'){gesture.current={kind:'pan',start:p,screen:[e.clientX,e.clientY],originPan:pan};return;}
