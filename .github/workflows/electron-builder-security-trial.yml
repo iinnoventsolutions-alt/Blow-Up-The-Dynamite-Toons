@@ -183,7 +183,7 @@ jobs:
           done
           (cd release && shasum -a 256 -- *.dmg > SHA256SUMS.txt)
           cat release/SHA256SUMS.txt
-          printf 'GitHub commit: %s\\nWorkflow run: %s\\nSigning: ad-hoc (not Developer ID)\\nNotarization: not performed\\nChrome Safe Browsing clearance: not established\\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > release/BUILD-TRUST-STATUS.txt
+          printf 'GitHub commit: %s\nWorkflow run: %s\nSigning: ad-hoc (not Developer ID)\nNotarization: not performed\nChrome Safe Browsing clearance: not established\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > release/BUILD-TRUST-STATUS.txt
       - name: Show package output
         if: always()
         run: ls -lah release/ || true
