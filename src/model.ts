@@ -104,9 +104,13 @@ export function changeDuration(scene: Scene, panel: Panel, duration: number) {
 }
 export type History = { past: Project[]; present: Project; future: Project[] };
 export const newHistory = (project: Project): History => ({ past: [], present: project, future: [] });
+export function commitChanged(h: History, next: Project, limit = 50): History {
+  // Caller has already compared validated serialized project content.
+  return { past: [...h.past, h.present].slice(-limit), present: next, future: [] };
+}
 export function commit(h: History, next: Project, limit = 50): History {
   if (JSON.stringify(h.present) === JSON.stringify(next)) return h;
-  return { past: [...h.past, h.present].slice(-limit), present: next, future: [] };
+  return commitChanged(h, next, limit);
 }
 export function undo(h: History): History {
   if (!h.past.length) return h;
