@@ -5,14 +5,14 @@ on:
     branches:
       - Security-Audit-W
 permissions:
-  contents: write
+  contents: read
 jobs:
   builder-trial:
     runs-on: macos-15
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
           cache: npm
@@ -124,7 +124,7 @@ jobs:
           exit 1
       - name: Upload browser regression diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: browser-regression-diagnostics
           path: test-results/
@@ -155,10 +155,8 @@ jobs:
             fi
             file "$app/Contents/MacOS/IInnovent Professional Storyboard"
           done
-      - name: Verify and commit reproducible dependency fix
-        if: github.event_name == 'push' && github.ref == 'refs/heads/Security-Audit-W'
+      - name: Verify locked dependencies without repository writes
         run: |
-          # Confirm the security fix survives a clean lockfile install.
           npm ci
           npm audit --audit-level=low
           npm audit --omit=dev
@@ -170,32 +168,44 @@ jobs:
               || manifest.overrides?.['@electron/get'] !== '5.1.0'
               || lock.packages['node_modules/electron-builder']?.version !== '26.17.0'
               || lock.packages['node_modules/@electron/get']?.version !== '5.1.0') {
-            throw new Error('Security fix versions are not reproducibly locked.');
+            throw new Error('Locked dependency versions differ from the audited configuration.');
           }
-          const bad = Object.keys(lock.packages).filter(p => /node_modules\/(sprintf-js|roarr|global-agent)$/.test(p));
+          const bad = Object.keys(lock.packages).filter(p => /node_modules\\/(sprintf-js|roarr|global-agent)$/.test(p));
           if (bad.length) throw new Error('Vulnerable dependency chain remains: ' + bad.join(', '));
           NODE
-          git add -- package.json package-lock.json
-          if git diff --cached --quiet; then
-            echo "Dependency fix already committed."
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -m "fix(security): lock builder 26.17.0 and @electron/get 5.1.0 override [skip ci]"
-            git push origin HEAD:Security-Audit-W
-          fi
+      - name: Verify disk images and record installer checksums
+        run: |
+          set -euo pipefail
+          test -f "release/IInnovent Professional Storyboard-1.0.0-arm64.dmg"
+          test -f "release/IInnovent Professional Storyboard-1.0.0.dmg"
+          for dmg in release/*.dmg; do
+            hdiutil verify "$dmg"
+          done
+          (cd release && shasum -a 256 -- *.dmg > SHA256SUMS.txt)
+          cat release/SHA256SUMS.txt
+          printf 'GitHub commit: %s\\nWorkflow run: %s\\nSigning: ad-hoc (not Developer ID)\\nNotarization: not performed\\nChrome Safe Browsing clearance: not established\\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > release/BUILD-TRUST-STATUS.txt
       - name: Show package output
         if: always()
         run: ls -lah release/ || true
-      - name: Upload audits and installers
+      - name: Upload security audit reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: electron-builder-trial
+          name: security-audit-reports
           path: |
             baseline-audit.json
             candidate-audit.json
             security-audit-comparison.md
-            release/*.dmg
           if-no-files-found: warn
+          retention-days: 7
+      - name: Upload installers and integrity manifest
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mac-installers-unnotarized
+          path: |
+            release/*.dmg
+            release/SHA256SUMS.txt
+            release/BUILD-TRUST-STATUS.txt
+          if-no-files-found: error
           retention-days: 7
