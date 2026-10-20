@@ -9,7 +9,7 @@ permissions:
 jobs:
   builder-trial:
     runs-on: macos-15
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -184,6 +184,8 @@ jobs:
           (cd release && shasum -a 256 -- *.dmg > SHA256SUMS.txt)
           cat release/SHA256SUMS.txt
           printf 'GitHub commit: %s\nWorkflow run: %s\nSigning: ad-hoc (not Developer ID)\nNotarization: not performed\nChrome Safe Browsing clearance: not established\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > release/BUILD-TRUST-STATUS.txt
+      - name: Scan both Mac installers with ClamAV signatures
+        run: bash scripts/scan-mac-installers.sh
       - name: Show package output
         if: always()
         run: ls -lah release/ || true
@@ -196,6 +198,8 @@ jobs:
             baseline-audit.json
             candidate-audit.json
             security-audit-comparison.md
+            release/CLAMAV-SCAN.txt
+            release/clamav-*.log
           if-no-files-found: warn
           retention-days: 7
       - name: Upload installers and integrity manifest
@@ -207,5 +211,6 @@ jobs:
             release/*.dmg
             release/SHA256SUMS.txt
             release/BUILD-TRUST-STATUS.txt
+            release/CLAMAV-SCAN.txt
           if-no-files-found: error
           retention-days: 7
