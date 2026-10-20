@@ -16,7 +16,8 @@ type Props={onion:OnionSettings;panel:Panel;project:Project;layerId:string;tool:
 type Gesture={kind:'stroke'|'shape'|'region'|'transform'|'point'|'pan'|'rotate';start:Point;screen:[number,number];originPan:{x:number;y:number};mode?:string;original?:Panel;pointIndex?:number;pathIndex?:number;box?:{x:number;y:number;width:number;height:number};rotation?:number;};
 export default function DrawingStage({onion,panel,project,layerId,tool,color,size,zoom,guides,rotation,options=oDefault,cameraFrame,command,onCameraChange,onLayers,onColor,onSize,onSelection,onRotation,onOptions,onError}:Props){
  const insertedPoint=useRef<{time:number;x:number;y:number}|null>(null);
- const fillPending=useRef(false);
+ const fillPending=useRef(false),mounted=useRef(true);
+ useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
  const textInput=useRef<HTMLTextAreaElement>(null),inlineRef=useRef<{id:string;layerId:string;value:string}|null>(null),[inline,setInline]=useState<{id:string;layerId:string;value:string}|null>(null);
  const latestPanel=useRef(panel),committing=useRef(false),canvas=useRef<HTMLCanvasElement>(null),svg=useRef<SVGSVGElement>(null),live=useRef<Stroke|null>(null),gesture=useRef<Gesture|null>(null),frame=useRef(0),draft=useRef<Panel|null>(null),selectionRef=useRef<Selected[]>([]),selectedPoint=useRef<{path:number;index:number}|null>(null),space=useRef(false);
  const [selected,setSelected]=useState<Selected[]>([]),[region,setRegion]=useState<Point[]>([]),[pan,setPan]=useState({x:0,y:0}),[temporaryHand,setTemporaryHand]=useState(false),[tick,setTick]=useState(0),[busy,setBusy]=useState(false);
@@ -68,6 +69,7 @@ export default function DrawingStage({onion,panel,project,layerId,tool,color,siz
    recordPerformance('Bucket trace contours',result.contourMs);
    recordPerformance(result.worker?'Bucket background worker elapsed':'Bucket calculation elapsed',result.worker?result.waitMs:result.maskMs+result.contourMs);
    stage=performance.now();
+   if(!mounted.current||latestPanel.current.id!==panel.id)return; // Discard work if the user navigated away during background fill.
    if(!result.contours.length){onError('No fillable area at this point. Adjust tolerance or gap closing.');return;}
    const next=structuredClone(panel),l=next.layers.find(l=>l.id===layerId)!;
    l.strokes.push({id:uid(),tool:'fill',color,size:1,opacity:options.opacity,points:[p],contours:result.contours});
