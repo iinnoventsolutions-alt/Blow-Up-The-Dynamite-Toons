@@ -189,11 +189,18 @@ jobs:
       - name: Show package output
         if: always()
         run: ls -lah release/ || true
+      - name: Generate unique artifact identifier
+        if: always()
+        id: artifact_label
+        run: |
+          echo "stamp=$(TZ=America/New_York date +%Y%m%d-%H%M%S)" >> "$GITHUB_OUTPUT"
+          echo "Source commit: $GITHUB_SHA"
+          echo "Run ID: $GITHUB_RUN_ID | Attempt: $GITHUB_RUN_ATTEMPT"
       - name: Upload security audit reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: security-audit-reports
+          name: IInnovent-security-reports-${{ steps.artifact_label.outputs.stamp }}-run${{ github.run_id }}-a${{ github.run_attempt }}
           path: |
             baseline-audit.json
             candidate-audit.json
@@ -206,7 +213,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: mac-installers-unnotarized
+          name: IInnovent-Mac-unnotarized-${{ steps.artifact_label.outputs.stamp }}-run${{ github.run_id }}-a${{ github.run_attempt }}
           path: |
             release/*.dmg
             release/SHA256SUMS.txt
