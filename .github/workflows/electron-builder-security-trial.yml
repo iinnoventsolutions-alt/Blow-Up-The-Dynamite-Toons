@@ -170,7 +170,7 @@ jobs:
               || lock.packages['node_modules/@electron/get']?.version !== '5.1.0') {
             throw new Error('Locked dependency versions differ from the audited configuration.');
           }
-          const bad = Object.keys(lock.packages).filter(p => /node_modules\\/(sprintf-js|roarr|global-agent)$/.test(p));
+          const bad = Object.keys(lock.packages).filter(p => ['sprintf-js', 'roarr', 'global-agent'].some(name => p.endsWith('/' + name)));
           if (bad.length) throw new Error('Vulnerable dependency chain remains: ' + bad.join(', '));
           NODE
       - name: Verify disk images and record installer checksums
