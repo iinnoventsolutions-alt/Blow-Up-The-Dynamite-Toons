@@ -9,6 +9,6 @@ self.onmessage=(event:MessageEvent<Request>)=>{
   const contours=maskContours(mask,q.width,q.height,q.scaleX,q.scaleY);
   self.postMessage({id:q.id,contours,maskMs:afterMask-start,contourMs:performance.now()-afterMask});
  }catch(error){
-  (self as DedicatedWorkerGlobalScope).postMessage({id:q.id,error:error instanceof Error?error.message:String(error)});
+  self.postMessage({id:q.id,error:error instanceof Error?error.message:String(error)});
  }
 };
