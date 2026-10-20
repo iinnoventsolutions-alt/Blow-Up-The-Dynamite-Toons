@@ -9,7 +9,7 @@ import { findPanel, uid, type Layer, type Panel, type Point, type Project, type 
 import { bounds, textLocalBounds, simplifyStroke, cloneArtwork, contourFromPoints, defaultToolOptions, editSelected, eligibleLayers, hitStroke, pointInPolygon, selectionBounds, transformStroke, type Selected, type Tool, type ToolOptions } from './artwork';
 import { canDraw, drawPanel, flattenLayer, layerCanvas, preloadImages } from './render';
 import { floodMask } from './flood';
-import {calculateFill} from './fill-compute';
+import {calculateFill,warmFillWorker} from './fill-compute';
 import type { CameraPose } from './camera';
 type Command={seq:number;op:string};
 type Props={onion:OnionSettings;panel:Panel;project:Project;layerId:string;tool:Tool;color:string;size:number;zoom:number;guides:boolean;rotation:number;options:ToolOptions;cameraFrame:number;command:Command;onCameraChange:(frame:number,pose:CameraPose)=>void;onLayers:(layers:Layer[])=>void;onColor:(color:string)=>void;onSize:(size:number)=>void;onSelection:(selected:Selected[])=>void;onRotation:(n:number)=>void;onOptions:(p:Partial<ToolOptions>)=>void;onError:(message:string)=>void};
@@ -34,6 +34,7 @@ export default function DrawingStage({onion,panel,project,layerId,tool,color,siz
  useEffect(()=>{if(inline){const input=textInput.current;input?.focus();input?.setSelectionRange(inline.value.length,inline.value.length);}},[inline?.id]);
  const cancel=()=>{inlineRef.current=null;setInline(null);gesture.current=null;live.current=null;draft.current=null;setRegion([]);cancelAnimationFrame(frame.current);redraw();};
  useEffect(()=>{draft.current=null;live.current=null;gesture.current=null;select([]);setRegion([]);setPan({x:0,y:0});},[panel.id,layerId]);
+ useEffect(()=>{if(tool!=='bucket')return;const timer=setTimeout(()=>warmFillWorker(),0);return()=>clearTimeout(timer);},[tool]);
  useEffect(()=>{let active=true;preloadImages(panel).then(()=>{if(active)redraw();}).catch(e=>onError(e.message));return()=>{active=false;cancelAnimationFrame(frame.current);};},[panel,project.width,project.height,onion.enabled]);
  useEffect(()=>{const eligible=new Set(eligibleLayers(panel,layerId,options.selectionScope).map(l=>l.id));select(selectionRef.current.filter(s=>eligible.has(s.layerId)&&panel.layers.find(l=>l.id===s.layerId)?.strokes.some(p=>p.id===s.id)));},[options.selectionScope,panel.layers.map(l=>`${l.id}:${l.visible}:${l.locked}`).join('|')]);
  useEffect(()=>{if(['brush','pencil','eraser','bucket','shape','picker','hand','rotate-view','camera'].includes(tool)){const hadDraft=!!draft.current;draft.current=null;if(selectionRef.current.length)select([]);if(hadDraft)schedule();}},[tool]);
