@@ -1,7 +1,23 @@
 import type { Point } from './model.ts';
 export function floodMask(data: Uint8ClampedArray, width: number, height: number, x: number, y: number, tolerance: number, gap: number): Uint8Array {
  x=Math.max(0,Math.min(width-1,Math.floor(x)));y=Math.max(0,Math.min(height-1,Math.floor(y)));const seed=(y*width+x)*4,n=width*height;
- let wall=new Uint8Array(n);for(let i=0;i<n;i++){const k=i*4;const alpha=data[k+3],a=data[seed+3];const difference=Math.max(Math.abs(alpha-a),Math.abs(data[k]*alpha/255-data[seed]*a/255),Math.abs(data[k+1]*alpha/255-data[seed+1]*a/255),Math.abs(data[k+2]*alpha/255-data[seed+2]*a/255));wall[i]=difference>tolerance?1:0;}
+ // Compute seed premultiplied colors once. Check the alpha channel first and
+ // stop evaluating channels as soon as a pixel exceeds the tolerance.
+ // Preserve the original multiplication/division order for exact mask parity.
+ const seedAlpha=data[seed+3];
+ const seedR=data[seed]*seedAlpha/255;
+ const seedG=data[seed+1]*seedAlpha/255;
+ const seedB=data[seed+2]*seedAlpha/255;
+ let wall=new Uint8Array(n);
+ for(let i=0;i<n;i++){
+  const k=i*4,alpha=data[k+3];
+  wall[i]=(
+   Math.abs(alpha-seedAlpha)>tolerance ||
+   Math.abs(data[k]*alpha/255-seedR)>tolerance ||
+   Math.abs(data[k+1]*alpha/255-seedG)>tolerance ||
+   Math.abs(data[k+2]*alpha/255-seedB)>tolerance
+  )?1:0;
+ }
  // Close small openings in the boundary mask before filling; retain original artwork.
  for(let pass=0;pass<gap;pass++){const out=wall.slice();for(let yy=1;yy<height-1;yy++)for(let xx=1;xx<width-1;xx++){const i=yy*width+xx;out[i]=wall[i]||wall[i-1]||wall[i+1]||wall[i-width]||wall[i+width]||wall[i-width-1]||wall[i-width+1]||wall[i+width-1]||wall[i+width+1]?1:0;}wall=out;}
  for(let pass=0;pass<gap;pass++){const out=wall.slice();for(let yy=1;yy<height-1;yy++)for(let xx=1;xx<width-1;xx++){const i=yy*width+xx;out[i]=wall[i]&&wall[i-1]&&wall[i+1]&&wall[i-width]&&wall[i+width]&&wall[i-width-1]&&wall[i-width+1]&&wall[i+width-1]&&wall[i+width+1]?1:0;}wall=out;}
