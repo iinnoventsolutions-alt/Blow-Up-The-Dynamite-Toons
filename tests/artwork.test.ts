@@ -42,5 +42,5 @@ test('post-commit redraw skips image preparation only for panels without missing
  assert.equal(panelImagesReady(panel,new Set()),false);
  delete panel.layers[0].image;
  panel.layers[0].strokes.push({id:uid(),tool:'image',color:'#000000',size:1,points:[[0,0,1],[2,2,1]],source:'data:image/png;base64,AA=='});
- assert.equal(panelImagesReady(panel),false);
+ assert.equal(panelImagesReady(panel,new Set()),false);
 });
