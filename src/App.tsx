@@ -42,7 +42,7 @@ type Workspace = 'Drawing' | 'Panel' | 'Timeline' | 'Pitch';
 // Validate byte limits before committing an edit; reuse that serialization on
 // the next render without retaining full JSON for every undo-history entry.
 let textProject:Project|undefined,textValue='';
-function projectText(project:Project, artworkCommit=false){if(textProject!==project){const text=artworkCommit?serializeArtworkProject(project):serializeProject(project);textProject=project;textValue=text;}return textValue;}
+function projectText(project:Project, artworkCommit=false){if(textProject!==project){const text=artworkCommit?serializeArtworkProject(project,diagnosticsEnabled()?recordPerformance:undefined):serializeProject(project);textProject=project;textValue=text;}return textValue;}
 const fileDownload = (text: string, name: string, type = 'application/json') => { const url = URL.createObjectURL(new Blob([text], { type })); const a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); };
 const resultValue = <T,>(result: { ok: true; value: T } | { ok: false; error: string }): T => { if (!result.ok) throw new Error(result.error); return result.value; };
 function Button({ children, onClick, title, disabled, className = '' }: { children: ReactNode; onClick: () => void; title?: string; disabled?: boolean; className?: string }) { return <button className={className} onClick={onClick} title={title} disabled={disabled}>{children}</button>; }
