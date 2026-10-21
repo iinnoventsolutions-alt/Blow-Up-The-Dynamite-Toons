@@ -56,7 +56,12 @@ export default function DrawingStage({onion,panel,project,layerId,tool,color,siz
    if(profiling)recordPerformance('Drawing commit: selection and panel update',performance.now()-selectionAt);
    const parentAt=mark();
    onLayers(layers);
-   if(profiling)recordPerformance('Drawing commit: parent callback',performance.now()-parentAt);
+   if(profiling){
+    recordPerformance('Drawing commit: parent callback',performance.now()-parentAt);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+     if(mounted.current)recordPerformance('Drawing commit: callback to second frame',performance.now()-parentAt);
+    }));
+   }
    const finalAt=mark();
    draft.current=null;select(keep);selectedPoint.current=pt;
    if(profiling)recordPerformance('Drawing commit: selection finalize',performance.now()-finalAt);
