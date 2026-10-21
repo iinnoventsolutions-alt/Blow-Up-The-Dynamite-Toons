@@ -83,3 +83,18 @@ export function parseProject(text) {
 export function serializeProject(project) {
   validateProject(project); const text = JSON.stringify(project); parseProject(text); return text;
 }
+
+/**
+ * Artwork-commit serializer for current schema projects. Validate the full
+ * in-memory project once, encode once and enforce the exact UTF-8 file limit.
+ * Unlike serializeProject, do not parse and validate the same JSON a second
+ * time on the renderer's input path. Imports still use parseProject.
+ */
+export function serializeArtworkProject(project) {
+  validateProject(project);
+  const text = JSON.stringify(project);
+  if (typeof text !== 'string' || new TextEncoder().encode(text).byteLength > MAX_PROJECT_BYTES) {
+    fail('Project must be smaller than 128 MB in this developer build.');
+  }
+  return text;
+}
