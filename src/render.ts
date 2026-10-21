@@ -5,6 +5,13 @@ import type { Layer, Panel, Project, Stroke, Scene } from './model';
 const images = new Map<string, HTMLImageElement>();
 const pending = new Map<string, Promise<void>>();
 const scratchCanvases = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
+/** True only when every embedded image used by this panel has decoded. */
+export function panelImagesReady(panel: Panel): boolean {
+  return panel.layers.every(layer =>
+    (!layer.image || images.has(layer.image)) &&
+    layer.strokes.every(stroke => stroke.tool !== 'image' || !stroke.source || images.has(stroke.source))
+  );
+}
 export async function preloadImages(panel: Panel): Promise<void> {
   await Promise.all(panel.layers.flatMap(l=>[l.image,...l.strokes.filter(s=>s.tool==='image').map(s=>s.source)]).filter((source):source is string=>!!source&&!images.has(source)).map(source => {
     if (!pending.has(source)) pending.set(source, new Promise<void>((resolve, reject) => {
