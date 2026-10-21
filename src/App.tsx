@@ -28,7 +28,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { DrawingCanvas, Thumbnail, type Tool } from './Canvas';
 import { allPanels, changeDuration, commit, commitChanged, duplicatePanel, editProject, editPanelLayers, findPanel, makeLayer, makePanel, makeProject, makeScene, newHistory, projectFrames, redo, sceneFrames, timecode, undo, type History, type Layer, type Panel, type Project, type Scene } from './model';
-import { parseProject, serializeProject } from './project-format.js';
+import { parseProject, serializeProject, serializeArtworkProject } from './project-format.js';
 import { drawPanel, preloadImages } from './render';
 import { BUILD_LABEL, PRODUCT_NAME } from './build-info';
 import {recordPerformance,diagnosticsEnabled} from './performance-diagnostics';
@@ -42,7 +42,7 @@ type Workspace = 'Drawing' | 'Panel' | 'Timeline' | 'Pitch';
 // Validate byte limits before committing an edit; reuse that serialization on
 // the next render without retaining full JSON for every undo-history entry.
 let textProject:Project|undefined,textValue='';
-function projectText(project:Project){if(textProject!==project){const text=serializeProject(project);textProject=project;textValue=text;}return textValue;}
+function projectText(project:Project, artworkCommit=false){if(textProject!==project){const text=artworkCommit?serializeArtworkProject(project):serializeProject(project);textProject=project;textValue=text;}return textValue;}
 const fileDownload = (text: string, name: string, type = 'application/json') => { const url = URL.createObjectURL(new Blob([text], { type })); const a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); };
 const resultValue = <T,>(result: { ok: true; value: T } | { ok: false; error: string }): T => { if (!result.ok) throw new Error(result.error); return result.value; };
 function Button({ children, onClick, title, disabled, className = '' }: { children: ReactNode; onClick: () => void; title?: string; disabled?: boolean; className?: string }) { return <button className={className} onClick={onClick} title={title} disabled={disabled}>{children}</button>; }
@@ -119,7 +119,7 @@ export default function App() {
     const proposed=prepared?prepared(h.present):editProject(h.present,fn);
     if(profiling){recordPerformance('Artwork commit: prepare and validate',performance.now()-cloneAt);recordPerformance('Artwork commit: prior project text lookup',cloneAt-started);}
     const serializedAt=profiling?performance.now():0;
-    const nextText=projectText(proposed);
+    const nextText=projectText(proposed,!!prepared);
     if(profiling)recordPerformance('Artwork commit: serialize',performance.now()-serializedAt);
     if(beforeText===nextText)return;
     const historyAt=profiling?performance.now():0;
