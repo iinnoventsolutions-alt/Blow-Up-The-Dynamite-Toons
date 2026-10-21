@@ -33,7 +33,36 @@ export default function DrawingStage({onion,panel,project,layerId,tool,color,siz
  const point=(e:PointerEvent<SVGSVGElement>|globalThis.PointerEvent):Point=>{const p=localPoint(e.clientX,e.clientY);return [Math.max(-8192,Math.min(16384,p.x)),Math.max(-8192,Math.min(16384,p.y)),e.pointerType==='pen'&&options.pressure?Math.max(options.minSize,e.pressure||options.minSize):1];};
  const appendStrokePoint=(p:Point)=>{const stroke=live.current;if(!stroke||stroke.points.length>=10000)return;const prev=stroke.points.at(-1)!;if(Math.hypot(p[0]-prev[0],p[1]-prev[1])<.5)return;if(stroke.points.length>1){const before=stroke.points.at(-2)!,blend=options.smoothing/(options.smoothing+30);stroke.points[stroke.points.length-1]=[prev[0]*(1-blend)+(before[0]+p[0])*.5*blend,prev[1]*(1-blend)+(before[1]+p[1])*.5*blend,prev[2]];}stroke.points.push(p);strokeSamples.current++;};
  const appendPointerSamples=(e:PointerEvent<SVGSVGElement>)=>{const samples=e.nativeEvent.getCoalescedEvents?.()||[];for(const sample of samples)appendStrokePoint(point(sample));appendStrokePoint(point(e));};
- const commit=async(next:Panel)=>{if(committing.current)return;const previousPanel=latestPanel.current;const bitmapChanged=next.layers.some(l=>l.kind==='bitmap'&&JSON.stringify(previousPanel.layers.find(p=>p.id===l.id))!==JSON.stringify(l));committing.current=true;if(bitmapChanged)setBusy(true);try{const layers:Layer[]=[];for(const l of next.layers){const previous=previousPanel.layers.find(p=>p.id===l.id);if(l.kind==='bitmap'&&JSON.stringify(previous)!==JSON.stringify(l))layers.push(await flattenLayer(l,project));else layers.push(l);}const keep=selectionRef.current.filter(item=>layers.some(l=>l.id===item.layerId&&l.kind!=='bitmap'&&l.strokes.some(s=>s.id===item.id)));const pt=selectedPoint.current;latestPanel.current={...next,layers};const parentAt=diagnosticsEnabled()?performance.now():0;onLayers(layers);if(parentAt)recordPerformance('Drawing commit: parent callback',performance.now()-parentAt);draft.current=null;select(keep);selectedPoint.current=pt;}catch(e){onError((e as Error).message);draft.current=null;redraw();}finally{committing.current=false;if(bitmapChanged)setBusy(false);}};
+ const commit=async(next:Panel)=>{
+  if(committing.current)return;
+  const profiling=diagnosticsEnabled(),mark=()=>profiling?performance.now():0;
+  const previousPanel=latestPanel.current,bitmapAt=mark();
+  const bitmapChanged=next.layers.some(l=>l.kind==='bitmap'&&JSON.stringify(previousPanel.layers.find(p=>p.id===l.id))!==JSON.stringify(l));
+  if(profiling)recordPerformance('Drawing commit: bitmap change detection',performance.now()-bitmapAt);
+  committing.current=true;
+  if(bitmapChanged)setBusy(true);
+  try{
+   const layersAt=mark(),layers:Layer[]=[];
+   for(const l of next.layers){
+    const previous=previousPanel.layers.find(p=>p.id===l.id);
+    if(l.kind==='bitmap'&&JSON.stringify(previous)!==JSON.stringify(l))layers.push(await flattenLayer(l,project));
+    else layers.push(l);
+   }
+   if(profiling)recordPerformance('Drawing commit: layer preparation',performance.now()-layersAt);
+   const selectionAt=mark();
+   const keep=selectionRef.current.filter(item=>layers.some(l=>l.id===item.layerId&&l.kind!=='bitmap'&&l.strokes.some(s=>s.id===item.id)));
+   const pt=selectedPoint.current;
+   latestPanel.current={...next,layers};
+   if(profiling)recordPerformance('Drawing commit: selection and panel update',performance.now()-selectionAt);
+   const parentAt=mark();
+   onLayers(layers);
+   if(profiling)recordPerformance('Drawing commit: parent callback',performance.now()-parentAt);
+   const finalAt=mark();
+   draft.current=null;select(keep);selectedPoint.current=pt;
+   if(profiling)recordPerformance('Drawing commit: selection finalize',performance.now()-finalAt);
+  }catch(e){onError((e as Error).message);draft.current=null;redraw();}
+  finally{committing.current=false;if(bitmapChanged)setBusy(false);}
+ };
  const finishInline=(accept=true)=>{const edit=inlineRef.current;if(!edit)return;inlineRef.current=null;setInline(null);const next=structuredClone(panel),l=next.layers.find(l=>l.id===edit.layerId),stroke=l?.strokes.find(s=>s.id===edit.id);draft.current=null;if(accept&&l&&!l.locked&&l.visible&&stroke&&stroke.text!==edit.value){stroke.text=edit.value;onOptions({text:edit.value});void commit(next);}else redraw();};
  useEffect(()=>{if(inline){const input=textInput.current;input?.focus();input?.setSelectionRange(inline.value.length,inline.value.length);}},[inline?.id]);
  const cancel=()=>{inlineRef.current=null;setInline(null);gesture.current=null;live.current=null;draft.current=null;setRegion([]);cancelAnimationFrame(frame.current);frame.current=0;strokeStarted.current=0;redraw();};
@@ -76,9 +105,14 @@ export default function DrawingStage({onion,panel,project,layerId,tool,color,siz
    stage=performance.now();
    if(!mounted.current||latestPanel.current.id!==panel.id)return; // Discard work if the user navigated away during background fill.
    if(!result.contours.length){onError('No fillable area at this point. Adjust tolerance or gap closing.');return;}
+   const geometryAt=diagnosticsEnabled()?performance.now():0;
    const next=structuredClone(panel),l=next.layers.find(l=>l.id===layerId)!;
    l.strokes.push({id:uid(),tool:'fill',color,size:1,opacity:options.opacity,points:[p],contours:result.contours});
-   await commit(next);measured('commit');
+   if(geometryAt)recordPerformance('Bucket: geometry and panel clone',performance.now()-geometryAt);
+   const commitAt=diagnosticsEnabled()?performance.now():0;
+   await commit(next);
+   if(commitAt)recordPerformance('Bucket: drawing commit function',performance.now()-commitAt);
+   measured('commit');
   }catch(e){onError((e as Error).message);}finally{recordPerformance('Bucket total',performance.now()-started);fillPending.current=false;setBusy(false);}
  };
  const begin=(e:PointerEvent<SVGSVGElement>)=>{if(e.button!==0||busy||committing.current||inlineRef.current)return;e.preventDefault();e.currentTarget.focus({preventScroll:true});const p=point(e),target=e.target as SVGElement,mode=target.dataset.mode;e.currentTarget.setPointerCapture(e.pointerId);
