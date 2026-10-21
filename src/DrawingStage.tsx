@@ -1,5 +1,6 @@
 import { drawingPoint } from './drawing-coordinates';
 import {recordPerformance,diagnosticsEnabled} from './performance-diagnostics';
+import { changedBitmapIds } from './bitmap-commit';
 import OnionSkin from './OnionSkin';
 import type { OnionSettings } from './onion';
 import { useEffect, useRef, useState } from 'react';
@@ -33,11 +34,12 @@ export default function DrawingStage({onion,panel,project,layerId,tool,color,siz
  const point=(e:PointerEvent<SVGSVGElement>|globalThis.PointerEvent):Point=>{const p=localPoint(e.clientX,e.clientY);return [Math.max(-8192,Math.min(16384,p.x)),Math.max(-8192,Math.min(16384,p.y)),e.pointerType==='pen'&&options.pressure?Math.max(options.minSize,e.pressure||options.minSize):1];};
  const appendStrokePoint=(p:Point)=>{const stroke=live.current;if(!stroke||stroke.points.length>=10000)return;const prev=stroke.points.at(-1)!;if(Math.hypot(p[0]-prev[0],p[1]-prev[1])<.5)return;if(stroke.points.length>1){const before=stroke.points.at(-2)!,blend=options.smoothing/(options.smoothing+30);stroke.points[stroke.points.length-1]=[prev[0]*(1-blend)+(before[0]+p[0])*.5*blend,prev[1]*(1-blend)+(before[1]+p[1])*.5*blend,prev[2]];}stroke.points.push(p);strokeSamples.current++;};
  const appendPointerSamples=(e:PointerEvent<SVGSVGElement>)=>{const samples=e.nativeEvent.getCoalescedEvents?.()||[];for(const sample of samples)appendStrokePoint(point(sample));appendStrokePoint(point(e));};
- const commit=async(next:Panel)=>{
+ const commit=async(next:Panel,vectorOnlyFillLayerId?:string)=>{
   if(committing.current)return;
   const profiling=diagnosticsEnabled(),mark=()=>profiling?performance.now():0;
   const previousPanel=latestPanel.current,bitmapAt=mark();
-  const bitmapChanged=next.layers.some(l=>l.kind==='bitmap'&&JSON.stringify(previousPanel.layers.find(p=>p.id===l.id))!==JSON.stringify(l));
+  const changedBitmaps=changedBitmapIds(previousPanel,next,vectorOnlyFillLayerId);
+  const bitmapChanged=changedBitmaps.size>0;
   if(profiling)recordPerformance('Drawing commit: bitmap change detection',performance.now()-bitmapAt);
   committing.current=true;
   if(bitmapChanged)setBusy(true);
@@ -45,7 +47,7 @@ export default function DrawingStage({onion,panel,project,layerId,tool,color,siz
    const layersAt=mark(),layers:Layer[]=[];
    for(const l of next.layers){
     const previous=previousPanel.layers.find(p=>p.id===l.id);
-    if(l.kind==='bitmap'&&JSON.stringify(previous)!==JSON.stringify(l))layers.push(await flattenLayer(l,project));
+    if(l.kind==='bitmap'&&changedBitmaps.has(l.id))layers.push(await flattenLayer(l,project));
     else layers.push(l);
    }
    if(profiling)recordPerformance('Drawing commit: layer preparation',performance.now()-layersAt);
@@ -127,7 +129,7 @@ export default function DrawingStage({onion,panel,project,layerId,tool,color,siz
    l.strokes.push({id:uid(),tool:'fill',color,size:1,opacity:options.opacity,points:[p],contours:result.contours});
    if(geometryAt)recordPerformance('Bucket: geometry and panel clone',performance.now()-geometryAt);
    const commitAt=diagnosticsEnabled()?performance.now():0;
-   await commit(next);
+   await commit(next,l.kind==='vector'?l.id:undefined);
    if(commitAt)recordPerformance('Bucket: drawing commit function',performance.now()-commitAt);
    measured('commit');
   }catch(e){onError((e as Error).message);}finally{recordPerformance('Bucket total',performance.now()-started);fillPending.current=false;setBusy(false);}
