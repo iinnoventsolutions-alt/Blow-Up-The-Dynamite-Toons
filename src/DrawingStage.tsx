@@ -76,18 +76,14 @@ export default function DrawingStage({onion,panel,project,layerId,tool,color,siz
  useEffect(()=>{
   let active=true;
   const profiling=diagnosticsEnabled(),started=profiling?performance.now():0;
-  // Cached images need no async preparation. Coalesce committed panel redraws
-  // with pointer-driven redraws via the existing requestAnimationFrame queue.
-  if(panelImagesReady(panel)){
-   if(profiling)recordPerformance('Canvas: images already prepared',performance.now()-started);
-   schedule();
-  }else{
-   preloadImages(panel).then(()=>{
-    if(!active)return;
-    if(profiling)recordPerformance('Canvas: panel image preparation',performance.now()-started);
-    schedule();
-   }).catch(e=>{if(active)onError(e.message);});
-  }
+  // Diagnostic only: preserve the original preload-and-immediate-redraw path
+  // while checking whether frame-queued redraws caused browser regressions.
+  if(profiling&&panelImagesReady(panel))recordPerformance('Canvas: images already prepared',performance.now()-started);
+  preloadImages(panel).then(()=>{
+   if(!active)return;
+   if(profiling)recordPerformance('Canvas: panel image preparation',performance.now()-started);
+   redraw();
+  }).catch(e=>{if(active)onError(e.message);});
   return()=>{active=false;cancelAnimationFrame(frame.current);frame.current=0;};
  },[panel,project.width,project.height,onion.enabled]);
  useEffect(()=>{const eligible=new Set(eligibleLayers(panel,layerId,options.selectionScope).map(l=>l.id));select(selectionRef.current.filter(s=>eligible.has(s.layerId)&&panel.layers.find(l=>l.id===s.layerId)?.strokes.some(p=>p.id===s.id)));},[options.selectionScope,panel.layers.map(l=>`${l.id}:${l.visible}:${l.locked}`).join('|')]);
