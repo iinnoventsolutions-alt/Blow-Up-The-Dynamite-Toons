@@ -28,7 +28,7 @@ export default function DrawingStage({onion,panel,project,layerId,tool,color,siz
  useEffect(()=>{latestPanel.current=panel;},[panel]);
  const select=(items:Selected[])=>{selectionRef.current=items;setSelected(items);selectedPoint.current=null;onSelection(items);};
  const redrawCount=useRef(0);
- const redraw=()=>{const profiling=diagnosticsEnabled(),started=profiling?performance.now():0;if(canvas.current)drawPanel(canvas.current,working(),project,{transparent:onion.enabled,live:live.current?{layerId,stroke:live.current}:undefined});if(profiling){const elapsed=performance.now()-started;const first=redrawCount.current++===0;if(first||elapsed>=40)recordPerformance(first?'Canvas redraw: first render':'Canvas redraw: slow render',elapsed);}if(gesture.current?.kind==='transform'||gesture.current?.kind==='point')setTick(n=>n+1);};
+ const redraw=()=>{const profiling=diagnosticsEnabled(),started=profiling?performance.now():0;if(canvas.current)drawPanel(canvas.current,working(),project,{transparent:onion.enabled,live:live.current?{layerId,stroke:live.current}:undefined});if(profiling){const elapsed=performance.now()-started;const first=redrawCount.current++===0;if(first||elapsed>=16)recordPerformance(first?'Canvas redraw: first render':'Canvas redraw: render >=16ms',elapsed);}if(gesture.current?.kind==='transform'||gesture.current?.kind==='point')setTick(n=>n+1);};
  const schedule=()=>{if(frame.current)return;frame.current=requestAnimationFrame(()=>{frame.current=0;redraw();if(strokeStarted.current&&!strokeFrames.current){strokeFrames.current=1;recordPerformance(firstStroke.current?'First stroke: pointer down to first movement frame':'Stroke: pointer down to first movement frame',performance.now()-strokeStarted.current);}});};
  const localPoint=(x:number,y:number)=>{const c=canvas.current!,style=getComputedStyle(c);return drawingPoint(x,y,c.getBoundingClientRect(),parseFloat(style.width)/parseFloat(style.height),rotation,project.width,project.height);};
  const point=(e:PointerEvent<SVGSVGElement>|globalThis.PointerEvent):Point=>{const p=localPoint(e.clientX,e.clientY);return [Math.max(-8192,Math.min(16384,p.x)),Math.max(-8192,Math.min(16384,p.y)),e.pointerType==='pen'&&options.pressure?Math.max(options.minSize,e.pressure||options.minSize):1];};
@@ -60,9 +60,12 @@ export default function DrawingStage({onion,panel,project,layerId,tool,color,siz
    onLayers(layers);
    if(profiling){
     recordPerformance('Drawing commit: parent callback',performance.now()-parentAt);
-    requestAnimationFrame(()=>requestAnimationFrame(()=>{
-     if(mounted.current)recordPerformance('Drawing commit: callback to second frame',performance.now()-parentAt);
-    }));
+    requestAnimationFrame(()=>{
+     if(mounted.current)recordPerformance('Drawing commit: callback to first frame',performance.now()-parentAt);
+     requestAnimationFrame(()=>{
+      if(mounted.current)recordPerformance('Drawing commit: callback to second frame',performance.now()-parentAt);
+     });
+    });
    }
    const finalAt=mark();
    draft.current=null;select(keep);selectedPoint.current=pt;
