@@ -89,9 +89,10 @@ export function editProject(project: Project, edit: (draft: Project) => void): P
   return validateProject(draft);
 }
 /** Replace only the edited panel branch; unchanged scenes, panels and history stay shared.
- * The current schema's validator is read-only for version 4 projects.
- * Retain full validation before the edit reaches history or disk. */
-export function editPanelLayers(project: Project, panelId: string, layers: Layer[]): Project {
+ * When validate=false the caller MUST call serializeProject before entering history.
+ * This avoids a redundant full-project validation in App's artwork commit path.
+ * Other consumers retain the validated default. */
+export function editPanelLayers(project: Project, panelId: string, layers: Layer[], validate = true): Project {
   let found = false;
   const scenes = project.scenes.map(scene => {
     if (!scene.panels.some(panel => panel.id === panelId)) return scene;
@@ -105,7 +106,8 @@ export function editPanelLayers(project: Project, panelId: string, layers: Layer
     };
   });
   if (!found) throw new Error('Panel no longer exists.');
-  return validateProject({ ...project, scenes });
+  const next = { ...project, scenes };
+  return validate ? validateProject(next) : next;
 }
 export function duplicatePanel(panel: Panel): Panel {
   const copy = structuredClone(panel); copy.id = uid(); copy.name = `${panel.name} copy`;
