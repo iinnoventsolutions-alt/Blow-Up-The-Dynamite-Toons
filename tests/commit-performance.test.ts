@@ -52,3 +52,41 @@ test('artwork-only edit rejects missing panels and invalid layer data',()=>{
  assert.throws(()=>editPanelLayers(project,project.scenes[0].panels[0].id,[]),/Invalid project collection/);
  assert.equal(project.scenes[0].panels[0].layers.length,1);
 });
+
+test('4.3A deferred artwork validation rejects invalid data before history changes',()=>{
+ const original=makeProject('Deferred gate');
+ const panel=original.scenes[0].panels[0];
+ const history=newHistory(original);
+ const invalidLayers=structuredClone(panel.layers);
+ invalidLayers[0].strokes.push({id:uid(),tool:'fill',color:'#112233',size:1,points:[[10,10,1]]});
+ const prepared=editPanelLayers(original,panel.id,invalidLayers,false);
+ assert.equal(prepared.scenes[0].panels[0].layers,invalidLayers);
+ assert.throws(()=>serializeProject(prepared),/Fill needs contour geometry/);
+ assert.equal(history.present,original);
+ assert.equal(original.scenes[0].panels[0].layers[0].strokes.length,0);
+});
+test('4.3A deferred artwork commit matches validated history, save and undo',()=>{
+ const original=makeProject('Deferred equivalence');
+ original.scenes[0].panels.push(makePanel('Unaffected panel',original.fps));
+ const panel=original.scenes[0].panels[0];
+ const layers=structuredClone(panel.layers);
+ layers[0].strokes.push({id:uid(),tool:'pencil',color:'#112233',size:3,points:[[10,10,1],[20,20,1]]});
+ const deferred=editPanelLayers(original,panel.id,layers,false);
+ const checked=editPanelLayers(original,panel.id,layers);
+ assert.equal(serializeProject(deferred),serializeProject(checked));
+ assert.equal(deferred.scenes[0].panels[1],original.scenes[0].panels[1]);
+ const changed=commitChanged(newHistory(original),deferred);
+ assert.equal(undo(changed).present,original);
+ assert.equal(redo(undo(changed)).present,deferred);
+ assert.deepEqual(parseProject(serializeProject(deferred)),checked);
+});
+test('4.3A serializer still rejects oversized artwork and invalid embedded images',()=>{
+ const original=makeProject('Serialization guardrails');
+ const panel=original.scenes[0].panels[0];
+ const layers=structuredClone(panel.layers);
+ layers[0].image='https://example.com/untrusted.png';
+ assert.throws(()=>serializeProject(editPanelLayers(original,panel.id,layers,false)),/Invalid embedded image/);
+ const huge=structuredClone(panel.layers);
+ huge[0].strokes.push({id:uid(),tool:'brush',color:'#112233',size:3,points:Array.from({length:100001},()=>[10,10,1])});
+ assert.throws(()=>serializeProject(editPanelLayers(original,panel.id,huge,false)),/Invalid project collection/);
+});
