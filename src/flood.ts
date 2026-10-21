@@ -38,11 +38,25 @@ export function floodMask(data: Uint8ClampedArray, width: number, height: number
  return mask;
 }
 export function maskContours(mask: Uint8Array,width:number,height:number,scaleX:number,scaleY:number):Point[][] {
- const edges=new Map<number,number[]>(),stride=width+1;const add=(a:number,b:number)=>{const list=edges.get(a)||[];list.push(b);edges.set(a,list);};
+ // Most contour vertices have exactly one outgoing edge. Store that edge
+ // directly; allocate an array only for junctions (diagonal-touch cases).
+ // Preserve insertion order and LIFO traversal at multi-edge vertices.
+ const edges=new Map<number,number|number[]>(),stride=width+1;
+ const add=(a:number,b:number)=>{
+  const existing=edges.get(a);
+  if(existing===undefined)edges.set(a,b);
+  else if(typeof existing==='number')edges.set(a,[existing,b]);
+  else existing.push(b);
+ };
  for(let y=0;y<height;y++)for(let x=0;x<width;x++){const i=y*width+x;if(!mask[i])continue;const a=y*stride+x;if(y===0||!mask[i-width])add(a,a+1);if(x===width-1||!mask[i+1])add(a+1,a+stride+1);if(y===height-1||!mask[i+width])add(a+stride+1,a+stride);if(x===0||!mask[i-1])add(a+stride,a);}
  const paths:Point[][]=[];let total=0;
  while(edges.size){const first=edges.keys().next().value!;let current=first;const path:Point[]=[];let guard=0;
- do{path.push([(current%stride)*scaleX,Math.floor(current/stride)*scaleY,1]);const list=edges.get(current);if(!list?.length)break;const next=list.pop()!;if(!list.length)edges.delete(current);current=next;if(++guard>1000000)throw new Error('Fill boundary is too complex. Reduce detail or tolerance.');}while(current!==first);
+ do{path.push([(current%stride)*scaleX,Math.floor(current/stride)*scaleY,1]);const outgoing=edges.get(current);
+  if(outgoing===undefined)break;
+  let next:number;
+  if(typeof outgoing==='number'){next=outgoing;edges.delete(current);}
+  else {next=outgoing.pop()!;if(!outgoing.length)edges.delete(current);}
+  current=next;if(++guard>1000000)throw new Error('Fill boundary is too complex. Reduce detail or tolerance.');}while(current!==first);
  const simple=path.filter((p,i)=>{const a=path[(i+path.length-1)%path.length],b=path[(i+1)%path.length];return (p[0]-a[0])*(b[1]-p[1])!==(p[1]-a[1])*(b[0]-p[0]);});
  if(simple.length>=3){total+=simple.length;if(total>100000)throw new Error('Fill boundary is too complex. Reduce detail or tolerance.');paths.push(simple);}
  }
