@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { makeProject,makeLayer,uid,type Stroke } from '../src/model.ts';
 import { bounds,textLocalBounds,simplifyStroke,contourFromPoints,eligibleLayers,hitStroke,pointInPolygon,transformStroke,editSelected } from '../src/artwork.ts';
 import { floodMask,maskContours } from '../src/flood.ts';
+import { panelImagesReady } from '../src/render.ts';
 import { parseProject,serializeProject } from '../src/project-format.js';
 test('legacy projects migrate as editable vector layers; schema 4 round trips all artwork types',()=>{
  const p=makeProject();const legacy=structuredClone(p) as unknown as {schemaVersion:number;scenes:typeof p.scenes};legacy.schemaVersion=1;delete legacy.scenes[0].panels[0].layers[0].kind;const migrated=parseProject(JSON.stringify(legacy));assert.equal(migrated.schemaVersion,4);assert.equal(migrated.scenes[0].panels[0].layers[0].kind,'vector');
@@ -33,3 +34,13 @@ test('text bounds follow content rather than stale stored rectangle dimensions',
 test('round brush and pressure-pencil contours extend outward at both endpoints',()=>{const contour=contourFromPoints([[100,100,1],[200,100,.5]],20);assert(Math.min(...contour.map(p=>p[0]))<=90);assert(Math.max(...contour.map(p=>p[0]))>=205);assert(pointInPolygon(100,100,contour));assert(pointInPolygon(200,100,contour));});
 
 test('brush overlap hit testing matches nonzero paint while bucket holes stay empty',()=>{const points:Stroke['points']=[[300,300,1],[700,700,1],[300,700,1],[700,300,1]],stroke:Stroke={id:uid(),tool:'brush',color:'#000000',size:80,points,contours:[contourFromPoints(points,80)]};assert(hitStroke(stroke,500,500));const outer:Stroke['points']=[[200,200,1],[800,200,1],[800,800,1],[200,800,1]],inner:Stroke['points']=[[400,400,1],[600,400,1],[600,600,1],[400,600,1]];stroke.tool='fill';stroke.contours=[outer,inner];assert(!hitStroke(stroke,500,500));assert(hitStroke(stroke,300,300));});
+
+test('post-commit redraw skips image preparation only for panels without missing image assets',()=>{
+ const panel=makeProject().scenes[0].panels[0];
+ assert.equal(panelImagesReady(panel),true);
+ panel.layers[0].image='data:image/png;base64,AA==';
+ assert.equal(panelImagesReady(panel),false);
+ delete panel.layers[0].image;
+ panel.layers[0].strokes.push({id:uid(),tool:'image',color:'#000000',size:1,points:[[0,0,1],[2,2,1]],source:'data:image/png;base64,AA=='});
+ assert.equal(panelImagesReady(panel),false);
+});
