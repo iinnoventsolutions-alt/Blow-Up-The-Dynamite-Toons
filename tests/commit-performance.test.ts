@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {commit,commitChanged,makeProject,newHistory,undo,redo,editProject,editPanelLayers,makePanel,makeScene,uid} from '../src/model.ts';
 import {parseProject,serializeProject,serializeArtworkProject} from '../src/project-format.js';
+import { changedBitmapIds } from '../src/bitmap-commit.ts';
 
 test('prevalidated serialized-change commit preserves Undo, Redo and previous snapshots',()=>{
  const original=makeProject('History validation');
@@ -134,4 +135,32 @@ test('serialization phase diagnostics preserve output and report nonnegative tim
  const bad=structuredClone(project);
  bad.scenes[0].panels[0].layers=[];
  assert.throws(()=>serializeArtworkProject(bad,(label,elapsed)=>measurements.push([label,elapsed])),/Invalid project collection/);
+});
+
+test('4.3A.3 vector bucket skips unchanged bitmap comparisons without changing committed artwork',()=>{
+ const original=makeProject('Vector bucket with bitmap');
+ const panel=original.scenes[0].panels[0];
+ const bitmap=structuredClone(panel.layers[0]);bitmap.id=uid();bitmap.kind='bitmap';bitmap.image='data:image/png;base64,AA==';bitmap.strokes=[];
+ panel.layers.push(bitmap);
+ const next=structuredClone(panel);
+ next.layers[0].strokes.push({id:uid(),tool:'fill',color:'#ff0000',size:1,points:[[5,5,1]],contours:[[[0,0,1],[10,0,1],[10,10,1],[0,10,1]]]});
+ assert.deepEqual([...changedBitmapIds(panel,next,panel.layers[0].id)],[]);
+ assert.deepEqual([...changedBitmapIds(panel,next)],[]);
+ const committed=editPanelLayers(original,panel.id,next.layers);
+ assert.equal(committed.scenes[0].panels[0].layers[1].image,bitmap.image);
+ assert.deepEqual(redo(undo(commitChanged(newHistory(original),committed))).present,committed);
+ assert.deepEqual(parseProject(serializeArtworkProject(committed)),committed);
+});
+
+test('4.3A.3 bitmap edits still require flattening; invalid vector-only hint falls back',()=>{
+ const original=makeProject('Bitmap change detection');
+ const panel=original.scenes[0].panels[0];
+ const bitmap=structuredClone(panel.layers[0]);bitmap.id=uid();bitmap.kind='bitmap';bitmap.image='data:image/png;base64,AA==';bitmap.strokes=[];
+ panel.layers.push(bitmap);
+ const next=structuredClone(panel);
+ next.layers[1].image='data:image/png;base64,AQ==';
+ assert.deepEqual([...changedBitmapIds(panel,next)],[bitmap.id]);
+ assert.deepEqual([...changedBitmapIds(panel,next,bitmap.id)],[bitmap.id]);
+ const altered=structuredClone(next);altered.layers.push(structuredClone(altered.layers[0]));altered.layers.at(-1).id=uid();
+ assert.deepEqual([...changedBitmapIds(panel,altered,panel.layers[0].id)],[bitmap.id]);
 });
