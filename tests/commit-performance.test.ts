@@ -119,3 +119,19 @@ test('4.3A.2 artwork serializer rejects invalid geometry, duplicate IDs and remo
  media.scenes[0].panels[0].layers[0].image='https://example.com/not-embedded.png';
  assert.throws(()=>serializeArtworkProject(media),/Invalid embedded image/);
 });
+
+test('serialization phase diagnostics preserve output and report nonnegative timings',()=>{
+ const project=makeProject('Serialization phase diagnostics');
+ const measurements=[];
+ const serialized=serializeArtworkProject(project,(label,elapsed)=>measurements.push([label,elapsed]));
+ assert.equal(serialized,serializeProject(project));
+ assert.deepEqual(measurements.map(([label])=>label),[
+  'Artwork serialize: project validation',
+  'Artwork serialize: JSON stringify',
+  'Artwork serialize: UTF-8 size check'
+ ]);
+ assert.ok(measurements.every(([,elapsed])=>Number.isFinite(elapsed)&&elapsed>=0));
+ const bad=structuredClone(project);
+ bad.scenes[0].panels[0].layers=[];
+ assert.throws(()=>serializeArtworkProject(bad,(label,elapsed)=>measurements.push([label,elapsed)),/Invalid project collection/);
+});
