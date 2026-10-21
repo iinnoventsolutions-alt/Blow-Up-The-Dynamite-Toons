@@ -7,7 +7,7 @@ import type { CSSProperties, PointerEvent } from 'react';
 import CameraOverlay from './CameraOverlay';
 import { findPanel, uid, type Layer, type Panel, type Point, type Project, type Stroke } from './model';
 import { bounds, textLocalBounds, simplifyStroke, cloneArtwork, contourFromPoints, defaultToolOptions, editSelected, eligibleLayers, hitStroke, pointInPolygon, selectionBounds, transformStroke, type Selected, type Tool, type ToolOptions } from './artwork';
-import { canDraw, drawPanel, flattenLayer, layerCanvas, preloadImages } from './render';
+import { canDraw, drawPanel, flattenLayer, layerCanvas, panelImagesReady, preloadImages } from './render';
 import { floodMask } from './flood';
 import {calculateFill,warmFillWorker} from './fill-compute';
 import type { CameraPose } from './camera';
@@ -73,7 +73,23 @@ export default function DrawingStage({onion,panel,project,layerId,tool,color,siz
  const cancel=()=>{inlineRef.current=null;setInline(null);gesture.current=null;live.current=null;draft.current=null;setRegion([]);cancelAnimationFrame(frame.current);frame.current=0;strokeStarted.current=0;redraw();};
  useEffect(()=>{draft.current=null;live.current=null;gesture.current=null;select([]);setRegion([]);setPan({x:0,y:0});},[panel.id,layerId]);
  useEffect(()=>{if(tool!=='bucket')return;const timer=setTimeout(()=>warmFillWorker(),0);return()=>clearTimeout(timer);},[tool]);
- useEffect(()=>{let active=true;const started=diagnosticsEnabled()?performance.now():0;preloadImages(panel).then(()=>{if(active){if(started)recordPerformance('Canvas: panel image preparation',performance.now()-started);redraw();}}).catch(e=>onError(e.message));return()=>{active=false;cancelAnimationFrame(frame.current);frame.current=0;};},[panel,project.width,project.height,onion.enabled]);
+ useEffect(()=>{
+  let active=true;
+  const profiling=diagnosticsEnabled(),started=profiling?performance.now():0;
+  // Cached images need no async preparation. Coalesce committed panel redraws
+  // with pointer-driven redraws via the existing requestAnimationFrame queue.
+  if(panelImagesReady(panel)){
+   if(profiling)recordPerformance('Canvas: images already prepared',performance.now()-started);
+   schedule();
+  }else{
+   preloadImages(panel).then(()=>{
+    if(!active)return;
+    if(profiling)recordPerformance('Canvas: panel image preparation',performance.now()-started);
+    schedule();
+   }).catch(e=>{if(active)onError(e.message);});
+  }
+  return()=>{active=false;cancelAnimationFrame(frame.current);frame.current=0;};
+ },[panel,project.width,project.height,onion.enabled]);
  useEffect(()=>{const eligible=new Set(eligibleLayers(panel,layerId,options.selectionScope).map(l=>l.id));select(selectionRef.current.filter(s=>eligible.has(s.layerId)&&panel.layers.find(l=>l.id===s.layerId)?.strokes.some(p=>p.id===s.id)));},[options.selectionScope,panel.layers.map(l=>`${l.id}:${l.visible}:${l.locked}`).join('|')]);
  useEffect(()=>{if(['brush','pencil','eraser','bucket','shape','picker','hand','rotate-view','camera'].includes(tool)){const hadDraft=!!draft.current;draft.current=null;if(selectionRef.current.length)select([]);if(hadDraft)schedule();}},[tool]);
  const selectedArtwork=()=>{const s=selectionRef.current[0];return s?working().layers.find(l=>l.id===s.layerId)?.strokes.find(p=>p.id===s.id):undefined;};
