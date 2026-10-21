@@ -131,6 +131,12 @@ export default function DrawingStage({onion,panel,project,layerId,tool,color,siz
    recordPerformance('Bucket flood mask',result.maskMs);
    recordPerformance('Bucket trace contours',result.contourMs);
    recordPerformance(result.worker?'Bucket background worker elapsed':'Bucket calculation elapsed',result.worker?result.waitMs:result.maskMs+result.contourMs);
+   if(result.worker&&result.timing&&diagnosticsEnabled()){
+    recordPerformance('Bucket worker: message submission',result.timing.postMessageMs);
+    recordPerformance('Bucket worker: receive queue delay',result.timing.queueMs);
+    recordPerformance('Bucket worker: result return delay',result.timing.returnMs);
+    recordPerformance('Bucket worker: remaining overhead',result.timing.unattributedMs);
+   }
    stage=performance.now();
    if(!mounted.current||latestPanel.current.id!==panel.id)return; // Discard work if the user navigated away during background fill.
    if(!result.contours.length){onError('No fillable area at this point. Adjust tolerance or gap closing.');return;}
