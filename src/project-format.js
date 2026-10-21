@@ -90,11 +90,20 @@ export function serializeProject(project) {
  * Unlike serializeProject, do not parse and validate the same JSON a second
  * time on the renderer's input path. Imports still use parseProject.
  */
-export function serializeArtworkProject(project) {
+export function serializeArtworkProject(project, onPhase) {
+  const started = onPhase ? performance.now() : 0;
   validateProject(project);
+  const validatedAt = onPhase ? performance.now() : 0;
   const text = JSON.stringify(project);
+  const stringifiedAt = onPhase ? performance.now() : 0;
   if (typeof text !== 'string' || new TextEncoder().encode(text).byteLength > MAX_PROJECT_BYTES) {
     fail('Project must be smaller than 128 MB in this developer build.');
+  }
+  if (onPhase) {
+    const measuredAt = performance.now();
+    onPhase('Artwork serialize: project validation', validatedAt - started);
+    onPhase('Artwork serialize: JSON stringify', stringifiedAt - validatedAt);
+    onPhase('Artwork serialize: UTF-8 size check', measuredAt - stringifiedAt);
   }
   return text;
 }
