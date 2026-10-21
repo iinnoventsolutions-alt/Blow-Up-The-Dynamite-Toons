@@ -18,7 +18,7 @@ type Gesture={kind:'stroke'|'shape'|'region'|'transform'|'point'|'pan'|'rotate';
 export default function DrawingStage({onion,panel,project,layerId,tool,color,size,zoom,guides,rotation,options=oDefault,cameraFrame,command,onCameraChange,onLayers,onColor,onSize,onSelection,onRotation,onOptions,onError}:Props){
  const insertedPoint=useRef<{time:number;x:number;y:number}|null>(null);
  const firstStroke=useRef(true),strokeStarted=useRef(0),strokeFrames=useRef(0),strokeSamples=useRef(0);
- const fillPending=useRef(false),mounted=useRef(true);
+ const fillPending=useRef(false),mounted=useRef(true),bucketCanvas=useRef<HTMLCanvasElement|null>(null);
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
  const textInput=useRef<HTMLTextAreaElement>(null),inlineRef=useRef<{id:string;layerId:string;value:string}|null>(null),[inline,setInline]=useState<{id:string;layerId:string;value:string}|null>(null);
  const latestPanel=useRef(panel),committing=useRef(false),canvas=useRef<HTMLCanvasElement>(null),svg=useRef<SVGSVGElement>(null),live=useRef<Stroke|null>(null),gesture=useRef<Gesture|null>(null),frame=useRef(0),draft=useRef<Panel|null>(null),selectionRef=useRef<Selected[]>([]),selectedPoint=useRef<{path:number;index:number}|null>(null),space=useRef(false);
@@ -114,9 +114,16 @@ export default function DrawingStage({onion,panel,project,layerId,tool,color,siz
   try{
    const ref=options.fillReference==='active'?{...panel,layers:[{...layer,opacity:1}]}:panel;
    await preloadImages(ref);measured('preload images');
-   const c=document.createElement('canvas'),width=Math.min(project.width,Math.round(2048*project.width/Math.max(project.width,project.height)));
+   // Fill operations are serialized by fillPending, so reuse the same scratch canvas.
+   // drawPanel resets/clears the backing pixels for every operation.
+   const c=bucketCanvas.current||(bucketCanvas.current=document.createElement('canvas'));
+   const width=Math.min(project.width,Math.round(2048*project.width/Math.max(project.width,project.height)));
+   const renderAt=performance.now();
    drawPanel(c,ref,project,{width,transparent:true});
-   const pixels=c.getContext('2d')!.getImageData(0,0,c.width,c.height);measured('render and pixel readback');
+   measured('render');
+   const pixels=c.getContext('2d')!.getImageData(0,0,c.width,c.height);
+   measured('pixel readback');
+   if(diagnosticsEnabled())recordPerformance('Bucket render and pixel readback',performance.now()-renderAt);
    const result=await calculateFill(pixels.data,c.width,c.height,p[0]/project.width*c.width,p[1]/project.height*c.height,options.tolerance,options.gap,project.width/c.width,project.height/c.height);
    recordPerformance('Bucket flood mask',result.maskMs);
    recordPerformance('Bucket trace contours',result.contourMs);
