@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {commit,commitChanged,makeProject,newHistory,undo,redo,editProject,editPanelLayers,makePanel,makeScene,uid} from '../src/model.ts';
-import {parseProject,serializeProject} from '../src/project-format.js';
+import {parseProject,serializeProject,serializeArtworkProject} from '../src/project-format.js';
 
 test('prevalidated serialized-change commit preserves Undo, Redo and previous snapshots',()=>{
  const original=makeProject('History validation');
@@ -89,4 +89,33 @@ test('4.3A serializer still rejects oversized artwork and invalid embedded image
  const huge=structuredClone(panel.layers);
  huge[0].strokes.push({id:uid(),tool:'brush',color:'#112233',size:3,points:Array.from({length:100001},()=>[10,10,1])});
  assert.throws(()=>serializeProject(editPanelLayers(original,panel.id,huge,false)),/Invalid project collection/);
+});
+
+test('4.3A.2 artwork serialization equals strict serialized JSON and roundtrips',()=>{
+ const original=makeProject('Artwork fast serialization');
+ original.scenes[0].panels.push(makePanel('Second',original.fps));
+ const target=original.scenes[0].panels[0];
+ const layers=structuredClone(target.layers);
+ layers[0].strokes.push({id:uid(),tool:'brush',color:'#123456',size:7,points:[[3,4,.5],[9,11,1]]});
+ const updated=editPanelLayers(original,target.id,layers,false);
+ const text=serializeArtworkProject(updated);
+ assert.equal(text,serializeProject(updated));
+ assert.deepEqual(parseProject(text),updated);
+ const history=commitChanged(newHistory(original),updated);
+ assert.equal(undo(history).present,original);
+ assert.equal(redo(undo(history)).present,updated);
+});
+test('4.3A.2 artwork serializer rejects invalid geometry, duplicate IDs and remote media',()=>{
+ const original=makeProject('Artwork rejection');
+ const layers=structuredClone(original.scenes[0].panels[0].layers);
+ layers[0].strokes.push({id:uid(),tool:'brush',color:'#123456',size:4,points:[[0,0,1],[4,4,1]]});
+ const invalid=editPanelLayers(original,original.scenes[0].panels[0].id,layers,false);
+ invalid.scenes[0].panels[0].layers[0].strokes[0].points[0][2]=2;
+ assert.throws(()=>serializeArtworkProject(invalid),/Invalid project number/);
+ const duplicate=structuredClone(original);
+ duplicate.scenes[0].panels[0].layers[0].id=duplicate.id;
+ assert.throws(()=>serializeArtworkProject(duplicate),/duplicate object ID/);
+ const media=structuredClone(original);
+ media.scenes[0].panels[0].layers[0].image='https://example.com/not-embedded.png';
+ assert.throws(()=>serializeArtworkProject(media),/Invalid embedded image/);
 });
