@@ -119,7 +119,14 @@ export default function DrawingStage({onion,panel,project,layerId,tool,color,siz
    await preloadImages(ref);measured('preload images');
    // Fill operations are serialized by fillPending, so reuse the same scratch canvas.
    // drawPanel resets/clears the backing pixels for every operation.
-   const c=bucketCanvas.current||(bucketCanvas.current=document.createElement('canvas'));
+   const c=bucketCanvas.current||(()=>{
+    const scratch=document.createElement('canvas');
+    // The first 2D context request fixes its attributes for the canvas lifetime.
+    // Favor repeated getImageData reads on this bucket-only scratch surface.
+    if(!scratch.getContext('2d',{willReadFrequently:true}))throw new Error('Paint Bucket canvas is unavailable.');
+    bucketCanvas.current=scratch;
+    return scratch;
+   })();
    const width=Math.min(project.width,Math.round(2048*project.width/Math.max(project.width,project.height)));
    const renderAt=performance.now();
    drawPanel(c,ref,project,{width,transparent:true});
