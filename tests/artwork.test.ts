@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { makeProject,makeLayer,uid,type Stroke } from '../src/model.ts';
 import { bounds,textLocalBounds,simplifyStroke,contourFromPoints,eligibleLayers,hitStroke,pointInPolygon,transformStroke,editSelected } from '../src/artwork.ts';
 import { floodMask,maskContours } from '../src/flood.ts';
-import { panelImagesReady } from '../src/render.ts';
+import { panelImagesReady } from '../src/image-readiness.ts';
 import { parseProject,serializeProject } from '../src/project-format.js';
 test('legacy projects migrate as editable vector layers; schema 4 round trips all artwork types',()=>{
  const p=makeProject();const legacy=structuredClone(p) as unknown as {schemaVersion:number;scenes:typeof p.scenes};legacy.schemaVersion=1;delete legacy.scenes[0].panels[0].layers[0].kind;const migrated=parseProject(JSON.stringify(legacy));assert.equal(migrated.schemaVersion,4);assert.equal(migrated.scenes[0].panels[0].layers[0].kind,'vector');
@@ -37,9 +37,9 @@ test('brush overlap hit testing matches nonzero paint while bucket holes stay em
 
 test('post-commit redraw skips image preparation only for panels without missing image assets',()=>{
  const panel=makeProject().scenes[0].panels[0];
- assert.equal(panelImagesReady(panel),true);
+ assert.equal(panelImagesReady(panel,new Set()),true);
  panel.layers[0].image='data:image/png;base64,AA==';
- assert.equal(panelImagesReady(panel),false);
+ assert.equal(panelImagesReady(panel,new Set()),false);
  delete panel.layers[0].image;
  panel.layers[0].strokes.push({id:uid(),tool:'image',color:'#000000',size:1,points:[[0,0,1],[2,2,1]],source:'data:image/png;base64,AA=='});
  assert.equal(panelImagesReady(panel),false);
