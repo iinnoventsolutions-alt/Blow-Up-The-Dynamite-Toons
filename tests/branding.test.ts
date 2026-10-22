@@ -3,13 +3,12 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 
 test('Round 5 brand identity matches web, desktop and macOS package',async()=>{
- const [manifest,metadata,html,app,desktop,svg,png,icns]=await Promise.all([
+ const [manifest,metadata,html,app,desktop,png,icns]=await Promise.all([
   readFile('package.json','utf8').then(JSON.parse),
   readFile('src/build-info.json','utf8').then(JSON.parse),
   readFile('index.html','utf8'),
   readFile('src/App.tsx','utf8'),
   readFile('desktop/main.cjs','utf8'),
-  readFile('public/innovent-icon.svg','utf8'),
   readFile('public/innovent-icon.png'),
   readFile('public/innovent-icon.icns')
  ]);
