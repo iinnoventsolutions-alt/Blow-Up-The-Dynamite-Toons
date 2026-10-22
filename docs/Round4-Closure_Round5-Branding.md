@@ -35,3 +35,23 @@ Tool icon styling remains a separate user preference (Classic/Updated).
 Development build remains ad-hoc signed, not Developer ID signed or notarized.
 All work must be performed on `Security-Audit-W` until a branch promotion is
 explicitly approved. Never alter `Working` or `main` implicitly.
+
+## Approved Round 5 application icon — asset replacement pending
+
+Owner approved a specific uploaded icon rendering: dark rounded tile, artist's
+drafting/storyboard board, two blue lowercase 'i' shapes and orange rising arrow.
+This applies to **application icons only**. Preserve `public/innovent-logo.jpg`
+and all other company branding unchanged.
+
+The approved upload has been exported to 1024px PNG, macOS ICNS and SVG
+wrapper in a local handoff ZIP. The exact bundle filenames that must overwrite
+repository assets on `Security-Audit-W` are:
+- `public/innovent-icon.png` — SHA-256 `5a8d65cc0f8911622441387140289782a78f5cf4ffe7a62fc1a89a1320796eff`
+- `public/innovent-icon.icns` — SHA-256 `3dfcef2f2cc4055550c57d7c0335a75691e06eac7b8e1050ecbc20bd64592b7d`
+- `public/innovent-icon.svg` — approved-image raster wrapped in SVG
+
+Web favicon and header now reference the application PNG; Electron's desktop
+window already uses that PNG, and macOS packaging uses the ICNS. A binary
+upload is still required. Do **not** mark the visual icon replacement complete
+until the committed assets match these digests and macOS packaging/reliability
+tests pass. The company logo JPEG should not change.
