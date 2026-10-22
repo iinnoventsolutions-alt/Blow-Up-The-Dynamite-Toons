@@ -155,7 +155,16 @@ export default function DrawingStage({onion,panel,project,layerId,tool,color,siz
    await commit(next,l.kind==='vector'?l.id:undefined);
    if(commitAt)recordPerformance('Bucket: drawing commit function',performance.now()-commitAt);
    measured('commit');
-  }catch(e){onError((e as Error).message);}finally{recordPerformance('Bucket total',performance.now()-started);fillPending.current=false;setBusy(false);}
+  }catch(e){onError((e as Error).message);}finally{
+    // Distinguish completion of the fill handler from the next browser paint opportunity.
+    // Two frames are a proxy for visibility, not a compositor/GPU presentation timestamp.
+    const completedAt=performance.now();
+    recordPerformance('Bucket total',completedAt-started);
+    if(diagnosticsEnabled())requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      if(mounted.current)recordPerformance('Bucket click to second frame',performance.now()-started);
+    }));
+    fillPending.current=false;setBusy(false);
+   }
  };
  const begin=(e:PointerEvent<SVGSVGElement>)=>{if(e.button!==0||busy||committing.current||inlineRef.current)return;e.preventDefault();e.currentTarget.focus({preventScroll:true});const p=point(e),target=e.target as SVGElement,mode=target.dataset.mode;e.currentTarget.setPointerCapture(e.pointerId);
   if(space.current||tool==='hand'){gesture.current={kind:'pan',start:p,screen:[e.clientX,e.clientY],originPan:pan};return;}

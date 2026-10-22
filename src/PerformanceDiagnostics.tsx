@@ -1,5 +1,5 @@
 import {useEffect,useState} from 'react';
-import {clearDiagnostics,diagnosticsSamples,subscribeDiagnostics,setDiagnosticsEnabled,installPerformanceObserver} from './performance-diagnostics';
+import {clearDiagnostics,diagnosticsSamples,subscribeDiagnostics,setDiagnosticsEnabled,installPerformanceObserver,exportDiagnosticsJson} from './performance-diagnostics';
 const suffix=(label:string)=>label==='Stroke: accepted movement samples'?' samples':'ms';
 export default function PerformanceDiagnostics({close}:{close:()=>void}){
  const [samples,setSamples]=useState(diagnosticsSamples);
@@ -9,6 +9,12 @@ export default function PerformanceDiagnostics({close}:{close:()=>void}){
   <p>Repeat slow tool changes, PDF close, or paint bucket fills. Durations are in milliseconds; stroke movement samples are counts. No project content is collected.</p>
   <div style={{display:'flex',gap:8}}>
    <button onClick={()=>void navigator.clipboard.writeText(samples.map(s=>s.at+' | '+s.label+' | '+s.ms+suffix(s.label)).join('\n')).catch(()=>{})}>Copy timings</button>
+   <button onClick={()=>{
+    const blob=new Blob([exportDiagnosticsJson()],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement('a');link.href=url;link.download='pt1b-app-diagnostics-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json';
+    document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+   }}>Export JSON</button>
    <button onClick={clearDiagnostics}>Clear</button>
   </div>
   <div aria-live="off" style={{marginTop:8}}>{samples.length?samples.slice(0,35).map((s,i)=><div key={i} style={{borderTop:'1px solid #405466',padding:'4px 0'}}><span style={{opacity:.7}}>{s.at}</span> · <strong>{s.ms} {suffix(s.label).trim()}</strong> · {s.label}</div>):<p>Waiting for interactions…</p>}</div>
