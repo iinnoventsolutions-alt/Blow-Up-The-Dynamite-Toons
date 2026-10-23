@@ -130,7 +130,24 @@ export default function App() {
   }catch(e){report((e as Error).message);} };
   const editPanel = (fn: (p: Panel, s: Scene) => void, id = panel?.id) => edit(p => { const found = findPanel(p, id!); if (found) fn(found.panel, found.scene); });
   const editLayer = (fn: (l: Layer) => void, panelId = panel?.id, id = layer?.id) => editPanel(p => { const l = p.layers.find(l => l.id === id); if (l) fn(l); }, panelId);
-  const select = (id: string, selectedLayer?: string) => { setAudioSelection(null); setTransitionId(''); setDrawingPreview(false); setPlaying(false); setSelectedId(id); if (latest.current) setPlayFrame(panelStart(latest.current, id)); if (selectedLayer) setLayerSelection(prev => ({ ...prev, [id]: selectedLayer })); };
+  const select = (id: string, selectedLayer?: string) => {
+    const profiling=diagnosticsEnabled(),started=profiling?performance.now():0;
+    const prior=selectedId,from=latest.current?allPanels(latest.current).findIndex(e=>e.panel.id===prior):-1;
+    const to=latest.current?allPanels(latest.current).findIndex(e=>e.panel.id===id):-1;
+    setAudioSelection(null); setTransitionId(''); setDrawingPreview(false); setPlaying(false); setSelectedId(id);
+    if (latest.current) setPlayFrame(panelStart(latest.current, id));
+    if (selectedLayer) setLayerSelection(prev => ({ ...prev, [id]: selectedLayer }));
+    if(profiling&&prior!==id){
+      recordPerformance('Panel navigation: handler',performance.now()-started);
+      // Identifies the selected destination and whether the jump crossed scenes.
+      const fromScene=latest.current?.scenes.findIndex(s=>s.panels.some(p=>p.id===prior))??-1;
+      const toScene=latest.current?.scenes.findIndex(s=>s.panels.some(p=>p.id===id))??-1;
+      recordPerformance(fromScene!==toScene?'Panel navigation: cross-scene jump':'Panel navigation: same-scene jump',Math.abs(to-from));
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{
+        if(diagnosticsEnabled())recordPerformance('Panel navigation: click to second frame',performance.now()-started);
+      }));
+    }
+  };
   const install = (value: Project, name: string, clean: boolean) => { setAudioSelection(null); setTransitionId(''); const h = newHistory(value); historyRef.current = h; latest.current = value; savedRef.current = clean ? serializeProject(value) : ''; setHistory(h); setSelectedId(allPanels(value)[0].panel.id); setSelectedPanels([]); setShowMove(false); setLayerSelection({}); setSavedText(clean ? serializeProject(value) : ''); setFileName(name); let restored='Drawing';if(preferences.rememberWorkspace)try{const v=localStorage.getItem('iinnovent.workspace');if(['Drawing','Panel','Timeline','Pitch'].includes(v||''))restored=v!;}catch{}setWorkspace(restored as Workspace); setDrawingPreview(false); setPlaying(false); setPlayFrame(0); setRecovery(null); setZoom(1); };
   const save = async (saveAs = false, closeAfter = false): Promise<boolean> => {
     if(document.activeElement instanceof HTMLElement&&document.activeElement.matches('.inline-art-text'))document.activeElement.blur();
