@@ -19,6 +19,7 @@ try {
   await page.getByRole('button', { name: 'Create project →', exact: true }).click();
   await page.locator('canvas[aria-label="Drawing canvas"]').waitFor();
   await draw(.3); const first = await strokesPixels(); assert(first > 1000, 'Brush paints persistent pixels');
+  await page.getByRole('tab', { name: 'Layers' }).click();
   await page.getByTitle('Add layer', { exact: true }).click(); await draw(.65);
   const both = await strokesPixels(); assert(both > first * 1.5, 'Second layer draws independently');
   await page.getByTitle('Visibility Layer 2', { exact: true }).click(); await waitPaint();
@@ -28,6 +29,7 @@ try {
   await page.getByTitle('Lock Layer 2', { exact: true }).click(); await draw(.5);
   assert(Math.abs(await strokesPixels() - both) < 10, 'Locked layer rejects strokes');
   await page.getByTitle('Lock Layer 2', { exact: true }).click();
+  await page.getByRole('tab', { name: 'Panel' }).click();
   await page.getByLabel(/^dialogue$/i).fill('Dialogue survives module switching and reopen.');
   await page.getByRole('button', { name: '+ Panel', exact: true }).first().click();
   await page.getByLabel(/^panel name$/i).fill('Second shot');
@@ -40,6 +42,7 @@ try {
   await page.getByRole('button', { name: 'Drawing', exact: true }).click(); await waitPaint();
   assert(Math.abs(await strokesPixels() - first) < 10, 'Thumbnail controls update the shared drawing');
   await page.getByRole('button', { name: 'Timeline', exact: true }).click();
+  await page.getByRole('tab', { name: 'Panel' }).click();
   await page.getByLabel('Duration in seconds').fill('2');
   await page.getByLabel('Duration in seconds').press('Tab');
   assert.equal(await page.locator('.timing-summary strong').textContent(), '00:07:00');
@@ -58,6 +61,7 @@ try {
   await page.locator('input[type=file]').first().setInputFiles({ name: 'acceptance.innovent', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(project)) });
   await waitPaint(); assert.equal(await page.getByLabel(/^dialogue$/i).inputValue(), project.scenes[0].panels[0].dialogue);
   assert(Math.abs(await strokesPixels() - first) < 10, 'Save/reopen restores drawing and hidden layers');
+  await page.getByRole('tab', { name: 'Layers' }).click();
   await page.getByTitle('Visibility Layer 2', { exact: true }).click();
   await page.getByTitle('eraser (E)', { exact: true }).click(); await draw(.3);
   assert(Math.abs(await strokesPixels() - both) < 10, 'Eraser does not remove a lower layer');
@@ -70,6 +74,7 @@ try {
   assert.match(await page.locator('.grid-card').first().innerText(), /Second shot/);
   await page.getByRole('button', { name: 'Drawing', exact: true }).click();
   await page.locator('input[accept="image/png,image/jpeg,image/webp"]').setInputFiles('public/innovent-logo.jpg');
+  await page.getByRole('tab', { name: 'Layers' }).click();
   await page.waitForFunction(() => document.querySelectorAll('.layer-row').length === 3);
   await waitPaint(); assert(await strokesPixels() > both, 'Imported image is composited into its own layer');
   const portrait = structuredClone(project); portrait.width = 1080; portrait.height = 1920;
@@ -77,6 +82,7 @@ try {
   await waitPaint(); const box = await page.locator('canvas[aria-label="Drawing canvas"]').boundingBox();
   assert(box && Math.abs(box.width / box.height - 1080 / 1920) < .005, 'Portrait canvas fits without distortion');
   await page.locator('input[type=file]').first().setInputFiles({ name: 'acceptance.innovent', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(project)) }); await waitPaint();
+  await page.getByRole('tab', { name: 'Panel' }).click();
   await page.getByLabel('Duration in seconds').fill('3');
   const keyboardSave = page.waitForEvent('download'); await page.getByLabel('Duration in seconds').press('Control+s');
   const keyboardFile = await keyboardSave; const keyboardProject = JSON.parse(await readFile(await keyboardFile.path(), 'utf8'));
