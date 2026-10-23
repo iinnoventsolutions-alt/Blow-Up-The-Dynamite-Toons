@@ -147,6 +147,20 @@ export default function DrawingStage({onion,panel,project,layerId,tool,color,siz
    stage=performance.now();
    if(!mounted.current||latestPanel.current.id!==panel.id)return; // Discard work if the user navigated away during background fill.
    if(!result.contours.length){onError('No fillable area at this point. Adjust tolerance or gap closing.');return;}
+   // PT.1F: signed contour area subtracts holes and avoids a second full-size mask.
+   // Confirm only unusually large fills; ordinary fills remain one-click operations.
+   const signedArea=result.contours.reduce((total,path)=>{
+    let twice=0;
+    for(let i=0;i<path.length;i++){const a=path[i],b=path[(i+1)%path.length];twice+=a[0]*b[1]-b[0]*a[1];}
+    return total+twice/2;
+   },0);
+   const coverage=Math.min(1,Math.abs(signedArea)/(project.width*project.height));
+   if(coverage>=0.6){
+    const percent=Math.round(coverage*100);
+    const approved=window.confirm(`This fill covers approximately ${percent}% of the canvas.\\n\\nFill reference: ${options.fillReference==='active'?'Active layer':'All visible layers'}.\\n\\nApply this large fill? Choose Cancel to leave the artwork unchanged.`);
+    if(!approved)return;
+    if(!mounted.current||latestPanel.current.id!==panel.id)return;
+   }
    const geometryAt=diagnosticsEnabled()?performance.now():0;
    const next=structuredClone(panel),l=next.layers.find(l=>l.id===layerId)!;
    l.strokes.push({id:uid(),tool:'fill',color,size:1,opacity:options.opacity,points:[p],contours:result.contours});
@@ -155,7 +169,16 @@ export default function DrawingStage({onion,panel,project,layerId,tool,color,siz
    await commit(next,l.kind==='vector'?l.id:undefined);
    if(commitAt)recordPerformance('Bucket: drawing commit function',performance.now()-commitAt);
    measured('commit');
-  }catch(e){onError((e as Error).message);}finally{recordPerformance('Bucket total',performance.now()-started);fillPending.current=false;setBusy(false);}
+  }catch(e){onError((e as Error).message);}finally{
+    // Distinguish completion of the fill handler from the next browser paint opportunity.
+    // Two frames are a proxy for visibility, not a compositor/GPU presentation timestamp.
+    const completedAt=performance.now();
+    recordPerformance('Bucket total',completedAt-started);
+    if(diagnosticsEnabled())requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      if(mounted.current)recordPerformance('Bucket click to second frame',performance.now()-started);
+    }));
+    fillPending.current=false;setBusy(false);
+   }
  };
  const begin=(e:PointerEvent<SVGSVGElement>)=>{if(e.button!==0||busy||committing.current||inlineRef.current)return;e.preventDefault();e.currentTarget.focus({preventScroll:true});const p=point(e),target=e.target as SVGElement,mode=target.dataset.mode;e.currentTarget.setPointerCapture(e.pointerId);
   if(space.current||tool==='hand'){gesture.current={kind:'pan',start:p,screen:[e.clientX,e.clientY],originPan:pan};return;}
