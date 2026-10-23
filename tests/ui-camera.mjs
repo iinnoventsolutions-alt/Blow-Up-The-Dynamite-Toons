@@ -17,6 +17,10 @@ try{
  const drawing=page.getByLabel('Drawing canvas',{exact:true}),raw=await pixels(drawing);
  await page.getByTitle('camera (C)',{exact:true}).click();await page.getByRole('button',{name:'Set scene IN / OUT',exact:true}).click();await wait();
  assert.equal(await page.locator('.camera-key-list button').count(),2);
+ const cameraMask=page.getByRole('checkbox',{name:'Mask outside camera'});
+ assert.equal(await cameraMask.isChecked(),false,'Camera masking is off by default');
+ await cameraMask.check();assert.equal(await page.locator('.camera-outside-mask').count(),1,'Camera mask is visible when enabled');
+ await cameraMask.uncheck();assert.equal(await page.locator('.camera-outside-mask').count(),0,'Camera mask can be disabled without changing artwork');
  await page.locator('.camera-key-list button').last().click();await number('Camera zoom',2);await number('Camera X',1250);await number('Camera rotation',12);
  await page.getByLabel('Camera interpolation',{exact:true}).selectOption('ease');let output=await save();assert.equal(output.scenes[0].camera[1].zoom,2);assert.equal(output.scenes[0].camera[1].rotation,12);
  await page.locator('.camera-key-list button').first().click();assert.equal(await pixels(drawing),raw,'Camera editing leaves drawing pixels unchanged');
