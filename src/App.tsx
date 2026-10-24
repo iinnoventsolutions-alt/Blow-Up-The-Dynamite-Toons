@@ -1,6 +1,7 @@
 import {readEmbeddedImage} from './image-import';
 import PreferencesDialog from './PreferencesDialog';
 import HelpAbout from './HelpAbout';
+import StartupSplash from './StartupSplash';
 import { loadPreferences, nextName } from './preferences';
 import { removeStoryboardPanel, duplicateStoryboardPanel } from './model';
 import { lazy, Suspense } from 'react';
@@ -232,7 +233,7 @@ export default function App() {
   const exportVideo=async()=>{if(!project||busyRef.current)return;setPlaying(false);busyRef.current=true;const abort=new AbortController();exportAbort.current=abort;setExportProgress(0);try{const blob=await exportAnimatic(project,abort.signal,setExportProgress),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`${project.title.replace(/[^a-zA-Z0-9 _-]/g,'').slice(0,100)||'Storyboard'}.webm`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);report('Animatic video exported.');}catch(e){report((e as Error).message);}finally{busyRef.current=false;exportAbort.current=null;setExportProgress(null);}};
   const jumpPitch = (offset: number) => { if (!project || !panel) return; const panels = allPanels(project); const current = panels.findIndex(p => p.panel.id === panel.id); const index = Math.max(0, Math.min(panels.length - 1, current + offset)); select(panels[index].panel.id); setPlayFrame(panels.slice(0, index).reduce((n, p) => n + p.panel.duration, 0)); };
 
-  return <div className="application">
+  return <div className="application"><StartupSplash/>
     <input ref={openInput} hidden type="file" accept=".issb,.innovent,application/json" onChange={async e => { const f = e.target.files?.[0]; e.target.value = ''; if (!f) return; try { install(parseProject(await f.text()), f.name, true); report('Project opened.'); } catch (error) { report((error as Error).message); } }} />
     <input ref={audioInput} type="file" hidden multiple accept=".wav,.mp3,.m4a,.aac,.ogg,.flac,.webm,audio/*" onChange={e=>{const files=Array.from(e.target.files||[]);e.target.value='';void importAudioFiles(files);}}/>
     <input ref={imageInput} hidden type="file" accept="image/png,image/jpeg,image/webp" onChange={async e => { const f = e.target.files?.[0]; e.target.value = ''; if (!f) return; const targetPanel = panel?.id; try{const projectId=project?.id,source=await readEmbeddedImage(f);if(!latest.current||latest.current.id!==projectId||!findPanel(latest.current,targetPanel!))throw new Error('Project changed during image import. Import again into the current panel.');const l=makeLayer(f.name.slice(0,200),'bitmap');l.image=source;editPanel(p=>p.layers.push(l),targetPanel);select(targetPanel!,l.id);}catch(error){report((error as Error).message);} }} />
