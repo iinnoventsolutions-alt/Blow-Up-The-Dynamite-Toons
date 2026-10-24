@@ -15,7 +15,7 @@ try{
  await page.goto('http://127.0.0.1:4317');
  const p=makeProject('Layer delete rules'),panel=p.scenes[0].panels[0],initial=panel.layers[0];
  await load(p);
- await page.getByRole('button',{name:'Layers',exact:true}).click();
+ await page.getByRole('tab',{name:'Layers',exact:true}).click();
  const remove=page.getByRole('button',{name:'Delete selected layer',exact:true});
  assert(await remove.isDisabled(),'Sole initial layer cannot be deleted');
  await page.getByTitle('Add layer',{exact:true}).click();await pause();
