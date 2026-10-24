@@ -15,6 +15,7 @@ try{
  const p=makeProject('Camera milestone');const s=p.scenes[0];s.panels.push(makePanel('Panel 2'));s.panels.forEach(panel=>{panel.duration=60;panel.layers[0].strokes=[{id:uid(),tool:'brush',color:'#ff5020',size:32,points:[[250,230,1],[500,800,1],[970,300,1],[1600,850,1]]}];});
  await page.goto(url);await page.locator('input[type=file]').first().setInputFiles({name:'camera.issb',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(p))});await wait();
  const drawing=page.getByLabel('Drawing canvas',{exact:true}),raw=await pixels(drawing);
+ assert.equal(await page.locator('.camera-default-outline').count(),1,'Default camera outline is visible before camera keys are created');
  await page.getByTitle('camera (C)',{exact:true}).click();await page.getByRole('button',{name:'Set scene IN / OUT',exact:true}).click();await wait();
  assert.equal(await page.locator('.camera-key-list button').count(),2);
  const cameraMask=page.getByRole('checkbox',{name:'Mask outside camera'});
