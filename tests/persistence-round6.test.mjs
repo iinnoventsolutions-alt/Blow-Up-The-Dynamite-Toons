@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,readFile,readdir,rm,writeFile} from 'node:fs/promises';
+import {mkdtemp,readFile,readdir,rm,writeFile,truncate} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createRequire} from 'node:module';
@@ -24,7 +24,7 @@ test('desktop project reader rejects invalid recovery/project data',async()=>{
   const file=join(dir,'recovery.innovent');
   await writeFile(file,'{not valid json');
   await assert.rejects(readProject(file));
-  await writeFile(file,'x'.repeat(128*1024*1024+1));
+  await truncate(file,128*1024*1024+1);
   await assert.rejects(readProject(file),/128 MB limit/);
  }finally{await rm(dir,{recursive:true,force:true});}
 });
