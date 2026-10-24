@@ -16,6 +16,7 @@ const updated:Record<IconName,{body:string;detail:string}>={
  picker:{body:'m5 15 10-10 4 4L9 19l-6 2Z M15 3l6 6 2-2-6-6Z',detail:'m5 15 10-10 4 4L9 19l-6 2Z M15 3l6 6 2-2-6-6Z M6 14l4 4 M3 21l2-1'},
  hand:{body:'M6 12V7c0-2 3-2 3 0V4c0-2 3-2 3 0v1c0-2 3-2 3 0v2c0-2 3-2 3 0v6l2-2c2-1 3 1 2 2l-5 8H9l-6-7c-1-2 1-3 3-2Z',detail:'M6 12V7c0-2 3-2 3 0V4c0-2 3-2 3 0v1c0-2 3-2 3 0v2c0-2 3-2 3 0v6l2-2c2-1 3 1 2 2l-5 8H9l-6-7c-1-2 1-3 3-2Z M9 7v6 M12 5v8 M15 7v6'},
  'rotate-view':{body:'M3 3v6h6 M21 21v-6h-6',detail:'M4 9a8 8 0 0 1 14-3 M3 3v6h6 M20 15a8 8 0 0 1-14 3 M21 21v-6h-6 M9 9h6v6H9Z'},
+ zoom:{body:'M10 3a7 7 0 1 0 0 14a7 7 0 0 0 0-14Z',detail:'M10 3a7 7 0 1 0 0 14a7 7 0 0 0 0-14 M15 15l7 7 M7 10h6 M10 7v6'},
  camera:{body:'M2 7h12v13H2Z M14 11l8-4v13l-8-4Z',detail:'M2 7h12v13H2Z M14 11l8-4v13l-8-4Z M4 3a2 2 0 1 0 4 0 2 2 0 1 0-4 0 M9 3a2 2 0 1 0 4 0 2 2 0 1 0-4 0 M5 11h6'},
  'select-color':{body:'M3 3v15l4-4 3 6 3-1-3-6h7Z M19 2c-4 5-3 8 0 8s4-3 0-8Z',detail:'M3 3v15l4-4 3 6 3-1-3-6h7Z M19 2c-4 5-3 8 0 8s4-3 0-8Z'},
  'import-image':{body:'M2 4h15v16H2Z',detail:'M2 4h15v16H2Z M4 17l4-5 3 3 3-2 M5 8h2 M22 11H12 M15 8l-3 3 3 3'},
