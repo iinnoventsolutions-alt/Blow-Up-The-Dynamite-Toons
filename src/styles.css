@@ -208,3 +208,5 @@ progress{width:100%;height:18px;accent-color:#ff922c}
 .header-actions .preferences-trigger-icon{font-size:23px;line-height:1;color:#ffad61}
 .header-actions .preferences-trigger:focus-visible{outline:2px solid #ffbd75;outline-offset:3px}
 @media(max-width:1000px){.header-actions .preferences-trigger{gap:5px;padding:7px 9px;font-size:11px}.header-actions .preferences-trigger-icon{font-size:21px}}
+
+.recovery-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.recovery-actions button:not(.primary){border-color:#b88b5a;background:#312a25;color:#ffddb8}.recovery-actions button:not(.primary):hover{background:#493629;border-color:#ffc08a}
