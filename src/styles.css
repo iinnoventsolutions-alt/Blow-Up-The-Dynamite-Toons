@@ -194,3 +194,6 @@ progress{width:100%;height:18px;accent-color:#ff922c}
 .pitch-view:fullscreen .pitch-screen { flex: 1; min-height: 0; }
 
 .pitch-view:fullscreen .pitch-screen { width: 100%; max-height: calc(100% - 70px); }
+
+/* Round 6.3: dedicated zoom tool */
+.art-interaction.tool-zoom{cursor:zoom-in}
