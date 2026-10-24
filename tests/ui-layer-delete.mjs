@@ -8,9 +8,9 @@ for(let i=0;i<100;i++){try{if((await fetch('http://127.0.0.1:4317')).ok)break;}c
 const browser=await chromium.launch({headless:true,...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{})});
 const page=await browser.newPage({viewport:{width:1500,height:1000},acceptDownloads:true});
 page.on('dialog',d=>d.accept());
-const pause=()=>page.waitForTimeout(150);
+const pause=()=>page.waitForTimeout(250);
 const load=async p=>{await page.locator('input[type=file]').first().setInputFiles({name:'layers.issb',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(p))});await pause();};
-const save=async()=>{const pending=page.waitForEvent('download');await page.getByRole('button',{name:'Save project',exact:true}).click();return JSON.parse(await readFile(await(await pending).path(),'utf8'));};
+const save=async()=>{await page.getByRole('button',{name:'Save project',exact:true}).waitFor({state:'visible'});const pending=page.waitForEvent('download');await page.getByRole('button',{name:'Save project',exact:true}).click();return JSON.parse(await readFile(await(await pending).path(),'utf8'));};
 try{
  await page.goto('http://127.0.0.1:4317');
  const p=makeProject('Layer delete rules'),panel=p.scenes[0].panels[0],initial=panel.layers[0];
