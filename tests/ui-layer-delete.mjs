@@ -20,7 +20,7 @@ try{
  assert.equal(await page.locator('.layer-row').count(),2,'Adding a layer produces two inspector rows');
  await page.getByTitle('Select layer '+initial.name,{exact:true}).click();await pause();
  assert(await remove.isEnabled(),'Initial layer becomes deletable once another layer exists');
- await remove.click();await pause();
+ await remove.click();await page.getByRole('button',{name:'Discard / Delete',exact:true}).click();await page.locator('.layer-row').first().waitFor({state:'visible'});await pause();
  assert.equal(await page.locator('.layer-row').count(),1,'Deletion leaves one layer');assert.equal(await page.getByTitle('Select layer '+initial.name,{exact:true}).count(),0,'Initial layer is removed');
  assert(await remove.isDisabled(),'Remaining layer is protected');
  await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await pause();
