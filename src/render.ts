@@ -40,8 +40,9 @@ export function paintLayer(ctx:CanvasRenderingContext2D,layer:Layer,project:Proj
 }
 export function layerCanvas(layer:Layer,project:Project,width=project.width){const canvas=document.createElement('canvas');canvas.width=width;canvas.height=Math.max(1,Math.round(width*project.height/project.width));const ctx=canvas.getContext('2d')!;ctx.scale(width/project.width,canvas.height/project.height);paintLayer(ctx,layer,project);return canvas;}
 export async function flattenLayer(layer:Layer,project:Project):Promise<Layer>{await preloadImages({layers:[layer]} as Panel);if(project.width*project.height>16777216)throw new Error('Bitmap editing supports up to 16 megapixels. Use a smaller project or a Vector layer.');const canvas=layerCanvas(layer,project);return {...layer,kind:'bitmap',image:canvas.toDataURL('image/png'),strokes:[]};}
-export function drawPanel(canvas: HTMLCanvasElement, panel: Panel, project: Project, options: { width?: number; transparent?: boolean; camera?: CameraPose; overlay?: Scene; live?: { layerId: string; stroke: Stroke } } = {}) {
-  const width = options.width || Math.min(project.width, 1920), height = Math.max(1, Math.round(width * project.height / project.width));
+export function drawPanel(canvas: HTMLCanvasElement, panel: Panel, project: Project, options: { width?: number; transparent?: boolean; camera?: CameraPose; overlay?: Scene; live?: { layerId: string; stroke: Stroke }; drawingMargin?: number } = {}) {
+  const margin = options.drawingMargin || 0;
+  const width = options.width || Math.min(Math.round(project.width * (1 + 2 * margin)), 2400), height = Math.max(1, Math.round(width * project.height / project.width));
   if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
   const ctx = canvas.getContext('2d')!; ctx.clearRect(0, 0, width, height);
   if (!options.transparent) { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, width, height); }
@@ -53,7 +54,7 @@ export function drawPanel(canvas: HTMLCanvasElement, panel: Panel, project: Proj
   const layerCtx = scratch.getContext('2d')!;
   for (const layer of panel.layers) {
     if (!layer.visible) continue;
-    layerCtx.setTransform(1, 0, 0, 1, 0, 0); layerCtx.clearRect(0, 0, width, height); layerCtx.scale(width / project.width, height / project.height);
+    layerCtx.setTransform(1, 0, 0, 1, 0, 0); layerCtx.clearRect(0, 0, width, height); layerCtx.scale(width / (project.width * (1 + 2 * margin)), height / (project.height * (1 + 2 * margin))); if (margin) layerCtx.translate(project.width * margin, project.height * margin);
     paintLayer(layerCtx,layer,project,options.live?.layerId===layer.id?options.live.stroke:undefined);
     ctx.globalAlpha = layer.opacity; ctx.drawImage(scratch, 0, 0);
   }

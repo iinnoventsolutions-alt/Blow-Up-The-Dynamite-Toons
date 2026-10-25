@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import type { PointerEvent } from 'react';
 import { cameraAt, type Panel, type Project, type Scene } from './model';
 import { cameraCorners, localPanelStart, type CameraPose } from './camera';
-export default function CameraOverlay({ scene, panel, project, frame, editable = false, onChange }: { scene: Scene; panel: Panel; project: Project; frame?: number; editable?: boolean; onChange?: (frame: number, pose: CameraPose) => void }) {
+export default function CameraOverlay({ scene, panel, project, frame, drawingMargin = 0, editable = false, onChange }: { scene: Scene; panel: Panel; project: Project; frame?: number; drawingMargin?: number; editable?: boolean; onChange?: (frame: number, pose: CameraPose) => void }) {
   const start = localPanelStart(scene, panel), end = start + panel.duration - 1;
   const [live, setLive] = useState<{ frame: number; pose: CameraPose } | null>(null);
   const drag = useRef<{ frame: number; pose: CameraPose; x: number; y: number; mode: 'pan' | 'zoom'; radius: number } | null>(null);
@@ -14,7 +14,7 @@ export default function CameraOverlay({ scene, panel, project, frame, editable =
   const finish = () => { if (drag.current && live) onChange?.(live.frame, live.pose); cancel(); };
   const a = cameraCorners(inPose, project), b = cameraCorners(outPose, project), handle = Math.max(project.width, project.height) / 100;
   const outline = (pose: CameraPose, corners: [number, number][], f: number, color: string, label: string) => <g><polygon data-frame={f} data-mode="pan" points={corners.map(p => p.join(',')).join(' ')} fill="none" stroke={color} strokeWidth={handle / 5} className="camera-frame"/><text x={corners[0][0] + handle} y={corners[0][1] + handle * 1.7} fill={color} fontSize={handle * 1.25}>{label}</text>{corners.map(([x, y], i) => <rect key={i} data-frame={f} data-mode="zoom" x={x - handle / 2} y={y - handle / 2} width={handle} height={handle} fill={color} className="camera-handle"/>)}<circle data-frame={f} data-mode="pan" cx={pose.x} cy={pose.y} r={handle / 2} fill={color} className="camera-handle"/></g>;
-  return <svg className={`camera-overlay ${editable ? 'editable' : ''}`} viewBox={`0 0 ${project.width} ${project.height}`} aria-label="Camera movement overlay" onPointerDown={begin} onPointerMove={move} onPointerUp={finish} onPointerCancel={cancel} onLostPointerCapture={cancel} onKeyDown={e => { if (e.key === 'Escape') cancel(); }} tabIndex={editable ? 0 : undefined}>
+  return <svg className={`camera-overlay ${editable ? 'editable' : ''}`} viewBox={`${-project.width*drawingMargin} ${-project.height*drawingMargin} ${project.width*(1+2*drawingMargin)} ${project.height*(1+2*drawingMargin)}`} aria-label="Camera movement overlay" onPointerDown={begin} onPointerMove={move} onPointerUp={finish} onPointerCancel={cancel} onLostPointerCapture={cancel} onKeyDown={e => { if (e.key === 'Escape') cancel(); }} tabIndex={editable ? 0 : undefined}>
     <defs><marker id={`arrow-${panel.id}`} markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7" fill="#8c90db"/></marker></defs>
     {a.map(([x,y],i) => <line key={i} x1={x} y1={y} x2={b[i][0]} y2={b[i][1]} stroke="#8c90db" strokeWidth={handle / 9} markerEnd={`url(#arrow-${panel.id})`}/>)}
     {outline(inPose, a, start, '#32c85b', 'IN')}{outline(outPose, b, end, '#ef4d50', 'OUT')}

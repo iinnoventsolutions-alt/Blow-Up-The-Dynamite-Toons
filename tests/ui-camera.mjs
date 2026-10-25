@@ -15,8 +15,13 @@ try{
  const p=makeProject('Camera milestone');const s=p.scenes[0];s.panels.push(makePanel('Panel 2'));s.panels.forEach(panel=>{panel.duration=60;panel.layers[0].strokes=[{id:uid(),tool:'brush',color:'#ff5020',size:32,points:[[250,230,1],[500,800,1],[970,300,1],[1600,850,1]]}];});
  await page.goto(url);await page.locator('input[type=file]').first().setInputFiles({name:'camera.issb',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(p))});await wait();
  const drawing=page.getByLabel('Drawing canvas',{exact:true}),raw=await pixels(drawing);
+ assert.equal(await page.locator('.camera-default-outline').count(),1,'Default camera outline is visible before camera keys are created');
  await page.getByTitle('camera (C)',{exact:true}).click();await page.getByRole('button',{name:'Set scene IN / OUT',exact:true}).click();await wait();
  assert.equal(await page.locator('.camera-key-list button').count(),2);
+ const cameraMask=page.getByRole('checkbox',{name:'Mask outside camera'});
+ assert.equal(await cameraMask.isChecked(),false,'Camera masking is off by default');
+ await cameraMask.check();assert.equal(await page.locator('.camera-outside-mask').count(),1,'Camera mask is visible when enabled');
+ await cameraMask.uncheck();assert.equal(await page.locator('.camera-outside-mask').count(),0,'Camera mask can be disabled without changing artwork');
  await page.locator('.camera-key-list button').last().click();await number('Camera zoom',2);await number('Camera X',1250);await number('Camera rotation',12);
  await page.getByLabel('Camera interpolation',{exact:true}).selectOption('ease');let output=await save();assert.equal(output.scenes[0].camera[1].zoom,2);assert.equal(output.scenes[0].camera[1].rotation,12);
  await page.locator('.camera-key-list button').first().click();assert.equal(await pixels(drawing),raw,'Camera editing leaves drawing pixels unchanged');
@@ -32,7 +37,7 @@ try{
  await page.locator('.timeline-camera-lane button').last().click();await wait();assert.notEqual(await pixels(cameraCanvas),inPixels,'Camera pan, zoom and rotation change the rendered view');assert.equal(await page.locator('.timeline-clip.selected').getAttribute('data-panel-id'),s.panels[1].id);
  await page.getByTitle('Go to start',{exact:true}).click();await page.getByRole('button',{name:'Play',exact:true}).click();await page.waitForTimeout(300);assert(Number(await page.getByRole('slider',{name:'Timeline playhead'}).getAttribute('aria-valuenow'))>0);await page.getByRole('button',{name:'Pause',exact:true}).click();await page.screenshot({path:'test-results/camera-timeline.png'});
  await page.getByRole('button',{name:'Pitch',exact:true}).click();await wait();const pitchIn=await pixels(page.locator('.pitch-screen canvas'));await page.locator('.camera-key-list button').last().click();await wait();assert.notEqual(await pixels(page.locator('.pitch-screen canvas')),pitchIn,'Pitch uses the same scene camera');
- await page.getByRole('button',{name:'Drawing',exact:true}).click();await page.locator('.camera-key-list button').first().click();await number('Duration in seconds',5);output=await save();assert.deepEqual(output.scenes[0].camera.map(k=>k.frame),[0,179]);
+ await page.getByRole('button',{name:'Drawing',exact:true}).click();await page.locator('.camera-key-list button').first().click();await page.getByRole('tab',{name:'Panel'}).click();await number('Duration in seconds',5);await page.getByRole('tab',{name:'Camera'}).click();output=await save();assert.deepEqual(output.scenes[0].camera.map(k=>k.frame),[0,179]);
  const pending=page.waitForEvent('download');await page.getByRole('button',{name:'Export overlay PNG',exact:true}).click();const exported=await pending;assert(exported.suggestedFilename().endsWith('-overlay.png'));assert((await readFile(await exported.path())).length>1000);
  output=await save();await page.locator('input[type=file]').first().setInputFiles({name:'roundtrip.issb',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(output))});await wait();assert.deepEqual((await save()).scenes[0].camera,output.scenes[0].camera);await page.screenshot({path:'test-results/camera-drawing.png'});
  await page.getByRole('button',{name:'Delete key',exact:true}).click();await wait();assert.equal(await page.locator('.camera-key-list button').count(),1);await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();assert.equal(await page.locator('.camera-key-list button').count(),2);

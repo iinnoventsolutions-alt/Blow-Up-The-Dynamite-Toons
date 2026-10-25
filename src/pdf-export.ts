@@ -72,7 +72,7 @@ function pictureCanvas(entry:Entry,project:Project,s:PdfSettings,box:Box){
 export async function createStoryboardPdf(project:Project,raw:PdfSettings,range:PdfRange,signal:AbortSignal,progress:(n:number)=>void=()=>{}){
  const s=normalizePdfSettings(raw),entries=pdfEntries(project,range);if(!entries.length)throw new Error('Choose at least one panel or scene to export.');
  const doc=new jsPDF({unit:'pt',format:s.paper,orientation:s.orientation,compress:true,putOnlyUsedFonts:true});
- const [font,bold]=await Promise.all([fontData('StoryboardSans.ttf'),fontData('StoryboardSans-Bold.ttf')]);check(signal);doc.addFileToVFS('StoryboardSans.ttf',font);doc.addFont('StoryboardSans.ttf','Storyboard','normal');doc.addFileToVFS('StoryboardSans-Bold.ttf',bold);doc.addFont('StoryboardSans-Bold.ttf','Storyboard','bold');doc.setFont('Storyboard');doc.setFontSize(s.fontSize);doc.setProperties({title:project.title,subject:'Storyboard',creator:PRODUCT_NAME});
+ const [font,bold]=await Promise.all([fontData('StoryboardSans.ttf'),fontData('StoryboardSans-Bold.ttf')]);check(signal);doc.addFileToVFS('StoryboardSans.ttf',font);doc.addFont('StoryboardSans.ttf','Storyboard','normal');doc.addFileToVFS('StoryboardSans-Bold.ttf',bold);doc.addFont('StoryboardSans-Bold.ttf','Storyboard','bold');doc.setFont('Storyboard');doc.setFontSize(s.fontSize);doc.setProperties({title:project.subtitle.trim()||'Storyboard Presentation',subject:'Storyboard',creator:PRODUCT_NAME});
  const g=pdfGeometry(s),boxes=slotBoxes(s,0,0,g.cw,g.ch),pages:Slot[][]=[];let page:Slot[]=[],prior='';
  const flush=()=>{if(page.length){pages.push(page);page=[];}};
  for(const entry of entries){
@@ -83,19 +83,40 @@ export async function createStoryboardPdf(project:Project,raw:PdfSettings,range:
   }
  }flush();
  if(pages.length+(s.cover?1:0)>500)throw new Error('PDF exceeds 500 pages. Choose a smaller export range.');
- const textContent=[project.title,project.subtitle,...entries.flatMap(e=>[e.scene.name,e.panel.name,...(['dialogue','action','notes','slugging'] as const).filter(k=>s[k]).map(k=>e.panel[k])])].join('');
+ const textContent=[project.subtitle,...entries.flatMap(e=>[e.scene.name,e.panel.name,...(['dialogue','action','notes','slugging'] as const).filter(k=>s[k]).map(k=>e.panel[k])])].join('');
  const unsupported=[...new Set([...textContent].filter(c=>c.codePointAt(0)!>32&&!doc.getFont().metadata.characterToGlyph(c.codePointAt(0))))];
  if(unsupported.length)throw new Error('The PDF font does not support these characters: '+unsupported.slice(0,12).join(' ')+' . Replace them before exporting.');
  const logos=await Promise.all([s.showCompanyLogo?image(s.companyLogo):null,s.showSoftwareLogo?image('./innovent-icon.png'):null]);check(signal);
  const logo=(im:HTMLImageElement|null,b:Box)=>{if(im){const f=fit(im.width,im.height,b);doc.addImage(im,'PNG',f.x,f.y,f.w,f.h,undefined,'FAST');}};
  const short=(text:string,max:number)=>{text=text.replace(/\s+/g,' ');if(doc.getTextWidth(text)<=max)return text;let t=text;while(t.length&&doc.getTextWidth(t+'…')>max)t=t.slice(0,-1);return t+'…';};
- const header=(label:string)=>{doc.setFont('Storyboard','normal');doc.setFontSize(10);doc.setTextColor('#172b43');logo(logos[0],{x:s.margin,y:s.margin,w:62,h:32});logo(logos[1],{x:g.w-s.margin-38,y:s.margin,w:38,h:32});doc.text(short(project.title,g.w-2*s.margin-134),s.margin+72,s.margin+12);doc.setFontSize(8);doc.text(short(project.subtitle,g.w-2*s.margin-134),s.margin+72,s.margin+27);doc.setDrawColor('#687584');doc.setLineWidth(.5);doc.line(s.margin,s.margin+42,g.w-s.margin,s.margin+42);doc.setFontSize(8);doc.text(label,g.w-s.margin,g.h-s.margin,{align:'right'});};
+ const header=(label:string)=>{doc.setFont('Storyboard','normal');doc.setFontSize(10);doc.setTextColor('#172b43');logo(logos[0],{x:s.margin,y:s.margin,w:62,h:32});logo(logos[1],{x:g.w-s.margin-38,y:s.margin,w:38,h:32});doc.setFont('Storyboard','bold');doc.text(short(project.subtitle.trim()||'Storyboard Presentation',g.w-2*s.margin-134),s.margin+72,s.margin+18);doc.setDrawColor('#687584');doc.setLineWidth(.5);doc.line(s.margin,s.margin+42,g.w-s.margin,s.margin+42);doc.setFont('Storyboard','normal');doc.setFontSize(8);doc.text(label,g.w-s.margin,g.h-s.margin,{align:'right'});};
  let pageIndex=0;
  if(s.cover){
-  header('Cover');let size=28,title:string[]=[],subtitle:string[]=[];
-  do{doc.setFontSize(size);title=doc.splitTextToSize(project.title,g.w-2*s.margin-20);doc.setFontSize(12);subtitle=doc.splitTextToSize(project.subtitle,g.w-2*s.margin-20);if(title.length*size*1.3+subtitle.length*17+70<g.h*.6)break;size--;}while(size>10);
-  const top=Math.max(s.margin+80,g.h*.22);doc.setFontSize(size);doc.text(title,s.margin+10,top,{lineHeightFactor:1.3});doc.setFontSize(12);let y=top+title.length*size*1.3+18;doc.text(subtitle,s.margin+10,y,{lineHeightFactor:1.4});y+=subtitle.length*17+30;
-  doc.setFontSize(10);doc.text(entries.length+' panels · '+timecode(entries.reduce((n,e)=>n+e.panel.duration,0),project.fps)+' · '+project.fps+' fps',s.margin+10,y);
+  // A dedicated cover composition, independent of the panel-page header.
+  const left=s.margin+12,right=g.w-s.margin-12,usable=right-left;
+  doc.setFillColor('#172b43');doc.rect(0,0,g.w,Math.max(104,g.h*.19),'F');
+  doc.setFillColor('#ef8c35');doc.rect(0,0,7,Math.max(104,g.h*.19),'F');
+  logo(logos[0],{x:left,y:s.margin+6,w:72,h:38});
+  logo(logos[1],{x:right-45,y:s.margin+4,w:45,h:42});
+  doc.setFont('Storyboard','bold');doc.setFontSize(10);doc.setTextColor('#ffffff');
+  doc.text('STORYBOARD PRESENTATION',left,Math.max(104,g.h*.19)-20);
+  doc.setDrawColor('#ef8c35');doc.setLineWidth(2);doc.line(left,Math.max(104,g.h*.19)+20,left+Math.min(96,usable*.24),Math.max(104,g.h*.19)+20);
+  // The subtitle is the public-facing presentation title; never render the internal project filename.
+  const presentationTitle=project.subtitle.trim()||'Storyboard Presentation';
+  const top=Math.max(s.margin+95,g.h*.38);
+  let size=36,title:string[]=[];
+  do{doc.setFont('Storyboard','bold');doc.setFontSize(size);title=doc.splitTextToSize(presentationTitle,usable);if(top+title.length*size*1.25<g.h-145||size<=12)break;size--;}while(size>12);
+  doc.setTextColor('#172b43');doc.setFont('Storyboard','bold');doc.setFontSize(size);
+  const titleY=Math.min(top+title.length*size*.45,(top+g.h-145)/2);
+  doc.text(title,g.w/2,titleY,{align:'center',lineHeightFactor:1.25});
+  const lineY=Math.max(titleY+title.length*size*1.25+20,g.h-110);
+  doc.setDrawColor('#d6e0e8');doc.setLineWidth(.7);doc.line(left,lineY,right,lineY);
+  doc.setFont('Storyboard','normal');doc.setFontSize(10);doc.setTextColor('#172b43');
+  doc.text(entries.length+' panels  ·  '+timecode(entries.reduce((n,e)=>n+e.panel.duration,0),project.fps)+'  ·  '+project.fps+' fps',left,lineY+24);
+  doc.setFillColor('#eef3f7');doc.rect(0,g.h-55,g.w,55,'F');
+  doc.setFont('Storyboard','normal');doc.setFontSize(9);doc.setTextColor('#51657a');
+  doc.text('IINNOVENT PROFESSIONAL STORYBOARD',left,g.h-30);
+  doc.setFontSize(8);doc.text('Cover',right,g.h-30,{align:'right'});
   pageIndex++;
  }
  for(let p=0;p<pages.length;p++){
