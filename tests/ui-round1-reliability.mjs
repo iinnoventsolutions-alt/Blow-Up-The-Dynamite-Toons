@@ -261,7 +261,9 @@ try {
   const contourCandidates=[[400,300],[390,300],[410,300],[350,300],[450,300]];
   let contourSelected=false;
   for(const [x,y] of contourCandidates){
-    await selectAt(x/1920,y/1080);
+    // The interaction canvas includes a 25% drawing margin on every side.
+    // Convert project coordinates into the extended canvas viewport before clicking.
+    await selectAt((x/1920+0.25)/1.5,(y/1080+0.25)/1.5);
     if(await page.locator('[data-mode=point][data-index="1"]').count()){
       contourSelected=true;
       break;
