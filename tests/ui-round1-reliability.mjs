@@ -206,7 +206,7 @@ try {
   const pts=[[850,500,.5],[960,560,.8],[1080,500,.6]];
   panelOf(edit).layers[0].strokes=[
     {id:uid(),tool:'pencil',color:'#172b43',size:35,points:pts},
-    {id:uid(),tool:'brush',color:'#172b43',size:40,points:[[300,300,1],[400,330,1],[500,300,1]],contours:[contourFromPoints([[300,300,1],[400,330,1],[500,300,1]],40)]}
+    {id:uid(),tool:'brush',color:'#172b43',size:40,points:[[300,300,1],[500,300,1]],contours:[contourFromPoints([[300,300,1],[500,300,1]],40)]}
   ];
   await load(edit);
   await choose('Pencil Editor');
@@ -258,7 +258,7 @@ try {
   await choose('Contour Editor');
   // Hit testing can land between contour vertices at different CI render scales.
   // Try actual nearby stroke coordinates, and require an editable point before dragging.
-  const contourCandidates=[[400,330],[390,327],[410,327],[350,315],[450,315],[300,300],[500,300]];
+  const contourCandidates=[[400,300],[390,300],[410,300],[350,300],[450,300]];
   let contourSelected=false;
   for(const [x,y] of contourCandidates){
     await selectAt(x/1920,y/1080);
