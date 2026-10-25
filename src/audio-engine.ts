@@ -1,5 +1,5 @@
-import { uid,type AudioAsset,type Project } from './model';
-import { audioWindows } from './audio-model';
+import { uid,type AudioAsset,type Project } from './model.ts';
+import { audioWindows } from './audio-model.ts';
 let context:AudioContext|undefined;
 export const audioContext=()=>context ||= new AudioContext();
 const decoded=new Map<string,{source:string;buffer:Promise<AudioBuffer>}>();
