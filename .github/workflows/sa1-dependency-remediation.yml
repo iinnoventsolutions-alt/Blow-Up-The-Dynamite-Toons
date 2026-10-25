@@ -1,0 +1,44 @@
+name: SA-1 Dependency Remediation
+on:
+  workflow_dispatch:
+  push:
+    branches: [Security-Audit-W]
+    paths:
+      - '.github/workflows/sa1-dependency-remediation.yml'
+permissions:
+  contents: write
+jobs:
+  remediate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: Security-Audit-W
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Apply compatible dependency security fixes
+        run: |
+          npm ci --ignore-scripts
+          npm audit fix --ignore-scripts
+          npm audit --audit-level=moderate
+          npm audit --omit=dev --audit-level=moderate
+      - name: Verify lockfile and regression tests
+        run: |
+          npm ci
+          npm test
+          npm run build
+      - name: Commit only audited dependency changes
+        run: |
+          if git diff --quiet -- package.json package-lock.json; then
+            echo "No dependency changes needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- package.json package-lock.json
+          git commit -m "SA-1 remediate audited dependency vulnerabilities"
+          git push origin HEAD:Security-Audit-W
