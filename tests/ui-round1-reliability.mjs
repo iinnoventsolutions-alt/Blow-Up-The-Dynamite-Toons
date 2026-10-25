@@ -256,7 +256,18 @@ try {
   // Continue with the contour test on the original editor fixture.
   await load(edit);
   await choose('Contour Editor');
-  await selectAt(400/1920,330/1080);
+  // Hit testing can land between contour vertices at different CI render scales.
+  // Try actual nearby stroke coordinates, and require an editable point before dragging.
+  const contourCandidates=[[400,330],[390,327],[410,327],[350,315],[450,315],[300,300],[500,300]];
+  let contourSelected=false;
+  for(const [x,y] of contourCandidates){
+    await selectAt(x/1920,y/1080);
+    if(await page.locator('[data-mode=point][data-index="1"]').count()){
+      contourSelected=true;
+      break;
+    }
+  }
+  assert(contourSelected,'Contour Editor must expose point handles for the brush stroke');
   const original=panelOf(await save()).layers[0].strokes[1].contours[0];
   await dragHandle('[data-mode=point][data-index="1"]',0,35);
   saved=await save();
