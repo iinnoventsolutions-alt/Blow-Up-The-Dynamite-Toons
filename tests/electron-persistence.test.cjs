@@ -72,3 +72,28 @@ test('SA-3 rejects malformed project JSON without changing the source file', asy
  await assert.rejects(readProject(file), /not valid JSON/);
  assert.equal(await fs.readFile(file, 'utf8'), invalid);
 });
+
+test('SA-3 atomic saves create private files and leave no staging files', async t => {
+ const dir = await temporaryDirectory(t);
+ const file = path.join(dir, 'private.issb');
+ await atomicWrite(file, 'private storyboard');
+ const stat = await fs.stat(file);
+ if (process.platform !== 'win32') assert.equal(stat.mode & 0o077, 0);
+ assert.deepEqual(await fs.readdir(dir), ['private.issb']);
+});
+
+test('SA-3 failed staging write preserves the existing project and cleans up', async t => {
+ const dir = await temporaryDirectory(t);
+ const file = path.join(dir, 'project.issb');
+ await atomicWrite(file, 'original project');
+ await assert.rejects(atomicWrite(file, undefined));
+ assert.equal(await fs.readFile(file, 'utf8'), 'original project');
+ assert.deepEqual(await fs.readdir(dir), ['project.issb']);
+});
+
+test('SA-3 missing recovery files reject cleanly without creating files', async t => {
+ const dir = await temporaryDirectory(t);
+ const file = path.join(dir, 'recovery.innovent');
+ await assert.rejects(readProject(file), { code: 'ENOENT' });
+ assert.deepEqual(await fs.readdir(dir), []);
+});
