@@ -49,3 +49,26 @@ test('invalid recovery file is rejected rather than opened as a project', async 
  await atomicWrite(destination, '{\"not\":\"a valid storyboard\"}');
  await assert.rejects(readProject(destination));
 });
+
+test('SA-3 rejects directories as project files', async t => {
+ const dir = await temporaryDirectory(t);
+ await assert.rejects(readProject(dir), /regular file/);
+});
+
+test('SA-3 rejects an oversized project before reading its contents', async t => {
+ const dir = await temporaryDirectory(t);
+ const file = path.join(dir, 'oversized.issb');
+ const { MAX_PROJECT_BYTES } = await import('../src/project-format.js');
+ const handle = await fs.open(file, 'w');
+ try { await handle.truncate(MAX_PROJECT_BYTES + 1); } finally { await handle.close(); }
+ await assert.rejects(readProject(file), /128 MB limit/);
+});
+
+test('SA-3 rejects malformed project JSON without changing the source file', async t => {
+ const dir = await temporaryDirectory(t);
+ const file = path.join(dir, 'malformed.issb');
+ const invalid = '{"format":"innovent-storyboard",';
+ await fs.writeFile(file, invalid);
+ await assert.rejects(readProject(file), /not valid JSON/);
+ assert.equal(await fs.readFile(file, 'utf8'), invalid);
+});
