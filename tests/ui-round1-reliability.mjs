@@ -267,6 +267,18 @@ try {
       break;
     }
   }
+  if(!contourSelected){
+    const diagnostics={
+      hint:await page.locator('.stage-hint').allTextContents(),
+      tool:await page.locator('.art-interaction').getAttribute('class'),
+      mode:await page.getByLabel('Selection mode',{exact:true}).inputValue(),
+      points:await page.locator('[data-mode=point]').count(),
+      canvas:await page.getByLabel('Drawing canvas',{exact:true}).boundingBox(),
+      stage:await page.locator('.stage-paper').boundingBox(),
+      strokes:panelOf(await save()).layers.map(l=>({kind:l.kind,visible:l.visible,locked:l.locked,strokes:l.strokes.map(t=>({tool:t.tool,points:t.points,contourCount:t.contours?.length}))}))
+    };
+    console.error('Contour Editor selection diagnostics:',JSON.stringify(diagnostics));
+  }
   assert(contourSelected,'Contour Editor must expose point handles for the brush stroke');
   const original=panelOf(await save()).layers[0].strokes[1].contours[0];
   await dragHandle('[data-mode=point][data-index="1"]',0,35);
