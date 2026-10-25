@@ -10,7 +10,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "desktop": "npm run build && electron .",
-    "test": "node --experimental-strip-types --test tests/*.test.ts tests/persistence-round6.test.mjs tests/electron-ipc-security.test.cjs tests/electron-ipc-contract.test.cjs",
+    "test": "node --experimental-strip-types --test tests/*.test.ts tests/persistence-round6.test.mjs tests/electron-ipc-security.test.cjs tests/electron-ipc-contract.test.cjs tests/electron-pdf-security.test.cjs",
     "package:mac": "npm run build && electron-builder --mac dmg --arm64 --x64",
     "preview:built": "node desktop/preview.cjs",
     "test:ui": "npm run build && node tests/ui-smoke.mjs && node --experimental-strip-types tests/ui-build1.mjs && node --experimental-strip-types tests/ui-camera.mjs && node --experimental-strip-types tests/ui-drawing-tools.mjs && node --experimental-strip-types tests/ui-adjustments.mjs && node --experimental-strip-types tests/ui-text-playback.mjs && node --experimental-strip-types tests/ui-onion.mjs && node --experimental-strip-types tests/ui-transitions.mjs && node --experimental-strip-types tests/ui-drawing-regressions.mjs && node --experimental-strip-types tests/ui-zoom-editor.mjs && node --experimental-strip-types tests/ui-icons.mjs && node --experimental-strip-types tests/ui-layer-delete.mjs && node --experimental-strip-types tests/ui-audio.mjs && node --experimental-strip-types tests/ui-pdf.mjs && node --experimental-strip-types tests/ui-workflow.mjs",
