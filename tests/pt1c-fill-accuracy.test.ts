@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {floodMask} from '../src/flood.ts';
-const project=JSON.parse(readFileSync(new URL('../benchmark-results/fixtures/pt1-50-panels.issb',import.meta.url),'utf8'));
+const project=JSON.parse(readFileSync(new URL('./fixtures/pt1-fill-rectangle.json',import.meta.url),'utf8'));
 const panel=project.scenes[3].panels[4];
 const rectangle=panel.layers.flatMap(l=>l.strokes).find(s=>s.id==='pt1_2564');
-test('Panel 35 closed rectangle is present in deterministic fixture',()=>{
+test('Panel 35 closed rectangle is present in tracked focused fixture',()=>{
  assert.equal(panel.name,'Panel 35');assert.ok(rectangle);
  assert.deepEqual(rectangle.points,[[190,183,1],[358,183,1],[358,264,1],[190,264,1],[190,183,1]]);
 });
