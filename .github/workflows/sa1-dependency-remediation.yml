@@ -1,0 +1,43 @@
+name: SA-1 Dependency Remediation
+on:
+  workflow_dispatch:
+  push:
+    branches: [Working, Security-Audit-W]
+    paths:
+      - '.github/workflows/sa1-dependency-remediation.yml'
+permissions:
+  contents: read
+jobs:
+  remediate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.ref_name }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Apply compatible dependency security fixes
+        run: |
+          npm ci --ignore-scripts
+          npm audit fix --ignore-scripts
+          npm audit --audit-level=moderate
+          npm audit --omit=dev --audit-level=moderate
+      - name: Verify lockfile and regression tests
+        run: |
+          npm ci
+          npm test
+          npm run build
+      - name: Report proposed dependency changes without pushing
+        run: |
+          if git diff --quiet -- package.json package-lock.json; then
+            echo "No dependency changes needed."
+            exit 0
+          fi
+          echo "Dependency changes proposed; review before applying to the selected branch."
+          git diff --stat -- package.json package-lock.json
+          git diff --check -- package.json package-lock.json
+          echo "Dependency remediation needs review; no repository changes were pushed." >> "$GITHUB_STEP_SUMMARY"

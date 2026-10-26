@@ -206,7 +206,7 @@ try {
   const pts=[[850,500,.5],[960,560,.8],[1080,500,.6]];
   panelOf(edit).layers[0].strokes=[
     {id:uid(),tool:'pencil',color:'#172b43',size:35,points:pts},
-    {id:uid(),tool:'brush',color:'#172b43',size:40,points:[[300,300,1],[400,330,1],[500,300,1]],contours:[contourFromPoints([[300,300,1],[400,330,1],[500,300,1]],40)]}
+    {id:uid(),tool:'brush',color:'#172b43',size:40,points:[[300,300,1],[500,300,1]],contours:[contourFromPoints([[300,300,1],[500,300,1]],40)]}
   ];
   await load(edit);
   await choose('Pencil Editor');
@@ -256,7 +256,32 @@ try {
   // Continue with the contour test on the original editor fixture.
   await load(edit);
   await choose('Contour Editor');
-  await selectAt(400/1920,330/1080);
+  // Hit testing can land between contour vertices at different CI render scales.
+  // Try actual nearby stroke coordinates, and require an editable point before dragging.
+  const contourCandidates=[[400,300],[390,300],[410,300],[350,300],[450,300]];
+  let contourSelected=false;
+  for(const [x,y] of contourCandidates){
+    // The interaction canvas includes a 25% drawing margin on every side.
+    // Convert project coordinates into the extended canvas viewport before clicking.
+    await selectAt((x/1920+0.25)/1.5,(y/1080+0.25)/1.5);
+    if(await page.locator('[data-mode=point][data-index="1"]').count()){
+      contourSelected=true;
+      break;
+    }
+  }
+  if(!contourSelected){
+    const diagnostics={
+      hint:await page.locator('.stage-hint').allTextContents(),
+      tool:await page.locator('.art-interaction').getAttribute('class'),
+      mode:await page.getByLabel('Selection mode',{exact:true}).inputValue(),
+      points:await page.locator('[data-mode=point]').count(),
+      canvas:await page.getByLabel('Drawing canvas',{exact:true}).boundingBox(),
+      stage:await page.locator('.stage-paper').boundingBox(),
+      strokes:panelOf(await save()).layers.map(l=>({kind:l.kind,visible:l.visible,locked:l.locked,strokes:l.strokes.map(t=>({tool:t.tool,points:t.points,contourCount:t.contours?.length}))}))
+    };
+    console.error('Contour Editor selection diagnostics:',JSON.stringify(diagnostics));
+  }
+  assert(contourSelected,'Contour Editor must expose point handles for the brush stroke');
   const original=panelOf(await save()).layers[0].strokes[1].contours[0];
   await dragHandle('[data-mode=point][data-index="1"]',0,35);
   saved=await save();

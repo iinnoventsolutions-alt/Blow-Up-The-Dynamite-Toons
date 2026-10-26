@@ -1,6 +1,7 @@
 export async function readEmbeddedImage(file:File){
  if(file.size>8*1024*1024)throw new Error('Please use an image smaller than 8 MB.');
  const bytes=new Uint8Array(await file.arrayBuffer());
+ if(bytes.byteLength>8*1024*1024)throw new Error('Please use an image smaller than 8 MB.');
  const png=[137,80,78,71,13,10,26,10].every((v,i)=>bytes[i]===v),jpeg=bytes[0]===255&&bytes[1]===216&&bytes[2]===255,webp=String.fromCharCode(...bytes.subarray(0,4))==='RIFF'&&String.fromCharCode(...bytes.subarray(8,12))==='WEBP';
  const mime=png?'image/png':jpeg?'image/jpeg':webp?'image/webp':'';
  if(!mime)throw new Error('This file is not a valid PNG, JPEG or WebP image.');

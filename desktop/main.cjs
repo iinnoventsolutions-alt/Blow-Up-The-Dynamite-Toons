@@ -5,6 +5,7 @@ const { pathToFileURL } = require('node:url');
 const crypto = require('node:crypto');
 const { atomicWrite, readProject } = require('./persistence.cjs');
 const { windowIsUsable, sendToWindow, closeWindow } = require('./window-lifecycle.cjs');
+const { assertTrustedSender } = require('./ipc-security.cjs');
 const metadata = require('../src/build-info.json');
 const previousDataDirectory = app.getPath('userData');
 // Preserve packaged recovery/preferences across the display-name correction.
@@ -17,7 +18,7 @@ let win, currentPath = null, dirty = false, closePrompt = false, quitRequested =
 const pagePath = path.join(__dirname, '../dist/index.html');
 const pageURL = pathToFileURL(pagePath).href;
 const dataPath = (name) => path.join(app.getPath('userData'), name);
-function trusted(event) { if (!windowIsUsable(win) || event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame || event.senderFrame.url !== pageURL) throw new Error('Unauthorized application request.'); }
+function trusted(event) { assertTrustedSender(event, win, pageURL, windowIsUsable); }
 function handle(channel, fn) { ipcMain.handle(channel, async (event, ...args) => { trusted(event); try { return { ok: true, value: await fn(...args) }; } catch (error) { return { ok: false, error: error.message || 'Operation failed.' }; } }); }
 const queued = (fn) => { const result = saveQueue.then(fn); saveQueue = result.catch(() => {}); return result; };
 async function remember(filePath) {
