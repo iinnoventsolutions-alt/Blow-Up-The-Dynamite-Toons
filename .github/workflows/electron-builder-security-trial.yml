@@ -182,6 +182,7 @@ jobs:
             hdiutil verify "$dmg"
           done
           (cd release && shasum -a 256 -- *.dmg > SHA256SUMS.txt)
+          (cd release && shasum -a 256 -c SHA256SUMS.txt)
           cat release/SHA256SUMS.txt
           printf 'GitHub commit: %s\nWorkflow run: %s\nSigning: ad-hoc (not Developer ID)\nNotarization: not performed\nChrome Safe Browsing clearance: not established\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > release/BUILD-TRUST-STATUS.txt
       - name: Scan both Mac installers with ClamAV signatures
@@ -209,6 +210,11 @@ jobs:
             release/clamav-*.log
           if-no-files-found: warn
           retention-days: 7
+      - name: Verify installer checksums again after malware scanning
+        if: success()
+        run: |
+          set -euo pipefail
+          (cd release && shasum -a 256 -c SHA256SUMS.txt)
       - name: Upload installers and integrity manifest
         if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
