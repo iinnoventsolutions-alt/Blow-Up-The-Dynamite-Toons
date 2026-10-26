@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - Security-Audit-W
+      - Working
 permissions:
   contents: read
 jobs:
