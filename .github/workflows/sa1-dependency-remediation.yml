@@ -2,7 +2,7 @@ name: SA-1 Dependency Remediation
 on:
   workflow_dispatch:
   push:
-    branches: [Security-Audit-W]
+    branches: [Working, Security-Audit-W]
     paths:
       - '.github/workflows/sa1-dependency-remediation.yml'
 permissions:
@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: Security-Audit-W
+          ref: ${{ github.ref_name }}
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -37,7 +37,7 @@ jobs:
             echo "No dependency changes needed."
             exit 0
           fi
-          echo "Dependency changes proposed; review before applying to Security-Audit-W."
+          echo "Dependency changes proposed; review before applying to the selected branch."
           git diff --stat -- package.json package-lock.json
           git diff --check -- package.json package-lock.json
           echo "Dependency remediation needs review; no repository changes were pushed." >> "$GITHUB_STEP_SUMMARY"
