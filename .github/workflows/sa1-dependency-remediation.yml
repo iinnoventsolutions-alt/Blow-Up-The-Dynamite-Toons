@@ -6,7 +6,7 @@ on:
     paths:
       - '.github/workflows/sa1-dependency-remediation.yml'
 permissions:
-  contents: write
+  contents: read
 jobs:
   remediate:
     runs-on: ubuntu-latest
@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: Security-Audit-W
-          persist-credentials: true
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
@@ -31,14 +31,13 @@ jobs:
           npm ci
           npm test
           npm run build
-      - name: Commit only audited dependency changes
+      - name: Report proposed dependency changes without pushing
         run: |
           if git diff --quiet -- package.json package-lock.json; then
             echo "No dependency changes needed."
             exit 0
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- package.json package-lock.json
-          git commit -m "SA-1 remediate audited dependency vulnerabilities"
-          git push origin HEAD:Security-Audit-W
+          echo "Dependency changes proposed; review before applying to Security-Audit-W."
+          git diff --stat -- package.json package-lock.json
+          git diff --check -- package.json package-lock.json
+          echo "Dependency remediation needs review; no repository changes were pushed." >> "$GITHUB_STEP_SUMMARY"
