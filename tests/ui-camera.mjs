@@ -29,13 +29,14 @@ try{
  await cameraMask.uncheck();assert.equal(await page.locator('.camera-outside-mask').count(),0,'Camera mask can be disabled without changing artwork');
  await page.locator('.camera-key-list button').last().click();await number('Camera zoom',2);await number('Camera X',1250);await number('Camera rotation',12);
  await page.getByLabel('Camera interpolation',{exact:true}).selectOption('ease');let output=await save();assert.equal(output.scenes[0].camera[1].zoom,2);assert.equal(output.scenes[0].camera[1].rotation,12);
- assert.equal(await overlay.locator('circle[data-frame="0"]').count(),1,'Moving camera shows IN handle');
- assert.equal(await overlay.locator('circle[data-frame="119"]').count(),1,'Moving camera shows OUT handle');
+ await page.locator('.camera-key-list button').first().click();await wait();
+ assert.equal(await overlay.locator('circle[data-frame="0"]').count(),1,'First panel moving camera shows IN handle');
+ assert.equal(await overlay.locator('circle[data-frame="59"]').count(),1,'First panel moving camera shows OUT handle');
  assert.equal(await overlay.locator('text').filter({hasText:'IN'}).count(),1,'Moving camera labels IN');
  assert.equal(await overlay.locator('text').filter({hasText:'OUT'}).count(),1,'Moving camera labels OUT');
  await page.getByLabel('Scene camera time').fill('30');
  await page.getByRole('button',{name:'Add keyframe at current frame'}).click();await wait();
- assert.equal(await overlay.locator('.camera-intermediate').count(),1,'Intermediate camera outline appears');
+ assert.equal(await overlay.locator('.camera-intermediate').count(),1,'Intermediate camera outline appears within first panel');
  assert.equal(await overlay.locator('.camera-intermediate rect[data-mode="zoom"]').count(),4,'Intermediate camera offers four resize handles');
  assert.equal(await overlay.locator('.camera-intermediate circle[data-mode="pan"]').count(),1,'Intermediate camera offers a pan handle');
  await page.getByRole('button',{name:'Delete key',exact:true}).click();await wait();
