@@ -13,11 +13,14 @@ export default function CameraOverlay({ scene, panel, project, frame, drawingMar
   const cancel = () => { drag.current = null; setLive(null); };
   const finish = () => { if (drag.current && live) onChange?.(live.frame, live.pose); cancel(); };
   const a = cameraCorners(inPose, project), b = cameraCorners(outPose, project), handle = Math.max(project.width, project.height) / 100;
+  const stationary = (['x','y','zoom','rotation'] as const).every(k=>Math.abs(inPose[k]-outPose[k])<1e-7);
+  const intermediate = scene.camera.filter(k=>k.frame>start&&k.frame<end);
   const outline = (pose: CameraPose, corners: [number, number][], f: number, color: string, label: string) => <g><polygon data-frame={f} data-mode="pan" points={corners.map(p => p.join(',')).join(' ')} fill="none" stroke={color} strokeWidth={handle / 5} className="camera-frame"/><text x={corners[0][0] + handle} y={corners[0][1] + handle * 1.7} fill={color} fontSize={handle * 1.25}>{label}</text>{corners.map(([x, y], i) => <rect key={i} data-frame={f} data-mode="zoom" x={x - handle / 2} y={y - handle / 2} width={handle} height={handle} fill={color} className="camera-handle"/>)}<circle data-frame={f} data-mode="pan" cx={pose.x} cy={pose.y} r={handle / 2} fill={color} className="camera-handle"/></g>;
   return <svg className={`camera-overlay ${editable ? 'editable' : ''}`} viewBox={`${-project.width*drawingMargin} ${-project.height*drawingMargin} ${project.width*(1+2*drawingMargin)} ${project.height*(1+2*drawingMargin)}`} aria-label="Camera movement overlay" onPointerDown={begin} onPointerMove={move} onPointerUp={finish} onPointerCancel={cancel} onLostPointerCapture={cancel} onKeyDown={e => { if (e.key === 'Escape') cancel(); }} tabIndex={editable ? 0 : undefined}>
     <defs><marker id={`arrow-${panel.id}`} markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7" fill="#8c90db"/></marker></defs>
-    {a.map(([x,y],i) => <line key={i} x1={x} y1={y} x2={b[i][0]} y2={b[i][1]} stroke="#8c90db" strokeWidth={handle / 9} markerEnd={`url(#arrow-${panel.id})`}/>)}
-    {outline(inPose, a, start, '#32c85b', 'IN')}{outline(outPose, b, end, '#ef4d50', 'OUT')}
+    {!stationary && a.map(([x,y],i) => <line key={i} x1={x} y1={y} x2={b[i][0]} y2={b[i][1]} stroke="#8c90db" strokeWidth={handle / 9} markerEnd={`url(#arrow-${panel.id})`}/>)}
+    {stationary ? outline(inPose,a,start,'#222222','CAMERA') : <>{outline(inPose, a, start, '#32c85b', 'IN')}{outline(outPose, b, end, '#ef4d50', 'OUT')}</>}
+    {intermediate.map(k=>{const pose=live?.frame===k.frame?live.pose:cameraAt(scene,k.frame,project);return <g key={k.id} className="camera-intermediate"><polygon data-frame={k.frame} data-mode="pan" points={cameraCorners(pose,project).map(p=>p.join(',')).join(' ')} fill="none" stroke="#3478df" strokeWidth={handle/7} strokeDasharray={`${handle*.8} ${handle*.5}`}/><circle data-frame={k.frame} data-mode="pan" cx={pose.x} cy={pose.y} r={handle/2} fill="#3478df" className="camera-handle"/></g>;})}
     {frame !== undefined && <polygon className="camera-current" points={cameraCorners(cameraAt(scene, frame, project), project).map(p=>p.join(',')).join(' ')} fill="none" stroke="#ff922c" strokeWidth={handle / 8} strokeDasharray={`${handle} ${handle / 2}`}/>}
   </svg>;
 }
