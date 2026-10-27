@@ -67,3 +67,27 @@ test('single-frame panel camera copy paste and reset avoid duplicate frames',()=
  assert.equal(new Set(s.camera.map(k=>k.frame)).size,s.camera.length);
  assert.doesNotThrow(()=>serializeProject(p));
 });
+
+test('A3: three-panel camera integration preserves neighboring motion, interpolation and save/reopen',()=>{
+ const p=makeProject(),s=p.scenes[0];s.panels[0].duration=20;s.panels.push(makePanel('Middle'),makePanel('Last'));s.panels[1].duration=40;s.panels[2].duration=20;
+ putCameraKey(s,p,0,{x:100,zoom:1});putCameraKey(s,p,10,{x:300,zoom:2});putCameraKey(s,p,19,{x:500,zoom:1});
+ putCameraKey(s,p,20,{x:700,zoom:1});putCameraKey(s,p,59,{x:900,zoom:2});
+ putCameraKey(s,p,60,{x:1100,zoom:1});putCameraKey(s,p,79,{x:1300,zoom:2});
+ const leftBefore=[0,10,19].map(frame=>cameraAt(s,frame,p));
+ const rightBefore=[60,70,79].map(frame=>cameraAt(s,frame,p));
+ const clip=copyPanelCamera(s,s.panels[0],p);
+ pastePanelCamera(s,s.panels[1],p,clip);
+ assert.deepEqual(s.camera.filter(k=>k.frame>=20&&k.frame<=59).map(k=>k.frame),[20,41,59]);
+ assert.equal(cameraAt(s,41,p).x,300,'Intermediate key maps to destination panel timeline');
+ assert.deepEqual([0,10,19].map(frame=>cameraAt(s,frame,p)),leftBefore,'Source panel remains unchanged');
+ assert.deepEqual([60,70,79].map(frame=>cameraAt(s,frame,p)),rightBefore,'Third panel remains unchanged');
+ s.camera.find(k=>k.frame===20)!.interpolation='ease';
+ const eased=cameraAt(s,30,p);assert(eased.x>100&&eased.x<300,'Playback interpolates copied camera motion');
+ const restored=parseProject(serializeProject(p));
+ assert.deepEqual([0,10,19,20,30,41,59,60,70,79].map(frame=>cameraAt(restored.scenes[0],frame,restored)),[0,10,19,20,30,41,59,60,70,79].map(frame=>cameraAt(s,frame,p)),'Save/reopen retains all panel camera samples');
+ resetPanelCamera(s,s.panels[1],p);
+ assert.deepEqual([0,10,19].map(frame=>cameraAt(s,frame,p)),leftBefore,'Reset does not affect first panel');
+ assert.deepEqual([60,70,79].map(frame=>cameraAt(s,frame,p)),rightBefore,'Reset does not affect third panel');
+ assert.equal(cameraAt(s,20,p).zoom,1);assert.equal(cameraAt(s,59,p).x,p.width/2);
+ assert.deepEqual(s.camera.filter(k=>k.frame>20&&k.frame<59),[],'Reset clears intermediate keys only in target panel');
+});
