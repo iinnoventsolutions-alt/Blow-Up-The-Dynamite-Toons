@@ -29,6 +29,17 @@ try{
  await cameraMask.uncheck();assert.equal(await page.locator('.camera-outside-mask').count(),0,'Camera mask can be disabled without changing artwork');
  await page.locator('.camera-key-list button').last().click();await number('Camera zoom',2);await number('Camera X',1250);await number('Camera rotation',12);
  await page.getByLabel('Camera interpolation',{exact:true}).selectOption('ease');let output=await save();assert.equal(output.scenes[0].camera[1].zoom,2);assert.equal(output.scenes[0].camera[1].rotation,12);
+ assert.equal(await overlay.locator('circle[data-frame="0"]').count(),1,'Moving camera shows IN handle');
+ assert.equal(await overlay.locator('circle[data-frame="119"]').count(),1,'Moving camera shows OUT handle');
+ assert.equal(await overlay.locator('text').filter({hasText:'IN'}).count(),1,'Moving camera labels IN');
+ assert.equal(await overlay.locator('text').filter({hasText:'OUT'}).count(),1,'Moving camera labels OUT');
+ await page.getByLabel('Scene camera time').fill('30');
+ await page.getByRole('button',{name:'Add keyframe at current frame'}).click();await wait();
+ assert.equal(await overlay.locator('.camera-intermediate').count(),1,'Intermediate camera outline appears');
+ assert.equal(await overlay.locator('.camera-intermediate rect[data-mode="zoom"]').count(),4,'Intermediate camera offers four resize handles');
+ assert.equal(await overlay.locator('.camera-intermediate circle[data-mode="pan"]').count(),1,'Intermediate camera offers a pan handle');
+ await page.getByRole('button',{name:'Delete key',exact:true}).click();await wait();
+ assert.equal(await overlay.locator('.camera-intermediate').count(),0,'Deleting intermediate key removes its overlay');
  await page.locator('.camera-key-list button').first().click();assert.equal(await pixels(drawing),raw,'Camera editing leaves drawing pixels unchanged');
  const center=page.locator('.stage-paper .camera-overlay circle[data-frame="0"]');const box=await center.boundingBox();assert(box);await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2+30,box.y+box.height/2+10,{steps:8});await page.mouse.up();await wait();output=await save();assert(output.scenes[0].camera[0].x>960,'Dragging the green camera center pans the IN key');
  await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();assert.equal(await page.getByLabel('Camera X',{exact:true}).inputValue(),'960');await page.getByTitle('Redo (⌘/Ctrl Shift Z)',{exact:true}).click();await wait();
