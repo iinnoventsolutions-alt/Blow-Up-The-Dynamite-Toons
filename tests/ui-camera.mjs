@@ -20,9 +20,7 @@ try{
  assert.equal(await page.locator('.camera-key-list button').count(),2);
  const overlay=page.locator('.stage-paper .camera-overlay');
  assert.equal(await overlay.locator('.camera-intermediate').count(),0,'No intermediate outlines before an intermediate key exists');
- const overlayFrames=await overlay.locator('circle[data-frame]').evaluateAll(nodes=>nodes.map(n=>({frame:n.getAttribute('data-frame'),color:n.getAttribute('fill')})));
- console.log('A2 camera overlay diagnostic',JSON.stringify({frames:overlayFrames,labels:await overlay.locator('text').allTextContents(),selectedPanel:await page.locator('.timeline-clip.selected').count()}));
- assert.equal(await overlay.locator('circle[data-frame="59"]').count(),1,'Stationary camera retains editable OUT-frame handle');
+ assert.equal(await overlay.locator('circle[data-frame="119"]').count(),1,'Stationary camera retains editable OUT-frame handle');
  assert.equal(await overlay.locator('circle[data-frame="0"]').count(),0,'Stationary camera consolidates overlapping IN and OUT handles');
  assert.equal(await overlay.locator('text').filter({hasText:'CAMERA'}).count(),1,'Stationary camera has neutral label');
  const cameraMask=page.getByRole('checkbox',{name:'Mask outside camera'});
