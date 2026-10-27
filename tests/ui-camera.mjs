@@ -18,6 +18,10 @@ try{
  assert.equal(await page.locator('.camera-default-outline').count(),1,'Default camera outline is visible before camera keys are created');
  await page.getByTitle('camera (C)',{exact:true}).click();await page.getByRole('button',{name:'Add keyframe at beginning of current panel'}).click();await page.getByLabel('Scene camera time').fill('119');await page.getByRole('button',{name:'Add keyframe at end of current panel'}).click();await wait();
  assert.equal(await page.locator('.camera-key-list button').count(),2);
+ const overlay=page.locator('.stage-paper .camera-overlay');
+ assert.equal(await overlay.locator('.camera-intermediate').count(),0,'No intermediate outlines before an intermediate key exists');
+ assert.equal(await overlay.locator('circle[data-frame="0"]').count(),1,'IN camera handle exists');
+ assert.equal(await overlay.locator('circle[data-frame="59"]').count(),1,'OUT camera handle exists');
  const cameraMask=page.getByRole('checkbox',{name:'Mask outside camera'});
  assert.equal(await cameraMask.isChecked(),false,'Camera masking is off by default');
  await cameraMask.check();assert.equal(await page.locator('.camera-outside-mask').count(),1,'Camera mask is visible when enabled');
