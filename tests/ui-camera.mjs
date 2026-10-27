@@ -16,7 +16,7 @@ try{
  await page.goto(url);await page.locator('input[type=file]').first().setInputFiles({name:'camera.issb',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(p))});await wait();
  const drawing=page.getByLabel('Drawing canvas',{exact:true}),raw=await pixels(drawing);
  assert.equal(await page.locator('.camera-default-outline').count(),1,'Default camera outline is visible before camera keys are created');
- await page.getByTitle('camera (C)',{exact:true}).click();await page.getByRole('button',{name:'Set scene IN / OUT',exact:true}).click();await wait();
+ await page.getByTitle('camera (C)',{exact:true}).click();await page.getByRole('button',{name:'Add keyframe at beginning of current panel'}).click();await page.getByLabel('Scene camera time').fill('119');await page.getByRole('button',{name:'Add keyframe at end of current panel'}).click();await wait();
  assert.equal(await page.locator('.camera-key-list button').count(),2);
  const cameraMask=page.getByRole('checkbox',{name:'Mask outside camera'});
  assert.equal(await cameraMask.isChecked(),false,'Camera masking is off by default');
