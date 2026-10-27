@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cameraAt, changeDuration, commit, editProject, makePanel, makeProject, newHistory, redo, undo } from '../src/model.ts';
-import { cameraCorners, localPanelStart, moveCameraKey, putCameraKey, sceneStart } from '../src/camera.ts';
+import { cameraCorners, localPanelStart, moveCameraKey, putCameraKey, sceneStart, copyPanelCamera, pastePanelCamera, resetPanelCamera } from '../src/camera.ts';
 import { parseProject, serializeProject } from '../src/project-format.js';
 test('key insertion samples the current pose, updates at the same frame, and round trips through history',()=>{
  const p=makeProject(),s=p.scenes[0];putCameraKey(s,p,0);putCameraKey(s,p,119,{x:1199,zoom:2,rotation:45});
@@ -34,3 +34,36 @@ test('frame geometry uses project aspect ratio, zoom, pan and rotation',()=>{
 });
 
 test('poses sampled from endpoint keys cannot duplicate IDs or override target frame',()=>{const p=makeProject(),s=p.scenes[0];s.panels.push(makePanel());const original=putCameraKey(s,p,0);const pose=cameraAt(s,120,p);const next=putCameraKey(s,p,120,{...pose,x:1000});assert.notEqual(next.id,original.id);assert.equal(next.frame,120);const metadata={...original,frame:0,id:original.id,y:600};const out=putCameraKey(s,p,239,metadata);assert.notEqual(out.id,original.id);assert.equal(out.frame,239);assert.equal(out.y,600);assert.doesNotThrow(()=>serializeProject(p));});
+
+test('panel camera clipboard fits intermediate keys and preserves other panel keys',()=>{
+ const p=makeProject(),s=p.scenes[0];s.panels[0].duration=20;s.panels.push(makePanel());s.panels[1].duration=40;
+ putCameraKey(s,p,0,{x:100});putCameraKey(s,p,10,{x:300});putCameraKey(s,p,19,{x:500});
+ putCameraKey(s,p,20,{x:700});putCameraKey(s,p,59,{x:900});
+ const original=copyPanelCamera(s,s.panels[0],p);
+ assert.deepEqual(original.keys.map(k=>k.frame),[0,10,19]);
+ pastePanelCamera(s,s.panels[1],p,original);
+ assert.deepEqual(s.camera.filter(k=>k.frame>=20).map(k=>k.frame),[20,41,59]);
+ assert.equal(cameraAt(s,41,p).x,300);
+ assert.equal(cameraAt(s,0,p).x,100);
+ assert.equal(cameraAt(s,19,p).x,500);
+ assert.doesNotThrow(()=>serializeProject(p));
+});
+test('panel reset restores neutral pose without deleting neighboring camera keys',()=>{
+ const p=makeProject(),s=p.scenes[0];s.panels[0].duration=10;s.panels.push(makePanel());s.panels[1].duration=10;
+ putCameraKey(s,p,0,{x:100});putCameraKey(s,p,9,{x:200});
+ putCameraKey(s,p,10,{x:300});putCameraKey(s,p,19,{x:400});
+ resetPanelCamera(s,s.panels[1],p);
+ assert.equal(cameraAt(s,0,p).x,100);
+ assert.equal(cameraAt(s,9,p).x,200);
+ assert.equal(cameraAt(s,10,p).x,p.width/2);
+ assert.equal(cameraAt(s,19,p).x,p.width/2);
+ assert.doesNotThrow(()=>serializeProject(p));
+});
+test('single-frame panel camera copy paste and reset avoid duplicate frames',()=>{
+ const p=makeProject(),s=p.scenes[0];s.panels[0].duration=1;s.panels.push(makePanel());s.panels[1].duration=1;
+ putCameraKey(s,p,0,{zoom:2});const clip=copyPanelCamera(s,s.panels[0],p);
+ pastePanelCamera(s,s.panels[1],p,clip);assert.equal(cameraAt(s,1,p).zoom,2);
+ resetPanelCamera(s,s.panels[1],p);assert.equal(cameraAt(s,1,p).zoom,1);
+ assert.equal(new Set(s.camera.map(k=>k.frame)).size,s.camera.length);
+ assert.doesNotThrow(()=>serializeProject(p));
+});
