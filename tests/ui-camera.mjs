@@ -20,8 +20,9 @@ try{
  assert.equal(await page.locator('.camera-key-list button').count(),2);
  const overlay=page.locator('.stage-paper .camera-overlay');
  assert.equal(await overlay.locator('.camera-intermediate').count(),0,'No intermediate outlines before an intermediate key exists');
- assert.equal(await overlay.locator('circle[data-frame="0"]').count(),1,'IN camera handle exists');
- assert.equal(await overlay.locator('circle[data-frame="59"]').count(),1,'OUT camera handle exists');
+ assert.equal(await overlay.locator('circle[data-frame="59"]').count(),1,'Stationary camera retains editable OUT-frame handle');
+ assert.equal(await overlay.locator('circle[data-frame="0"]').count(),0,'Stationary camera consolidates overlapping IN and OUT handles');
+ assert.equal(await overlay.locator('text').filter({hasText:'CAMERA'}).count(),1,'Stationary camera has neutral label');
  const cameraMask=page.getByRole('checkbox',{name:'Mask outside camera'});
  assert.equal(await cameraMask.isChecked(),false,'Camera masking is off by default');
  await cameraMask.check();assert.equal(await page.locator('.camera-outside-mask').count(),1,'Camera mask is visible when enabled');
