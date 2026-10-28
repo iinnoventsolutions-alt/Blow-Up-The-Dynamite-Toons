@@ -80,18 +80,23 @@ try{
  // A3: exercise the toolbar against two differently sized panels after the round trip.
  await page.locator('.camera-key-list button').first().click();await wait();
  const cameraBeforeCopy=await save();
+ const sourceEnd=cameraBeforeCopy.scenes[0].panels[0].duration-1;
+ const destinationStart=sourceEnd+1;
+ const destinationEnd=destinationStart+cameraBeforeCopy.scenes[0].panels[1].duration-1;
+ const sourceKeys=keys=>keys.filter(k=>k.frame<=sourceEnd);
  await page.getByRole('button',{name:'Copy camera from selected panel'}).click();
  const pasteButton=page.getByRole('button',{name:'Paste and fit camera on selected panel'});
  assert.equal(await pasteButton.isEnabled(),true,'Copy enables Paste & Fit');
  await page.getByLabel('Scene camera time').fill('179');await wait();
+ assert.equal(destinationStart,60,'Duration edit places destination panel after the first panel');
  await pasteButton.click();await wait();
  const cameraAfterPaste=await save();
- assert.deepEqual(cameraAfterPaste.scenes[0].camera.filter(k=>k.frame<120),cameraBeforeCopy.scenes[0].camera.filter(k=>k.frame<120),'Paste leaves source panel camera keys unchanged');
- assert(cameraAfterPaste.scenes[0].camera.some(k=>k.frame===179),'Paste creates destination OUT key');
+ assert.deepEqual(sourceKeys(cameraAfterPaste.scenes[0].camera),sourceKeys(cameraBeforeCopy.scenes[0].camera),'Paste leaves source panel camera keys unchanged');
+ assert(cameraAfterPaste.scenes[0].camera.some(k=>k.frame===destinationEnd),'Paste creates destination OUT key');
  await page.getByRole('button',{name:'Reset camera for selected panel'}).click();await wait();
  const cameraAfterReset=await save();
- assert.deepEqual(cameraAfterReset.scenes[0].camera.filter(k=>k.frame<120),cameraBeforeCopy.scenes[0].camera.filter(k=>k.frame<120),'Reset leaves source panel camera keys unchanged');
- assert.equal(cameraAfterReset.scenes[0].camera.find(k=>k.frame===179)?.zoom,1,'Reset restores neutral destination zoom');
+ assert.deepEqual(sourceKeys(cameraAfterReset.scenes[0].camera),sourceKeys(cameraBeforeCopy.scenes[0].camera),'Reset leaves source panel camera keys unchanged');
+ assert.equal(cameraAfterReset.scenes[0].camera.find(k=>k.frame===destinationEnd)?.zoom,1,'Reset restores neutral destination zoom');
  await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();
  assert.deepEqual((await save()).scenes[0].camera,cameraAfterPaste.scenes[0].camera,'Undo restores pasted camera');
  await page.getByTitle('Redo (⌘/Ctrl Shift Z)',{exact:true}).click();await wait();
