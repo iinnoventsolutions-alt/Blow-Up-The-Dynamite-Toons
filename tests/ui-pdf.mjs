@@ -29,7 +29,7 @@ try{
  await label('PDF export range').selectOption('all');
  await label('PDF panel imagery').selectOption('movement');
  const cameraMovementPdf=await exportPdf('pdf-camera-movement');
- assert.match(cameraMovementPdf.info,/Pages:\\s+[1-9]/,'Movement PDF is structurally valid');
+ assert.match(cameraMovementPdf.info,/Pages:\s+[1-9]/,'Movement PDF is structurally valid');
  assert.match(cameraMovementPdf.text,/PDF_PANEL_HEADING/,'Movement export retains panel identification');
  await label('Saved PDF profile').selectOption('3');await label('PDF export range').selectOption('all');await label('PDF paper').selectOption('a4');await label('Start each scene on a new page').check();await label('PDF panel imagery').selectOption('artwork');const d=await exportPdf('pdf-overview');assert.match(d.info,/841.89 x 595.28/);assert.match(d.text,/FINAL_CAPTION_SENTINEL/);
  await label('PDF export range').selectOption('scenes');assert(await page.getByRole('button',{name:'Export PDF',exact:true}).last().isDisabled());await label('Scene 2 (1)').check();await label('Cover page').uncheck();await label('Notes').uncheck();const e=await exportPdf('pdf-range');assert(!e.text.includes('NOTES_SENTINEL'));assert(!e.text.includes('SECOND_SCENE_SENTINEL'));assert(!e.text.includes('LINE_'));
