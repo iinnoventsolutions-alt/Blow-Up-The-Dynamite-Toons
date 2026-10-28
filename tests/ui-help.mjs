@@ -29,8 +29,30 @@ try {
   assert.equal(await dialog.getByRole('heading', { name: 'Camera keyframes' }).count(), 0);
   await dialog.getByLabel('Search help topics').fill('not-a-real-help-topic');
   await dialog.getByText('No matching help topics. Try a different search term.').waitFor();
+  // Search inputs may consume Escape to clear their query before the dialog receives it.
+  // Focus a non-search control to exercise the native dialog cancellation behavior.
+  await dialog.getByRole('button', { name: 'Camera', exact: true }).focus();
+  const escapeEvents = await page.evaluate(() => {
+    window.__helpEscapeEvents = [];
+    const record = event => window.__helpEscapeEvents.push(event.type);
+    const node = document.querySelector('dialog.help-about');
+    node.addEventListener('cancel', record);
+    node.addEventListener('close', record);
+    return true;
+  });
+  assert.equal(escapeEvents, true);
   await page.keyboard.press('Escape');
-  await dialog.waitFor({ state: 'hidden' });
+  try {
+    await dialog.waitFor({ state: 'hidden' });
+  } catch (error) {
+    const diagnostics = await page.evaluate(() => ({
+      events: window.__helpEscapeEvents,
+      activeElement: document.activeElement?.outerHTML?.slice(0, 300),
+      dialogOpen: document.querySelector('dialog.help-about')?.open
+    }));
+    console.error('Help Escape diagnostics:', JSON.stringify(diagnostics));
+    throw error;
+  }
   assert.equal(await dialog.count(), 0, 'Escape closes help dialog');
 
   await page.getByRole('button', { name: '+ Create storyboard', exact: true }).click();
