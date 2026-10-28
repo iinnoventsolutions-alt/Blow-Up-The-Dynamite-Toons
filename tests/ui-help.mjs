@@ -30,6 +30,7 @@ try {
   await dialog.getByLabel('Search help topics').fill('not-a-real-help-topic');
   await dialog.getByText('No matching help topics. Try a different search term.').waitFor();
   await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'hidden' });
   assert.equal(await dialog.count(), 0, 'Escape closes help dialog');
 
   await page.getByRole('button', { name: '+ Create storyboard', exact: true }).click();
