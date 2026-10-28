@@ -27,5 +27,25 @@ try{
  await page.setViewportSize({width:1500,height:1000});await load(makeProject('Onion visual'));await load(p);await page.locator('.filmstrip .panel-image-button').nth(3).click();await wait();await page.screenshot({path:'test-results/onion-drawing.png'});
  await page.getByLabel('Drawing playback controls',{exact:true}).getByRole('button',{name:'Play',exact:true}).click();await wait();assert.equal(await page.locator('.onion-skin-surface').count(),0);await page.getByLabel('Drawing playback controls',{exact:true}).getByTitle('Stop playback',{exact:true}).click();await wait();assert.equal(await page.locator('.onion-skin-surface').count(),1);
  await page.getByRole('button',{name:'Timeline',exact:true}).click();assert.equal(await page.locator('.onion-controls').count(),0);assert.equal(await page.locator('.onion-skin-surface').count(),0);
- await page.reload();await wait();assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('innovent.onion')).backward),3);assert.deepEqual(errors,[]);console.log('PASS onion: tint/distance, independent counts, scene isolation, bitmap whites, hidden layers, save isolation, playback, compact layout, device persistence.');
+ // C1: five ghosts per direction, independent limits, and persistence.
+ const expanded=makeProject('Five ghosts');expanded.scenes[0].panels=Array.from({length:11},(_,i)=>{const panel=makePanel('Ghost '+i);panel.layers[0].strokes.push({id:uid(),tool:'shape',shape:'rectangle',fill:'#000000',color:'#000000',size:2,points:[[50+i*155,150,1],[110+i*155,210,1]]});return panel;});
+ await load(expanded);await page.locator('.filmstrip .panel-image-button').nth(5).click();
+ await page.getByLabel('backward onion panels',{exact:true}).selectOption('5');
+ await page.getByLabel('forward onion panels',{exact:true}).selectOption('4');await wait();
+ assert.equal(await page.getByLabel('backward onion panels',{exact:true}).inputValue(),'5');
+ assert.equal(await page.getByLabel('forward onion panels',{exact:true}).inputValue(),'4');
+ const ghostAlpha=async index=>page.locator('.onion-skin-surface').evaluate((c,i)=>c.getContext('2d').getImageData(80+i*155,180,1,1).data[3],index);
+ assert((await ghostAlpha(0))>0,'Fifth previous panel visible');
+ assert((await ghostAlpha(9))>0,'Fourth next panel visible');
+ assert.equal(await ghostAlpha(10),0,'Fifth next panel excluded at forward four');
+ await page.getByLabel('forward onion panels',{exact:true}).selectOption('5');await wait();
+ assert((await ghostAlpha(10))>0,'Fifth next panel visible');
+ await page.getByLabel('backward onion panels',{exact:true}).selectOption('0');await wait();
+ assert.equal(await ghostAlpha(0),0,'Backward zero does not change forward ghosts');
+ assert((await ghostAlpha(10))>0,'Forward five remains active');
+ await page.getByLabel('backward onion panels',{exact:true}).selectOption('5');
+ await page.reload();await wait();
+ const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem('innovent.onion')));
+ assert.equal(stored.backward,5);assert.equal(stored.forward,5);
+assert.deepEqual(errors,[]);console.log('PASS onion: tint/distance, independent counts, scene isolation, bitmap whites, hidden layers, save isolation, playback, compact layout, device persistence.');
 }finally{await browser.close();server.kill();}
