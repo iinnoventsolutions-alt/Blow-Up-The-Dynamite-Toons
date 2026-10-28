@@ -15,10 +15,10 @@ const topics:HelpTopic[]=[
  {category:'Export',title:'Animatic export',body:'Render a WebM preview with camera movement, transitions, and audio.',steps:['Review panel timing, camera keys, and audio in Timeline.','Choose Export Animatic to begin WebM recording.','Keep the application visible while recording finishes.','Save the exported video, or use Cancel Export to stop the operation.']}
 ];
 const categories=['All','Start','Drawing','Camera','Playback','Audio','Files','Export'];
-export default function HelpAbout({close}:{close:()=>void}){
+export default function HelpAbout({close,initialCategory='All'}:{close:()=>void;initialCategory?:string}){
  const ref=useRef<HTMLDialogElement>(null);
  const [query,setQuery]=useState('');
- const [category,setCategory]=useState('All');
+ const [category,setCategory]=useState(()=>categories.includes(initialCategory)?initialCategory:'All');
  const results=topics.filter(topic=>(category==='All'||topic.category===category)&&(topic.title+' '+topic.body+' '+topic.steps.join(' ')).toLowerCase().includes(query.trim().toLowerCase()));
  useEffect(()=>{const node=ref.current;node?.showModal();return()=>{if(node?.open)node.close();};},[]);
  return <dialog ref={ref} className="help-about" onClose={close} onCancel={e=>{e.preventDefault();close();}} aria-label="Help and About">
