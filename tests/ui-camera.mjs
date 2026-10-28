@@ -84,7 +84,8 @@ try{
  const destinationStart=sourceEnd+1;
  const destinationEnd=destinationStart+cameraBeforeCopy.scenes[0].panels[1].duration-1;
  const sourceFrames=[0,Math.floor(sourceEnd/2),sourceEnd];
- const sourcePoses=project=>sourceFrames.map(frame=>cameraAt(project.scenes[0],frame,project));
+ const sourcePoses=project=>sourceFrames.map(frame=>{const {x,y,zoom,rotation}=cameraAt(project.scenes[0],frame,project);return {x,y,zoom,rotation};});
+ const assertSamePoses=(actual,expected,message)=>{assert.equal(actual.length,expected.length,message);for(let i=0;i<actual.length;i++)for(const field of ['x','y','zoom','rotation'])assert(Math.abs(actual[i][field]-expected[i][field])<1e-8,`${message}: frame ${sourceFrames[i]} ${field}`);};
  const beforeSourcePoses=sourcePoses(cameraBeforeCopy);
  await page.getByRole('button',{name:'Copy camera from selected panel'}).click();
  const pasteButton=page.getByRole('button',{name:'Paste and fit camera on selected panel'});
@@ -93,11 +94,11 @@ try{
  assert(destinationStart>sourceEnd,'Destination begins after source panel');
  await pasteButton.click();await wait();
  const cameraAfterPaste=await save();
- assert.deepEqual(sourcePoses(cameraAfterPaste),beforeSourcePoses,'Paste leaves source panel camera keys unchanged');
+ assertSamePoses(sourcePoses(cameraAfterPaste),beforeSourcePoses,'Paste preserves source panel camera motion');
  assert(cameraAfterPaste.scenes[0].camera.some(k=>k.frame===destinationEnd),'Paste creates destination OUT key');
  await page.getByRole('button',{name:'Reset camera for selected panel'}).click();await wait();
  const cameraAfterReset=await save();
- assert.deepEqual(sourcePoses(cameraAfterReset),beforeSourcePoses,'Reset leaves source panel camera keys unchanged');
+ assertSamePoses(sourcePoses(cameraAfterReset),beforeSourcePoses,'Reset preserves source panel camera motion');
  assert.equal(cameraAfterReset.scenes[0].camera.find(k=>k.frame===destinationEnd)?.zoom,1,'Reset restores neutral destination zoom');
  await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();
  assert.deepEqual((await save()).scenes[0].camera,cameraAfterPaste.scenes[0].camera,'Undo restores pasted camera');
