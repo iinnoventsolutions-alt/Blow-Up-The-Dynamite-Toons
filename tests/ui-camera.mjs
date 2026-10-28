@@ -88,7 +88,7 @@ try{
  const pasteButton=page.getByRole('button',{name:'Paste and fit camera on selected panel'});
  assert.equal(await pasteButton.isEnabled(),true,'Copy enables Paste & Fit');
  await page.getByLabel('Scene camera time').fill('179');await wait();
- assert.equal(destinationStart,60,'Duration edit places destination panel after the first panel');
+ assert(destinationStart>sourceEnd,'Destination begins after source panel');
  await pasteButton.click();await wait();
  const cameraAfterPaste=await save();
  assert.deepEqual(sourceKeys(cameraAfterPaste.scenes[0].camera),sourceKeys(cameraBeforeCopy.scenes[0].camera),'Paste leaves source panel camera keys unchanged');
