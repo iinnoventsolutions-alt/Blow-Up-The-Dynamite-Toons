@@ -77,6 +77,25 @@ try{
  const pending=page.waitForEvent('download');await page.getByRole('button',{name:'Export overlay PNG',exact:true}).click();const exported=await pending;assert(exported.suggestedFilename().endsWith('-overlay.png'));assert((await readFile(await exported.path())).length>1000);
  output=await save();await page.locator('input[type=file]').first().setInputFiles({name:'roundtrip.issb',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(output))});await wait();assert.deepEqual((await save()).scenes[0].camera,output.scenes[0].camera);await page.screenshot({path:'test-results/camera-drawing.png'});
  await page.getByRole('button',{name:'Delete key',exact:true}).click();await wait();assert.equal(await page.locator('.camera-key-list button').count(),1);await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();assert.equal(await page.locator('.camera-key-list button').count(),2);
+ // A3: exercise the toolbar against two differently sized panels after the round trip.
+ await page.locator('.camera-key-list button').first().click();await wait();
+ const cameraBeforeCopy=await save();
+ await page.getByRole('button',{name:'Copy camera from selected panel'}).click();
+ const pasteButton=page.getByRole('button',{name:'Paste and fit camera on selected panel'});
+ assert.equal(await pasteButton.isEnabled(),true,'Copy enables Paste & Fit');
+ await page.getByLabel('Scene camera time').fill('179');await wait();
+ await pasteButton.click();await wait();
+ const cameraAfterPaste=await save();
+ assert.deepEqual(cameraAfterPaste.scenes[0].camera.filter(k=>k.frame<120),cameraBeforeCopy.scenes[0].camera.filter(k=>k.frame<120),'Paste leaves source panel camera keys unchanged');
+ assert(cameraAfterPaste.scenes[0].camera.some(k=>k.frame===179),'Paste creates destination OUT key');
+ await page.getByRole('button',{name:'Reset camera for selected panel'}).click();await wait();
+ const cameraAfterReset=await save();
+ assert.deepEqual(cameraAfterReset.scenes[0].camera.filter(k=>k.frame<120),cameraBeforeCopy.scenes[0].camera.filter(k=>k.frame<120),'Reset leaves source panel camera keys unchanged');
+ assert.equal(cameraAfterReset.scenes[0].camera.find(k=>k.frame===179)?.zoom,1,'Reset restores neutral destination zoom');
+ await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();
+ assert.deepEqual((await save()).scenes[0].camera,cameraAfterPaste.scenes[0].camera,'Undo restores pasted camera');
+ await page.getByTitle('Redo (⌘/Ctrl Shift Z)',{exact:true}).click();await wait();
+ assert.deepEqual((await save()).scenes[0].camera,cameraAfterReset.scenes[0].camera,'Redo restores reset camera');
  await page.getByRole('button',{name:'Clear scene camera',exact:true}).click();await page.getByRole('button',{name:'Discard / Delete',exact:true}).click();await wait();assert.equal(await page.locator('.camera-key-list button').count(),0);assert.deepEqual(errors,[]);
  console.log('PASS camera: setup, numeric pan/zoom/rotation, drag pan, key retime/collision, undo/redo, thumbnail overlays, Timeline/Pitch rendering and playback, duration retiming, PNG export, save/reopen and deletion.');
 }catch(e){await mkdir('test-results',{recursive:true});await page.screenshot({path:'test-results/camera-failure.png'});console.error(errors);throw e;}finally{await browser.close();server.kill();}
