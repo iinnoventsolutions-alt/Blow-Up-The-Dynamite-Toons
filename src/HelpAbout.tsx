@@ -21,7 +21,7 @@ export default function HelpAbout({close,initialCategory='All'}:{close:()=>void;
  const [category,setCategory]=useState(()=>categories.includes(initialCategory)?initialCategory:'All');
  const results=topics.filter(topic=>(category==='All'||topic.category===category)&&(topic.title+' '+topic.body+' '+topic.steps.join(' ')).toLowerCase().includes(query.trim().toLowerCase()));
  useEffect(()=>{const node=ref.current;node?.showModal();return()=>{if(node?.open)node.close();};},[]);
- return <dialog ref={ref} className="help-about" onClose={close} onCancel={e=>{e.preventDefault();close();}} aria-label="Help and About">
+ return <dialog ref={ref} className="help-about" onClose={close} onCancel={e=>{e.preventDefault();ref.current?.close();close();}} aria-label="Help and About">
  <div className="dialog-head"><h2>Help Center & About</h2><button onClick={close} title="Close Help and About" aria-label="Close Help and About">×</button></div>
  <div className="help-identity"><img src="./innovent-icon.png" alt="IInnovent Professional Storyboard application icon"/><div><strong>{PRODUCT_NAME}</strong><span>{BUILD_LABEL}</span></div></div>
  <label htmlFor="help-search">Search help topics</label>
