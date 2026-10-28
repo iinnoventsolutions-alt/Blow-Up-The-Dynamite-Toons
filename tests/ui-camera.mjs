@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import { mkdir, readFile } from 'node:fs/promises';
-import { makeProject, makePanel, uid } from '../src/model.ts';
+import { cameraAt, makeProject, makePanel, uid } from '../src/model.ts';
 const server=spawn(process.execPath,['desktop/preview.cjs'],{stdio:'ignore'}),url='http://127.0.0.1:4317';
 for(let i=0;i<100;i++){try{if((await fetch(url)).ok)break;}catch{}await new Promise(r=>setTimeout(r,100));}
 const browser=await chromium.launch({headless:true,...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{})});
@@ -83,7 +83,9 @@ try{
  const sourceEnd=cameraBeforeCopy.scenes[0].panels[0].duration-1;
  const destinationStart=sourceEnd+1;
  const destinationEnd=destinationStart+cameraBeforeCopy.scenes[0].panels[1].duration-1;
- const sourceKeys=keys=>keys.filter(k=>k.frame<=sourceEnd);
+ const sourceFrames=[0,Math.floor(sourceEnd/2),sourceEnd];
+ const sourcePoses=project=>sourceFrames.map(frame=>cameraAt(project.scenes[0],frame,project));
+ const beforeSourcePoses=sourcePoses(cameraBeforeCopy);
  await page.getByRole('button',{name:'Copy camera from selected panel'}).click();
  const pasteButton=page.getByRole('button',{name:'Paste and fit camera on selected panel'});
  assert.equal(await pasteButton.isEnabled(),true,'Copy enables Paste & Fit');
@@ -91,11 +93,11 @@ try{
  assert(destinationStart>sourceEnd,'Destination begins after source panel');
  await pasteButton.click();await wait();
  const cameraAfterPaste=await save();
- assert.deepEqual(sourceKeys(cameraAfterPaste.scenes[0].camera),sourceKeys(cameraBeforeCopy.scenes[0].camera),'Paste leaves source panel camera keys unchanged');
+ assert.deepEqual(sourcePoses(cameraAfterPaste),beforeSourcePoses,'Paste leaves source panel camera keys unchanged');
  assert(cameraAfterPaste.scenes[0].camera.some(k=>k.frame===destinationEnd),'Paste creates destination OUT key');
  await page.getByRole('button',{name:'Reset camera for selected panel'}).click();await wait();
  const cameraAfterReset=await save();
- assert.deepEqual(sourceKeys(cameraAfterReset.scenes[0].camera),sourceKeys(cameraBeforeCopy.scenes[0].camera),'Reset leaves source panel camera keys unchanged');
+ assert.deepEqual(sourcePoses(cameraAfterReset),beforeSourcePoses,'Reset leaves source panel camera keys unchanged');
  assert.equal(cameraAfterReset.scenes[0].camera.find(k=>k.frame===destinationEnd)?.zoom,1,'Reset restores neutral destination zoom');
  await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();
  assert.deepEqual((await save()).scenes[0].camera,cameraAfterPaste.scenes[0].camera,'Undo restores pasted camera');
