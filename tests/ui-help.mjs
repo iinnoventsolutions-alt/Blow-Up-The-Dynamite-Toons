@@ -58,12 +58,13 @@ try {
   await page.getByRole('button', { name: '+ Create storyboard', exact: true }).click();
   await page.getByLabel(/^project title$/i).fill('Help acceptance');
   await page.getByRole('button', { name: 'Create project →', exact: true }).click();
-  await page.getByRole('button', { name: 'Help for this workspace' }).click();
+  await page.locator('canvas[aria-label="Drawing canvas"]').waitFor();
+  await page.getByTitle('Help for this workspace').click();
   await dialog.waitFor();
   assert.equal(await dialog.getByRole('button', { name: 'Drawing', exact: true }).getAttribute('aria-pressed'), 'true');
   await dialog.getByRole('button', { name: 'Done' }).click();
   await page.getByRole('button', { name: 'Timeline', exact: true }).click();
-  await page.getByRole('button', { name: 'Help for this workspace' }).click();
+  await page.getByTitle('Help for this workspace').click();
   await dialog.waitFor();
   assert.equal(await dialog.getByRole('button', { name: 'Playback', exact: true }).getAttribute('aria-pressed'), 'true');
   await dialog.getByRole('button', { name: 'Done' }).click();
