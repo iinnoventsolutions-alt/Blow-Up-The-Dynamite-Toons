@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { makeProject, makePanel, makeAudioTrack, makeAudioClip, uid } from '../src/model.ts';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { makeProject, makePanel } from '../src/model.ts';
 
 // Diagnostic only: intentionally separate from npm run test:ui until RFU fixes are accepted.
 const server = spawn(process.execPath, ['desktop/preview.cjs'], { stdio: 'ignore' });
