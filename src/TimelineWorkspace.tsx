@@ -8,7 +8,7 @@ import type { PointerEvent } from 'react';
 import { allPanels, panelStart, projectFrames, secondsText, timecode, type Project } from './model';
 import { Thumbnail } from './Canvas';
 type Resize = { id: string; startX: number; original: number; scale: number; frames: number };
-export default function TimelineWorkspace({ audioSelection,onAudioSelect,onAudioEdit,transitionId,onTransition,project, activeId, playFrame, playing, onTogglePlay, onStop, onSeek, onResize }: { audioSelection:AudioSelection|null;onAudioSelect:(s:AudioSelection)=>void;onAudioEdit:(fn:(p:Project)=>void)=>void;transitionId:string;onTransition:(id:string)=>void;project: Project; activeId: string; playFrame: number; playing: boolean; onTogglePlay: () => void; onStop: () => void; onSeek: (frame: number) => void; onResize: (id: string, frames: number) => boolean }) {
+export default function TimelineWorkspace({ seekRevision, audioSelection,onAudioSelect,onAudioEdit,transitionId,onTransition,project, activeId, playFrame, playing, onTogglePlay, onStop, onSeek, onResize }: { seekRevision:number;audioSelection:AudioSelection|null;onAudioSelect:(s:AudioSelection)=>void;onAudioEdit:(fn:(p:Project)=>void)=>void;transitionId:string;onTransition:(id:string)=>void;project: Project; activeId: string; playFrame: number; playing: boolean; onTogglePlay: () => void; onStop: () => void; onSeek: (frame: number) => void; onResize: (id: string, frames: number) => boolean }) {
   const entries = allPanels(project), total = projectFrames(project), active = entries.find(p => p.panel.id === activeId) || entries[0];
   const [timelineZoom,setTimelineZoom]=useState(1);
   const scale = Math.min(48 * timelineZoom / project.fps, 200000 / Math.max(total,audioEnd(project)));
@@ -35,7 +35,7 @@ export default function TimelineWorkspace({ audioSelection,onAudioSelect,onAudio
     if (x < left + margin || x > right - margin) {
       viewport.scrollLeft = Math.max(0, x - viewport.clientWidth / 3);
     }
-  }, [playFrame, playing, scale]);
+  }, [playFrame, playing, scale, seekRevision]);
   const seekPointer = (e: PointerEvent<HTMLDivElement>) => { if (!body.current) return; const r = body.current.getBoundingClientRect(); onSeek(Math.max(0, Math.min(total - 1, Math.round((e.clientX - r.left) / scale)))); };
   const maxTicks = Math.ceil(displayTotal / project.fps); const tickStep = Math.max(1, Math.ceil(maxTicks / 200), Math.ceil(70 / (project.fps * scale)));
   const ticks = Array.from({ length: Math.floor(maxTicks / tickStep) + 1 }, (_, i) => i * tickStep * project.fps).filter(f => f <= displayTotal);
