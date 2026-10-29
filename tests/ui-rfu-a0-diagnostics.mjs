@@ -79,6 +79,9 @@ try {
     const clip = page.locator('.audio-clip').first();
     await clip.scrollIntoViewIfNeeded();
     const start = await saveProject();
+    // Saving shows a toast that can cover the clip; clear it before pointer testing.
+    const saveToast = page.getByRole('status').filter({ hasText: 'Project file downloaded.' });
+    if (await saveToast.isVisible()) await saveToast.getByTitle('Dismiss message').click();
     const source = start.audioTracks.find(t => t.clips.length);
     const destination = start.audioTracks.find(t => t.id !== source.id);
     const box = await clip.boundingBox();
