@@ -113,6 +113,20 @@ jobs:
         id: browser_regression
         continue-on-error: true
         run: npm run test:ui
+      - name: RFU-A0 diagnostic browser reproduction (non-gating)
+        id: rfu_a0_diagnostic
+        continue-on-error: true
+        run: node --experimental-strip-types tests/ui-rfu-a0-diagnostics.mjs
+      - name: Upload RFU-A0 browser evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: rfu-a0-browser-evidence-${{ github.run_id }}
+          path: |
+            test-results/rfu-a0-*.json
+            test-results/rfu-a0-*.png
+          if-no-files-found: warn
+          retention-days: 14
       - name: Round 1 drawing reliability regression
         id: drawing_reliability
         continue-on-error: true
