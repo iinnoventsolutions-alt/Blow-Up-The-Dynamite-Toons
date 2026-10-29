@@ -40,7 +40,7 @@ try {
   const frames = [];
   await controls.getByRole('button', { name: 'Play', exact: true }).click();
   const started = Date.now();
-  while (Date.now() - started < 3500) {
+  while (Date.now() - started < 12000) {
     frames.push({ t: Date.now() - started, frame: Number(await slider.getAttribute('aria-valuenow')) });
     await page.waitForTimeout(65);
   }
@@ -52,7 +52,10 @@ try {
     return state;
   }, { last: -1, since: 0, longest: 0 }).longest;
   const backward = frames.some((s, i) => i && s.frame < frames[i - 1].frame);
-  record('RFU1', !backward && maxFreeze < 250, 'samples=' + frames.length + ', repeated=' + gaps + ', longest unchanged interval=' + maxFreeze + 'ms');
+  const expectedAdvance = (frames.at(-1).t - frames[0].t) * project.fps / 1000;
+  const actualAdvance = frames.at(-1).frame - frames[0].frame;
+  const driftFrames = Math.abs(actualAdvance - expectedAdvance);
+  record('RFU1', !backward && maxFreeze < 250 && driftFrames < project.fps, 'samples=' + frames.length + ', repeated=' + gaps + ', longest unchanged interval=' + maxFreeze + 'ms, drift=' + driftFrames.toFixed(1) + ' frames over 12s');
   // RFU6: real pointer drags and persisted project verification (non-gating).
   // Generate a short PCM WAV and import it through the actual application controls.
   const rate = 16000, count = rate * 2, wav = Buffer.alloc(44 + count * 2);
