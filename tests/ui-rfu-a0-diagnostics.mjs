@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { makeProject, makePanel } from '../src/model.ts';
 
 // Diagnostic only: intentionally separate from npm run test:ui until RFU fixes are accepted.
@@ -21,7 +21,6 @@ try {
   const project = makeProject('RFU-A0 reproduction');
   for (let i = 0; i < 11; i++) project.scenes[0].panels.push(makePanel('Panel ' + (i + 2)));
   for (const panel of project.scenes[0].panels) panel.duration = project.fps * 5;
-  // Audio fixtures use the model's validated factory methods and are added in follow-up tests.
   await page.locator('input[type=file]').first().setInputFiles({
     name: 'rfu-a0.issb', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(project))
   });
@@ -54,7 +53,48 @@ try {
   }, { last: -1, since: 0, longest: 0 }).longest;
   const backward = frames.some((s, i) => i && s.frame < frames[i - 1].frame);
   record('RFU1', !backward && maxFreeze < 250, 'samples=' + frames.length + ', repeated=' + gaps + ', longest unchanged interval=' + maxFreeze + 'ms');
-  await writeFile('test-results/rfu-a0-diagnostics.json', JSON.stringify({ results, playback: frames }, null, 2));
+  // RFU6: real pointer drags and persisted project verification (non-gating).
+  // Generate a short PCM WAV and import it through the actual application controls.
+  const rate = 16000, count = rate * 2, wav = Buffer.alloc(44 + count * 2);
+  wav.write('RIFF'); wav.writeUInt32LE(36 + count * 2, 4);
+  wav.write('WAVEfmt ', 8); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20);
+  wav.writeUInt16LE(1, 22); wav.writeUInt32LE(rate, 24);
+  wav.writeUInt32LE(rate * 2, 28); wav.writeUInt16LE(2, 32);
+  wav.writeUInt16LE(16, 34); wav.write('data', 36); wav.writeUInt32LE(count * 2, 40);
+  for (let i = 0; i < count; i++) wav.writeInt16LE(Math.sin(i * 2 * Math.PI * 440 / rate) * 5000, 44 + i * 2);
+  await page.locator('input[accept*=".wav"]').setInputFiles({ name: 'RFU6.wav', mimeType: 'audio/wav', buffer: wav });
+  await page.waitForFunction(() => document.querySelectorAll('.audio-clip').length === 1);
+  await page.getByRole('button', { name: '+ Audio track', exact: true }).click();
+  const saveProject = async () => {
+    const pending = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Save project', exact: true }).click();
+    return JSON.parse(await readFile(await (await pending).path(), 'utf8'));
+  };
+  const outcomes = [];
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const clip = page.locator('.audio-clip').first();
+    await clip.scrollIntoViewIfNeeded();
+    const start = await saveProject();
+    const source = start.audioTracks.find(t => t.clips.length);
+    const destination = start.audioTracks.find(t => t.id !== source.id);
+    const box = await clip.boundingBox();
+    const target = page.locator('[data-audio-track="' + destination.id + '"]');
+    const targetBox = await target.boundingBox();
+    const x = box.x + Math.min(box.width / 2, 28), y = box.y + 20;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 24, targetBox.y + targetBox.height / 2, { steps: attempt % 2 ? 3 : 14 });
+    await page.mouse.up();
+    await page.waitForTimeout(120);
+    const saved = await saveProject();
+    const moved = saved.audioTracks.find(t => t.clips.some(c => c.id === source.clips[0].id));
+    const newClip = moved?.clips.find(c => c.id === source.clips[0].id);
+    const ok = moved?.id === destination.id && newClip?.start > source.clips[0].start;
+    outcomes.push({ attempt, from: source.id, to: destination.id, actual: moved?.id, oldStart: source.clips[0].start, newStart: newClip?.start, passed: ok });
+  }
+  record('RFU6', outcomes.every(o => o.passed), outcomes.filter(o => o.passed).length + '/' + outcomes.length + ' cross-track drags persisted');
+  await page.screenshot({ path: 'test-results/rfu-a0-audio-drag.png' });
+  await writeFile('test-results/rfu-a0-diagnostics.json', JSON.stringify({ results, playback: frames, audioDrags: outcomes }, null, 2));
   console.log('RFU-A0 diagnostic completed; findings are non-gating until fixes and acceptance tests are approved.');
 } catch (error) {
   console.error('RFU-A0 diagnostic setup failed:', error);
