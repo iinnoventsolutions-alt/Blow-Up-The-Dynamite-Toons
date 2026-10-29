@@ -74,6 +74,7 @@ try {
     return JSON.parse(await readFile(await (await pending).path(), 'utf8'));
   };
   const outcomes = [];
+  await page.evaluate(() => { window.__rfu6PointerEvents = []; for (const type of ['pointerdown','pointermove','pointerup','pointercancel','lostpointercapture']) document.addEventListener(type, e => { if (window.__rfu6PointerEvents.length < 1000) window.__rfu6PointerEvents.push({type, x:Math.round(e.clientX), y:Math.round(e.clientY), target:e.target?.className?.toString().slice(0,70), captured:document.querySelector('.audio-lanes')?.hasPointerCapture(e.pointerId)}); }, true); });
   for (let attempt = 0; attempt < 6; attempt++) {
     const clip = page.locator('.audio-clip').first();
     await clip.scrollIntoViewIfNeeded();
@@ -93,7 +94,8 @@ try {
     const moved = saved.audioTracks.find(t => t.clips.some(c => c.id === source.clips[0].id));
     const newClip = moved?.clips.find(c => c.id === source.clips[0].id);
     const ok = moved?.id === destination.id && newClip?.start > source.clips[0].start;
-    outcomes.push({ attempt, from: source.id, to: destination.id, actual: moved?.id, oldStart: source.clips[0].start, newStart: newClip?.start, passed: ok });
+    const events = await page.evaluate(() => window.__rfu6PointerEvents.splice(0));
+    outcomes.push({ attempt, from: source.id, to: destination.id, actual: moved?.id, oldStart: source.clips[0].start, newStart: newClip?.start, passed: ok, pointerEvents: events });
   }
   record('RFU6', outcomes.every(o => o.passed), outcomes.filter(o => o.passed).length + '/' + outcomes.length + ' cross-track drags persisted');
   await page.screenshot({ path: 'test-results/rfu-a0-audio-drag.png' });
