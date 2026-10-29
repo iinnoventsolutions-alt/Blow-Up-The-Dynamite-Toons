@@ -20,7 +20,22 @@ export default function TimelineWorkspace({ audioSelection,onAudioSelect,onAudio
   const endResize = () => { const d = drag.current; drag.current = null; setPreview(null); if (d && d.frames !== d.original) onResize(d.id, d.frames); };
   const cancelResize = () => { drag.current = null; setPreview(null); };
   useEffect(() => { const cancel = (e: KeyboardEvent) => { if (e.key === 'Escape') cancelResize(); }; window.addEventListener('keydown', cancel); return () => window.removeEventListener('keydown', cancel); }, []);
-  useEffect(() => { if (!playing || !scroll.current) return; const x = playFrame * scale, viewport = scroll.current; if (x > viewport.scrollLeft + viewport.clientWidth - 60 || x < viewport.scrollLeft + 10) viewport.scrollLeft = Math.max(0, x - viewport.clientWidth / 3); }, [playFrame, playing, scale]);
+  useEffect(() => {
+    const viewport = scroll.current;
+    if (!viewport) return;
+    // Seeking and Go to Start must reveal the playhead even when playback is paused.
+    if (playFrame === 0) {
+      if (viewport.scrollLeft !== 0) viewport.scrollLeft = 0;
+      return;
+    }
+    const x = playFrame * scale;
+    const left = viewport.scrollLeft;
+    const right = left + viewport.clientWidth;
+    const margin = Math.min(60, viewport.clientWidth / 4);
+    if (x < left + margin || x > right - margin) {
+      viewport.scrollLeft = Math.max(0, x - viewport.clientWidth / 3);
+    }
+  }, [playFrame, playing, scale]);
   const seekPointer = (e: PointerEvent<HTMLDivElement>) => { if (!body.current) return; const r = body.current.getBoundingClientRect(); onSeek(Math.max(0, Math.min(total - 1, Math.round((e.clientX - r.left) / scale)))); };
   const maxTicks = Math.ceil(displayTotal / project.fps); const tickStep = Math.max(1, Math.ceil(maxTicks / 200), Math.ceil(70 / (project.fps * scale)));
   const ticks = Array.from({ length: Math.floor(maxTicks / tickStep) + 1 }, (_, i) => i * tickStep * project.fps).filter(f => f <= displayTotal);
