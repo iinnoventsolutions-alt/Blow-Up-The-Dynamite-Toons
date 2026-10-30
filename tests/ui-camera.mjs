@@ -30,8 +30,8 @@ try{
  assert.equal(await overlay.locator('text').filter({hasText:/^OUT$/}).count(),1,'Stationary camera displays exactly one OUT endpoint label');
  assert.equal(await overlay.locator('text').filter({hasText:/^● OUT$/}).count(),1,'Stationary camera displays exactly one OUT selector');
  // RFU2: coincident camera frames must route pointer input only to the chosen endpoint.
- const inGroup=overlay.locator('g').filter({has:overlay.locator('circle[data-frame="60"]')}).last();
- const outGroup=overlay.locator('g').filter({has:overlay.locator('circle[data-frame="119"]')}).last();
+ const inGroup=overlay.locator('[data-camera-endpoint="in"]');
+ const outGroup=overlay.locator('[data-camera-endpoint="out"]');
  assert.equal(await outGroup.getAttribute('pointer-events'),'none','Overlapping OUT handle cannot intercept selected IN drag');
  await overlay.getByRole('button',{name:'Select camera OUT endpoint'}).click();await wait();
  assert.equal(await inGroup.getAttribute('pointer-events'),'none','Selecting OUT disables overlapping IN hit-testing');
