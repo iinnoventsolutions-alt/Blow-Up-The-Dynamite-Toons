@@ -102,6 +102,26 @@ try{
  const pending=page.waitForEvent('download');await page.getByRole('button',{name:'Export overlay PNG',exact:true}).click();const exported=await pending;assert(exported.suggestedFilename().endsWith('-overlay.png'));assert((await readFile(await exported.path())).length>1000);
  output=await save();await page.locator('input[type=file]').first().setInputFiles({name:'roundtrip.issb',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(output))});await wait();assert.deepEqual((await save()).scenes[0].camera,output.scenes[0].camera);await page.screenshot({path:'test-results/camera-drawing.png'});
  await page.getByRole('button',{name:'Delete key',exact:true}).click();await wait();assert.equal(await page.locator('.camera-key-list button').count(),1);await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();assert.equal(await page.locator('.camera-key-list button').count(),2);
+ // RFU4: transfer source OUT to destination START without disturbing destination OUT.
+ await page.getByLabel('Scene camera time').fill('0');await wait();
+ const rfu4Before=await save();
+ const rfu4SourceEnd=rfu4Before.scenes[0].panels[0].duration-1;
+ const rfu4DestStart=rfu4SourceEnd+1;
+ const rfu4DestEnd=rfu4DestStart+rfu4Before.scenes[0].panels[1].duration-1;
+ const rfu4SourcePose=cameraAt(rfu4Before.scenes[0],rfu4SourceEnd,rfu4Before);
+ const rfu4DestOutBefore=cameraAt(rfu4Before.scenes[0],rfu4DestEnd,rfu4Before);
+ await page.getByRole('button',{name:'Copy camera OUT from selected panel'}).click();
+ const rfu4Paste=page.getByRole('button',{name:'Paste copied camera OUT as selected panel START'});
+ assert(await rfu4Paste.isEnabled(),'RFU4 copy OUT enables paste as START');
+ await page.getByLabel('Scene camera time').fill(String(rfu4DestEnd));await wait();
+ await rfu4Paste.click();await wait();
+ const rfu4After=await save();
+ for(const key of ['x','y','zoom','rotation']) {
+  assert(Math.abs(cameraAt(rfu4After.scenes[0],rfu4DestStart,rfu4After)[key]-rfu4SourcePose[key])<1e-8,'RFU4 destination START matches source OUT '+key);
+  assert(Math.abs(cameraAt(rfu4After.scenes[0],rfu4DestEnd,rfu4After)[key]-rfu4DestOutBefore[key])<1e-8,'RFU4 destination OUT unchanged '+key);
+ }
+ await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();
+ assert.deepEqual((await save()).scenes[0].camera,rfu4Before.scenes[0].camera,'RFU4 undo restores original camera keys');
  // A3: exercise the toolbar against two differently sized panels after the round trip.
  await page.locator('.camera-key-list button').first().click();await wait();
  const cameraBeforeCopy=await save();
