@@ -19,9 +19,12 @@ try{
  await page.getByTitle('camera (C)',{exact:true}).click();await page.getByRole('button',{name:'Add keyframe at beginning of current panel'}).click();await page.getByLabel('Scene camera time').fill('119');await page.getByRole('button',{name:'Add keyframe at end of current panel'}).click();await wait();
  assert.equal(await page.locator('.camera-key-list button').count(),2);
  const overlay=page.locator('.stage-paper .camera-overlay');
+ // The scene-time slider seeks to frame 119, selecting Panel 2 (frames 60–119).
+ assert.equal(await page.getByLabel('Scene camera time').inputValue(),'119','Camera test is on the second panel at the stationary checkpoint');
  assert.equal(await overlay.locator('.camera-intermediate').count(),0,'No intermediate outlines before an intermediate key exists');
  assert.equal(await overlay.locator('circle[data-frame="119"]').count(),1,'Stationary camera retains editable OUT-frame handle');
- assert.equal(await overlay.locator('circle[data-frame="0"]').count(),1,'Stationary camera retains independent IN handle');
+ assert.equal(await overlay.locator('circle[data-frame="60"]').count(),1,'Stationary camera retains the active second panel IN handle at frame 60');
+ assert.equal(await overlay.locator('circle[data-frame="0"]').count(),0,'Second panel overlay must not expose the first panel IN handle');
  assert.equal(await overlay.locator('text').filter({hasText:'IN'}).count(),2,'Stationary camera displays IN label and selector');
  assert.equal(await overlay.locator('text').filter({hasText:'OUT'}).count(),2,'Stationary camera displays OUT label and selector');
  const cameraMask=page.getByRole('checkbox',{name:'Mask outside camera'});
