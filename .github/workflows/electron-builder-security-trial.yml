@@ -200,8 +200,30 @@ jobs:
           (cd release && shasum -a 256 -c SHA256SUMS.txt)
           cat release/SHA256SUMS.txt
           printf 'GitHub commit: %s\nWorkflow run: %s\nSigning: ad-hoc (not Developer ID)\nNotarization: not performed\nChrome Safe Browsing clearance: not established\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > release/BUILD-TRUST-STATUS.txt
-      - name: Scan both Mac installers with ClamAV signatures
-        run: bash scripts/scan-mac-installers.sh
+      - name: Stage exact mounted installer contents for independent Linux scan
+        run: |
+          set -euo pipefail
+          mkdir -p release/scan-input
+          for arch in arm64 x64; do
+            if [ "$arch" = arm64 ]; then dmg="release/IInnovent Professional Storyboard-1.0.0-arm64.dmg"; else dmg="release/IInnovent Professional Storyboard-1.0.0.dmg"; fi
+            mountpoint="$(mktemp -d)"
+            hdiutil attach -readonly -nobrowse -mountpoint "$mountpoint" "$dmg" >/dev/null
+            test -d "$mountpoint/IInnovent Professional Storyboard.app"
+            ditto -c -k --keepParent "$mountpoint/IInnovent Professional Storyboard.app" "release/scan-input/${arch}.zip"
+            hdiutil detach "$mountpoint" -quiet
+            rmdir "$mountpoint"
+          done
+      - name: Upload installers for independent Linux security gate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mac-installer-scan-input
+          path: |
+            release/*.dmg
+            release/SHA256SUMS.txt
+            release/BUILD-TRUST-STATUS.txt
+            release/scan-input/*.zip
+          if-no-files-found: error
+          retention-days: 7
       - name: Show package output
         if: always()
         run: ls -lah release/ || true
@@ -225,16 +247,51 @@ jobs:
             release/clamav-*.log
           if-no-files-found: warn
           retention-days: 7
-      - name: Verify installer checksums again after malware scanning
-        if: success()
+
+  linux-installer-malware-scan:
+    needs: builder-trial
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: mac-installer-scan-input
+          path: release
+      - name: Verify installer checksums and scan mounted DMG app contents
         run: |
           set -euo pipefail
-          (cd release && shasum -a 256 -c SHA256SUMS.txt)
-      - name: Upload installers and integrity manifest
+          cd release
+          sha256sum -c SHA256SUMS.txt
+          sudo apt-get update
+          sudo apt-get install -y clamav clamav-freshclam unzip
+          sudo systemctl stop clamav-freshclam || true
+          mkdir -p scanned/arm64 scanned/x64
+          unzip -q scan-input/arm64.zip -d scanned/arm64
+          unzip -q scan-input/x64.zip -d scanned/x64
+          test -d "scanned/arm64/IInnovent Professional Storyboard.app"
+          test -d "scanned/x64/IInnovent Professional Storyboard.app"
+          sudo freshclam
+          clamscan --version | tee CLAMAV-SCAN.txt
+          for arch in arm64 x64; do
+            echo "Scanning mounted DMG app contents: $arch" | tee -a CLAMAV-SCAN.txt
+            clamscan --recursive --infected --official-db-only --log="clamav-$arch.log" "scanned/$arch/IInnovent Professional Storyboard.app" 2>&1 | tee -a CLAMAV-SCAN.txt
+          done
+          sha256sum -c SHA256SUMS.txt
+          printf 'Both mounted DMG app contents scanned with zero detections; not a guarantee of safety.\\n' | tee -a CLAMAV-SCAN.txt
+      - name: Upload scanner evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: linux-clamav-scan-evidence-${{ github.run_id }}
+          path: |
+            release/CLAMAV-SCAN.txt
+            release/clamav-*.log
+          if-no-files-found: warn
+      - name: Upload verified Mac installers
         if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: IInnovent-Mac-unnotarized-${{ steps.artifact_label.outputs.stamp }}-run${{ github.run_id }}-a${{ github.run_attempt }}
+          name: IInnovent-Mac-unnotarized-verified-run${{ github.run_id }}
           path: |
             release/*.dmg
             release/SHA256SUMS.txt
