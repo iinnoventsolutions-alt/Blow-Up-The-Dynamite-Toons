@@ -46,3 +46,17 @@ export function resetPanelCamera(scene:Scene,panel:Panel,project:Project){
  if(before&&!scene.camera.some(k=>k.frame===start-1))putCameraKey(scene,project,start-1,before);
  if(after&&!scene.camera.some(k=>k.frame===end+1))putCameraKey(scene,project,end+1,after);
 }
+
+// RFU4 copies only the evaluated OUT pose; existing full-panel copy/paste stays intact.
+export function copyPanelCameraOut(scene:Scene,panel:Panel,project:Project):CameraPose {
+ const end=localPanelStart(scene,panel)+panel.duration-1;
+ const {x,y,zoom,rotation}=cameraAt(scene,end,project);
+ return {x,y,zoom,rotation};
+}
+export function pasteCameraOutAsStart(scene:Scene,panel:Panel,project:Project,pose:CameraPose) {
+ const start=localPanelStart(scene,panel),end=start+panel.duration-1;
+ // Preserve the destination OUT pose even when no explicit OUT key exists.
+ const outPose=end>start?cameraAt(scene,end,project):null;
+ putCameraKey(scene,project,start,pose);
+ if(outPose)putCameraKey(scene,project,end,outPose);
+}
