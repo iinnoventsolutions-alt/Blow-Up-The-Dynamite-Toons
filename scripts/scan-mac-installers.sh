@@ -21,8 +21,8 @@ brew install clamav ca-certificates
 # disable official CVD verification or treat an unloaded database as clean.
 clamav_version="$(clamscan --version | head -n 1)"
 openssl_formula_version="$(brew list --versions openssl@4 2>/dev/null || true)"
-printf 'Scanner version: %s\\nOpenSSL formula: %s\\n' "$clamav_version" "$openssl_formula_version" | tee -a "$report"
-if [[ "$clamav_version" == *'ClamAV 1.5.4/'* && "$openssl_formula_version" == *' 4.1.0'* ]]; then
+printf 'Scanner version: %s\nOpenSSL formula: %s\n' "$clamav_version" "$openssl_formula_version" | tee -a "$report"
+if [[ "$clamav_version" == *'ClamAV 1.5.4'* && "$openssl_formula_version" == *' 4.1.0'* ]]; then
   echo 'ERROR: Known ClamAV 1.5.4 / OpenSSL 4.1.0 database signature verification incompatibility.' | tee -a "$report"
   echo 'See Homebrew/homebrew-core issues 322047 and 322048. Requires a verified upstream-fixed ClamAV build.' | tee -a "$report"
   exit 1
