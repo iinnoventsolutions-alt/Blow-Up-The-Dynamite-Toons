@@ -29,6 +29,15 @@ try{
  assert.equal(await overlay.locator('text').filter({hasText:/^● IN$/}).count(),1,'Stationary camera displays exactly one IN selector');
  assert.equal(await overlay.locator('text').filter({hasText:/^OUT$/}).count(),1,'Stationary camera displays exactly one OUT endpoint label');
  assert.equal(await overlay.locator('text').filter({hasText:/^● OUT$/}).count(),1,'Stationary camera displays exactly one OUT selector');
+ // RFU2: coincident camera frames must route pointer input only to the chosen endpoint.
+ const inGroup=overlay.locator('g').filter({has:overlay.locator('circle[data-frame="60"]')}).last();
+ const outGroup=overlay.locator('g').filter({has:overlay.locator('circle[data-frame="119"]')}).last();
+ assert.equal(await outGroup.getAttribute('pointer-events'),'none','Overlapping OUT handle cannot intercept selected IN drag');
+ await overlay.getByRole('button',{name:'Select camera OUT endpoint'}).click();await wait();
+ assert.equal(await inGroup.getAttribute('pointer-events'),'none','Selecting OUT disables overlapping IN hit-testing');
+ assert.notEqual(await outGroup.getAttribute('pointer-events'),'none','Selected OUT handle receives pointer input');
+ await overlay.getByRole('button',{name:'Select camera IN endpoint'}).click();await wait();
+ assert.equal(await outGroup.getAttribute('pointer-events'),'none','Selecting IN restores IN-only hit-testing');
  const cameraMask=page.getByRole('checkbox',{name:'Mask outside camera'});
  assert.equal(await cameraMask.isChecked(),false,'Camera masking is off by default');
  await cameraMask.check();assert.equal(await page.locator('.camera-outside-mask').count(),1,'Camera mask is visible when enabled');
