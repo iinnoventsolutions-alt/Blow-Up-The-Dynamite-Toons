@@ -25,8 +25,10 @@ try{
  assert.equal(await overlay.locator('circle[data-frame="119"]').count(),1,'Stationary camera retains editable OUT-frame handle');
  assert.equal(await overlay.locator('circle[data-frame="60"]').count(),1,'Stationary camera retains the active second panel IN handle at frame 60');
  assert.equal(await overlay.locator('circle[data-frame="0"]').count(),0,'Second panel overlay must not expose the first panel IN handle');
- assert.equal(await overlay.locator('text').filter({hasText:'IN'}).count(),2,'Stationary camera displays IN label and selector');
- assert.equal(await overlay.locator('text').filter({hasText:'OUT'}).count(),2,'Stationary camera displays OUT label and selector');
+ assert.equal(await overlay.locator('text').filter({hasText:/^IN$/}).count(),1,'Stationary camera displays exactly one IN endpoint label');
+ assert.equal(await overlay.locator('text').filter({hasText:/^● IN$/}).count(),1,'Stationary camera displays exactly one IN selector');
+ assert.equal(await overlay.locator('text').filter({hasText:/^OUT$/}).count(),1,'Stationary camera displays exactly one OUT endpoint label');
+ assert.equal(await overlay.locator('text').filter({hasText:/^● OUT$/}).count(),1,'Stationary camera displays exactly one OUT selector');
  const cameraMask=page.getByRole('checkbox',{name:'Mask outside camera'});
  assert.equal(await cameraMask.isChecked(),false,'Camera masking is off by default');
  await cameraMask.check();assert.equal(await page.locator('.camera-outside-mask').count(),1,'Camera mask is visible when enabled');
