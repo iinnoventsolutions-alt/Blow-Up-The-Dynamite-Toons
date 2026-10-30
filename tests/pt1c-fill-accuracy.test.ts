@@ -39,3 +39,14 @@ test('opaque closed boundary separates identical transparent interior and exteri
  assert.equal(floodMask(d,w,h,60,60,0,0)[10*w+10],0);
  assert.equal(floodMask(d,w,h,10,10,0,0)[60*w+60],0);
 });
+
+// RDR-1 regression: visual camera guides must never become flood-fill boundaries.
+test('camera guide crossing artwork does not divide a fillable region',()=>{
+ const w=220,h=140,d=rect(w,h);
+ // Camera IN/OUT outlines are display overlays, not pixels in the fill reference.
+ // A closed artwork rectangle spanning x=90 must remain one fill region.
+ const mask=floodMask(d,w,h,60,60,0,0);
+ assert.equal(mask[60*w+45],1,'interior left of camera guide remains fillable');
+ assert.equal(mask[60*w+125],1,'interior right of camera guide remains fillable');
+ assert.equal(mask[60*w+180],0,'artwork boundary still contains the fill');
+});
