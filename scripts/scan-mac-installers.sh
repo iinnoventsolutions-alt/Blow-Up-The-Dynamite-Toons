@@ -15,6 +15,18 @@ trap cleanup EXIT
 
 printf 'ClamAV signature scan (not a substitute for notarization or Safe Browsing)\nCommit: %s\nRun: %s\n' "${GITHUB_SHA:-unknown}" "${GITHUB_RUN_ID:-unknown}" > "$report"
 brew install clamav ca-certificates
+# Homebrew ClamAV 1.5.4 with OpenSSL 4.1.0 has an upstream signature
+# verification defect (Homebrew/homebrew-core#322047, #322048).
+# Reject this known-broken combination before attempting any scan. Never
+# disable official CVD verification or treat an unloaded database as clean.
+clamav_version="$(clamscan --version | head -n 1)"
+openssl_formula_version="$(brew list --versions openssl@4 2>/dev/null || true)"
+printf 'Scanner version: %s\\nOpenSSL formula: %s\\n' "$clamav_version" "$openssl_formula_version" | tee -a "$report"
+if [[ "$clamav_version" == *'ClamAV 1.5.4/'* && "$openssl_formula_version" == *' 4.1.0'* ]]; then
+  echo 'ERROR: Known ClamAV 1.5.4 / OpenSSL 4.1.0 database signature verification incompatibility.' | tee -a "$report"
+  echo 'See Homebrew/homebrew-core issues 322047 and 322048. Requires a verified upstream-fixed ClamAV build.' | tee -a "$report"
+  exit 1
+fi
 # FreshClam must validate official signature downloads with a trusted CA store.
 # macOS runners may not expose a default OpenSSL CA bundle to Homebrew ClamAV.
 ca_bundle="$(brew --prefix)/etc/ca-certificates/cert.pem"
