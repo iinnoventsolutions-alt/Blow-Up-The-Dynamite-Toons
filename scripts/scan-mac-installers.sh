@@ -14,7 +14,17 @@ cleanup() {
 trap cleanup EXIT
 
 printf 'ClamAV signature scan (not a substitute for notarization or Safe Browsing)\nCommit: %s\nRun: %s\n' "${GITHUB_SHA:-unknown}" "${GITHUB_RUN_ID:-unknown}" > "$report"
-brew install clamav
+brew install clamav ca-certificates
+# FreshClam must validate official signature downloads with a trusted CA store.
+# macOS runners may not expose a default OpenSSL CA bundle to Homebrew ClamAV.
+ca_bundle="$(brew --prefix)/etc/ca-certificates/cert.pem"
+if [[ ! -s "$ca_bundle" ]]; then
+  echo "ERROR: Homebrew trusted CA bundle is missing: $ca_bundle" | tee -a "$report"
+  exit 1
+fi
+export SSL_CERT_FILE="$ca_bundle"
+export CURL_CA_BUNDLE="$ca_bundle"
+printf 'Trusted CA bundle: %s\\n' "$ca_bundle" | tee -a "$report"
 cat > "$config" <<EOF
 DatabaseDirectory $db
 DatabaseOwner $(id -un)
