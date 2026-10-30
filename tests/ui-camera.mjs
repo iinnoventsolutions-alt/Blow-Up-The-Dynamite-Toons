@@ -77,6 +77,16 @@ try{
  assert.equal(await overlay.locator('.camera-intermediate').count(),0,'Deleting intermediate key removes its overlay');
  await page.locator('.camera-key-list button').first().click();assert.equal(await pixels(drawing),raw,'Camera editing leaves drawing pixels unchanged');
  const center=page.locator('.stage-paper .camera-overlay circle[data-frame="0"]');const box=await center.boundingBox();assert(box);await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2+30,box.y+box.height/2+10,{steps:8});await page.mouse.up();await wait();output=await save();assert(output.scenes[0].camera[0].x>960,'Dragging the green camera center pans the IN key');
+ // RFU3: repeated release cycles must commit the latest pose and survive panel switching and reopening.
+ const dragCenter=async(dx,dy)=>{const h=await center.boundingBox();assert(h,'Camera IN handle remains visible');await page.mouse.move(h.x+h.width/2,h.y+h.height/2);await page.mouse.down();await page.mouse.move(h.x+h.width/2+dx,h.y+h.height/2+dy,{steps:10});await page.mouse.up();await wait();};
+ const initialDragX=(await save()).scenes[0].camera.find(k=>k.frame===0).x;
+ await dragCenter(22,8);const firstRelease=(await save()).scenes[0].camera.find(k=>k.frame===0).x;assert(firstRelease>initialDragX,'RFU3 first release persists the latest IN position');
+ await dragCenter(19,7);const secondRelease=(await save()).scenes[0].camera.find(k=>k.frame===0).x;assert(secondRelease>firstRelease,'RFU3 second release persists without snap-back');
+ await page.getByLabel('Select Scene 1, Panel 2',{exact:true}).click();await wait();
+ await page.getByLabel('Select Scene 1, Panel 1',{exact:true}).click();await wait();
+ assert.equal((await save()).scenes[0].camera.find(k=>k.frame===0).x,secondRelease,'RFU3 panel switch retains committed pose');
+ const reopened=await save();await page.locator('input[type=file]').first().setInputFiles({name:'rfu3-reopen.issb',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(reopened))});await wait();
+ assert.equal((await save()).scenes[0].camera.find(k=>k.frame===0).x,secondRelease,'RFU3 save/reopen retains committed pose');
  await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();assert.equal(await page.getByLabel('Camera X',{exact:true}).inputValue(),'960');await page.getByTitle('Redo (⌘/Ctrl Shift Z)',{exact:true}).click();await wait();
  const corner=page.locator('.stage-paper .camera-overlay rect[data-frame="0"]').first(),cornerBox=await corner.boundingBox();assert(cornerBox);
  const zoomBefore=Number(await page.getByLabel('Camera zoom',{exact:true}).inputValue());await page.mouse.move(cornerBox.x+cornerBox.width/2,cornerBox.y+cornerBox.height/2);await page.mouse.down();await page.mouse.move(cornerBox.x+cornerBox.width/2+35,cornerBox.y+cornerBox.height/2+20,{steps:8});await page.mouse.up();await wait();assert(Number(await page.getByLabel('Camera zoom',{exact:true}).inputValue())>zoomBefore,'Dragging a corner inward increases camera zoom');await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();
