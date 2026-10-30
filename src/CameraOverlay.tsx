@@ -4,6 +4,7 @@ import { cameraAt, type Panel, type Project, type Scene } from './model';
 import { cameraCorners, localPanelStart, type CameraPose } from './camera';
 export default function CameraOverlay({ scene, panel, project, frame, drawingMargin = 0, editable = false, onChange }: { scene: Scene; panel: Panel; project: Project; frame?: number; drawingMargin?: number; editable?: boolean; onChange?: (frame: number, pose: CameraPose) => void }) {
   const start = localPanelStart(scene, panel), end = start + panel.duration - 1;
+  const showBothEndpoints = editable && scene.camera.length > 0;
   const [live, setLive] = useState<{ frame: number; pose: CameraPose } | null>(null);
   const liveRef = useRef<{ frame: number; pose: CameraPose } | null>(null);
   const [selectedEndpoint, setSelectedEndpoint] = useState<'in' | 'out'>('in');
@@ -22,8 +23,10 @@ export default function CameraOverlay({ scene, panel, project, frame, drawingMar
     <defs><marker id={`arrow-${panel.id}`} markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7" fill="#8c90db"/></marker></defs>
     {!stationary && a.map(([x,y],i) => <line key={i} x1={x} y1={y} x2={b[i][0]} y2={b[i][1]} stroke="#8c90db" strokeWidth={handle / 9} markerEnd={`url(#arrow-${panel.id})`}/>)}
     {stationary && <text x={a[0][0]} y={a[0][1]-handle*2} fontSize={handle*1.3} fill="#ffffff">Camera IN and OUT overlap — choose an endpoint below</text>}
-    <g opacity={selectedEndpoint==='in'?1:0.65} onPointerDown={()=>setSelectedEndpoint('in')}>{outline(inPose, a, start, '#32c85b', 'IN')}</g>
-    <g opacity={selectedEndpoint==='out'?1:0.65} onPointerDown={()=>setSelectedEndpoint('out')}>{outline(outPose, b, end, '#ef4d50', 'OUT')}</g>
+    {showBothEndpoints ? <>
+      <g opacity={selectedEndpoint==='in'?1:0.65} onPointerDown={()=>setSelectedEndpoint('in')}>{outline(inPose, a, start, '#32c85b', 'IN')}</g>
+      <g opacity={selectedEndpoint==='out'?1:0.65} onPointerDown={()=>setSelectedEndpoint('out')}>{outline(outPose, b, end, '#ef4d50', 'OUT')}</g>
+    </> : stationary ? outline(outPose,b,end,'#222222','CAMERA') : <>{outline(inPose,a,start,'#32c85b','IN')}{outline(outPose,b,end,'#ef4d50','OUT')}</>}
     {editable && <g className="camera-endpoint-selector"><text x={a[0][0]} y={a[0][1]-handle*4} fontSize={handle*1.7} fill="#32c85b" data-frame={start} data-mode="pan" onPointerDown={()=>setSelectedEndpoint('in')}>● IN</text><text x={a[0][0]+handle*9} y={a[0][1]-handle*4} fontSize={handle*1.7} fill="#ef4d50" data-frame={end} data-mode="pan" onPointerDown={()=>setSelectedEndpoint('out')}>● OUT</text></g>}
     {intermediate.map(k=>{const pose=live?.frame===k.frame?live.pose:cameraAt(scene,k.frame,project);return <g key={k.id} className="camera-intermediate"><polygon data-frame={k.frame} data-mode="pan" points={cameraCorners(pose,project).map(p=>p.join(',')).join(' ')} fill="none" stroke="#3478df" strokeWidth={handle/7} strokeDasharray={`${handle*.8} ${handle*.5}`}/>{cameraCorners(pose,project).map(([x,y],i)=><rect key={i} data-frame={k.frame} data-mode="zoom" x={x-handle/2} y={y-handle/2} width={handle} height={handle} fill="#3478df" className="camera-handle"/>)}<circle data-frame={k.frame} data-mode="pan" cx={pose.x} cy={pose.y} r={handle/2} fill="#3478df" className="camera-handle"/></g>;})}
     {frame !== undefined && <polygon className="camera-current" points={cameraCorners(cameraAt(scene, frame, project), project).map(p=>p.join(',')).join(' ')} fill="none" stroke="#ff922c" strokeWidth={handle / 8} strokeDasharray={`${handle} ${handle / 2}`}/>}
