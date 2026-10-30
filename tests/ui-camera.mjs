@@ -21,8 +21,9 @@ try{
  const overlay=page.locator('.stage-paper .camera-overlay');
  assert.equal(await overlay.locator('.camera-intermediate').count(),0,'No intermediate outlines before an intermediate key exists');
  assert.equal(await overlay.locator('circle[data-frame="119"]').count(),1,'Stationary camera retains editable OUT-frame handle');
- assert.equal(await overlay.locator('circle[data-frame="0"]').count(),0,'Stationary camera consolidates overlapping IN and OUT handles');
- assert.equal(await overlay.locator('text').filter({hasText:'CAMERA'}).count(),1,'Stationary camera has neutral label');
+ assert.equal(await overlay.locator('circle[data-frame="0"]').count(),1,'Stationary camera retains independent IN handle');
+ assert.equal(await overlay.locator('text').filter({hasText:'IN'}).count(),2,'Stationary camera displays IN label and selector');
+ assert.equal(await overlay.locator('text').filter({hasText:'OUT'}).count(),2,'Stationary camera displays OUT label and selector');
  const cameraMask=page.getByRole('checkbox',{name:'Mask outside camera'});
  assert.equal(await cameraMask.isChecked(),false,'Camera masking is off by default');
  await cameraMask.check();assert.equal(await page.locator('.camera-outside-mask').count(),1,'Camera mask is visible when enabled');
@@ -32,8 +33,8 @@ try{
  await page.locator('.camera-key-list button').first().click();await wait();
  assert.equal(await overlay.locator('circle[data-frame="0"]').count(),1,'First panel moving camera shows IN handle');
  assert.equal(await overlay.locator('circle[data-frame="59"]').count(),1,'First panel moving camera shows OUT handle');
- assert.equal(await overlay.locator('text').filter({hasText:'IN'}).count(),1,'Moving camera labels IN');
- assert.equal(await overlay.locator('text').filter({hasText:'OUT'}).count(),1,'Moving camera labels OUT');
+ assert.equal(await overlay.locator('text').filter({hasText:'IN'}).count(),2,'Moving camera displays IN label and selector');
+ assert.equal(await overlay.locator('text').filter({hasText:'OUT'}).count(),2,'Moving camera displays OUT label and selector');
  await page.getByLabel('Scene camera time').fill('30');
  await page.getByRole('button',{name:'Add keyframe at current frame'}).click();await wait();
  assert.equal(await overlay.locator('.camera-intermediate').count(),1,'Intermediate camera outline appears within first panel');
