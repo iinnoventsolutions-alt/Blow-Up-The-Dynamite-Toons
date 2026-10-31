@@ -82,7 +82,19 @@ try{
  const dragCenter=async(dx,dy)=>{const h=await center.boundingBox();assert(h,'Camera IN handle remains visible');await page.mouse.move(h.x+h.width/2,h.y+h.height/2);await page.mouse.down();await page.mouse.move(h.x+h.width/2+dx,h.y+h.height/2+dy,{steps:10});await page.mouse.up();await wait();};
  const initialDragX=(await save()).scenes[0].camera.find(k=>k.frame===0).x;
  await dragCenter(22,8);const firstRelease=(await save()).scenes[0].camera.find(k=>k.frame===0).x;assert(firstRelease>initialDragX,'RFU3 first release persists the latest IN position');
+ // RDR-03 diagnostic: compare the rendered camera handle with the persisted key immediately
+ // after pointer release, after a browser paint, and after switching panels. A saved key
+ // alone cannot detect a visual snapback while React reconciles the temporary drag pose.
+ const assertCameraVisual=async(label)=>{
+  const saved=(await save()).scenes[0].camera.find(k=>k.frame===0);
+  const displayed=Number(await center.getAttribute('cx'));
+  assert(Math.abs(displayed-saved.x)<0.001,`RDR-03 ${label}: visible IN center ${displayed} differs from saved key ${saved.x}`);
+ };
+ await assertCameraVisual('first release');
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ await assertCameraVisual('after two animation frames');
  await dragCenter(19,7);const secondRelease=(await save()).scenes[0].camera.find(k=>k.frame===0).x;assert(secondRelease>firstRelease,'RFU3 second release persists without snap-back');
+ await assertCameraVisual('second release');
  await page.getByLabel('Select Scene 1, Panel 2',{exact:true}).click();await wait();
  await page.getByLabel('Select Scene 1, Panel 1',{exact:true}).click();await wait();
  assert.equal((await save()).scenes[0].camera.find(k=>k.frame===0).x,secondRelease,'RFU3 panel switch retains committed pose');
