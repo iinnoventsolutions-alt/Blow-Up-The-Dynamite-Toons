@@ -55,6 +55,18 @@ jobs:
           npm audit --json > candidate-audit.json || true
           npm audit --omit=dev
           node -p "'Trial builder: ' + require('electron-builder/package.json').version"
+      - name: Apply patched minimatch to CI candidate (trial only)
+        run: |
+          npm pkg set 'overrides.minimatch=11.0.1'
+          npm install --package-lock-only --ignore-scripts
+          cp package.json minimatch-candidate-package.json
+          cp package-lock.json minimatch-candidate-lock.json
+          npm ci
+          npm ls minimatch --all > minimatch-compatibility-tree.txt 2>&1 || true
+          npm audit --json > minimatch-compatibility-audit.json || true
+          npm audit --audit-level=low
+          npm audit --omit=dev
+          node -e "const p=require('./package-lock.json');if(p.packages['node_modules/electron-builder'].version!=='26.17.0')process.exit(1)"
       - name: Compare dependency vulnerabilities
         run: |
           node --input-type=module <<'NODE'
@@ -171,23 +183,6 @@ jobs:
             fi
             file "$app/Contents/MacOS/IInnovent Professional Storyboard"
           done
-      - name: Investigate minimatch remediation in isolated temporary copy (non-gating)
-        continue-on-error: true
-        run: |
-          set -u
-          trial="$(mktemp -d)"
-          cp package.json package-lock.json "$trial/"
-          (
-            cd "$trial"
-            # This is an exploratory compatibility probe, not a proposed production override.
-            npm pkg set 'overrides.minimatch=11.0.1'
-            npm install --package-lock-only --ignore-scripts
-            npm audit --json > "$GITHUB_WORKSPACE/minimatch-compatibility-audit.json" || true
-            npm ls minimatch --all > "$GITHUB_WORKSPACE/minimatch-compatibility-tree.txt" 2>&1 || true
-            cp package-lock.json "$GITHUB_WORKSPACE/minimatch-compatibility-lock.json"
-          )
-          rm -rf "$trial"
-          echo 'Exploratory minimatch override assessed; release lockfile and gate unchanged.'
       - name: Verify locked dependencies without repository writes
         run: |
           npm ci
@@ -268,7 +263,8 @@ jobs:
             locked-production-audit.json
             minimatch-compatibility-audit.json
             minimatch-compatibility-tree.txt
-            minimatch-compatibility-lock.json
+            minimatch-candidate-package.json
+            minimatch-candidate-lock.json
             release/CLAMAV-SCAN.txt
             release/clamav-*.log
           if-no-files-found: warn
