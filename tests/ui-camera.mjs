@@ -145,6 +145,19 @@ try{
  await assertCameraVisual('rapid release');
  await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();
  assert.equal((await save()).scenes[0].camera.find(k=>k.frame===0).x,fastBefore,'Undo restores rapid camera drag');
+ // RDR-03.5: a release followed immediately by lostpointercapture must retain the last live pose.
+ // Simulate the event ordering observed during rapid mouse releases, before a parent render.
+ const raceBefore=(await save()).scenes[0].camera.find(k=>k.frame===0).x;
+ const raceBox=await center.boundingBox();assert(raceBox);
+ const raceX=raceBox.x+raceBox.width/2,raceY=raceBox.y+raceBox.height/2;
+ await page.mouse.move(raceX,raceY);await page.mouse.down();
+ await page.mouse.move(raceX+68,raceY+31,{steps:1});await page.mouse.up();
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ const raceAfter=(await save()).scenes[0].camera.find(k=>k.frame===0).x;
+ assert(raceAfter>raceBefore,'Rapid single-step release commits camera pose');
+ await assertCameraVisual('single-step release after pointer capture loss');
+ await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();
+ assert.equal((await save()).scenes[0].camera.find(k=>k.frame===0).x,raceBefore,'Undo restores single-step release');
  // RDR-03.4D: pointer capture permits releasing outside the SVG while preserving the final pan.
  const offBefore=(await save()).scenes[0].camera.find(k=>k.frame===0).x;
  const offHandle=await center.boundingBox();assert(offHandle);
