@@ -55,18 +55,21 @@ jobs:
           npm audit --json > candidate-audit.json || true
           npm audit --omit=dev
           node -p "'Trial builder: ' + require('electron-builder/package.json').version"
-      - name: Apply patched minimatch to CI candidate (trial only)
+      - name: Verify committed dependency configuration (no CI override)
         run: |
-          npm pkg set 'overrides.minimatch=11.0.1'
-          npm install --package-lock-only --ignore-scripts
-          cp package.json minimatch-candidate-package.json
-          cp package-lock.json minimatch-candidate-lock.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const manifest = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          if (manifest.overrides?.minimatch !== '11.0.1') throw new Error('Committed minimatch override missing');
+          if (manifest.devDependencies?.['electron-builder'] !== '26.17.0') throw new Error('Electron Builder manifest version changed');
+          if (lock.packages?.['node_modules/electron-builder']?.version !== '26.17.0') throw new Error('Electron Builder lockfile version changed');
+          NODE
           npm ci
-          npm ls minimatch --all > minimatch-compatibility-tree.txt 2>&1 || true
-          npm audit --json > minimatch-compatibility-audit.json || true
           npm audit --audit-level=low
           npm audit --omit=dev
-          node -e "const p=require('./package-lock.json');if(p.packages['node_modules/electron-builder'].version!=='26.17.0')process.exit(1)"
+          npm ls minimatch --all > minimatch-compatibility-tree.txt 2>&1 || true
+          npm audit --json > minimatch-compatibility-audit.json || true
       - name: Compare dependency vulnerabilities
         run: |
           node --input-type=module <<'NODE'
@@ -263,8 +266,8 @@ jobs:
             locked-production-audit.json
             minimatch-compatibility-audit.json
             minimatch-compatibility-tree.txt
-            minimatch-candidate-package.json
-            minimatch-candidate-lock.json
+            package.json
+            package-lock.json
             release/CLAMAV-SCAN.txt
             release/clamav-*.log
           if-no-files-found: warn
