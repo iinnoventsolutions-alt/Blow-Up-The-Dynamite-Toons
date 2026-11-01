@@ -55,6 +55,22 @@ try{
  await page.getByLabel('Tool color',{exact:true}).fill('#e06422');await click(.76,.48);
  out=await save();assert.equal(out.scenes[0].panels[0].layers[0].strokes.at(-1).tool,'fill','RDR-01 second moved camera creates fill');
  for(const x of [.2,.35,.5,.65,.8])assert.deepEqual((await pixel(x,.48)).slice(0,3),[224,100,34],`RDR-01 no stale guide after second camera move at x=${x}`);
+ // RDR-01 direct-interaction reproduction: drag the live camera overlay and fill immediately,
+ // without save/reload or a delayed state reconciliation between the two tools.
+ p=makeProject('RDR direct camera drag then fill');
+ p.scenes[0].camera=[{id:'rdr-live-camera',frame:0,x:p.width/2,y:p.height/2,zoom:2,rotation:0,interpolation:'linear'}];
+ await load(p);await choose('Shape (U)');await page.getByLabel('Fill shape',{exact:true}).uncheck();
+ await page.getByLabel('Shape',{exact:true}).selectOption('rectangle');await drag(.12,.18,.88,.82);
+ await choose('camera (C)');
+ const liveCameraHandle=page.locator('.stage-paper .camera-overlay circle[data-frame="0"]').first();
+ const liveCameraBox=await liveCameraHandle.boundingBox();assert(liveCameraBox,'RDR-01 live camera drag handle visible');
+ await page.mouse.move(liveCameraBox.x+liveCameraBox.width/2,liveCameraBox.y+liveCameraBox.height/2);
+ await page.mouse.down();await page.mouse.move(liveCameraBox.x+liveCameraBox.width/2+48,liveCameraBox.y+liveCameraBox.height/2-19,{steps:12});await page.mouse.up();
+ await choose('Paint Bucket (F)');await page.getByLabel('Tool color',{exact:true}).fill('#1147a8');
+ await click(.24,.48);out=await save();
+ assert.equal(out.scenes[0].panels[0].layers[0].strokes.at(-1).tool,'fill','RDR-01 live drag creates fill');
+ for(const x of [.2,.35,.5,.65,.8])assert.deepEqual((await pixel(x,.48)).slice(0,3),[17,71,168],`RDR-01 direct camera drag cannot divide fill at x=${x}`);
+ assert.deepEqual((await pixel(.06,.08)).slice(0,3),[255,255,255],'RDR-01 direct drag preserves real artwork boundary');
  p=makeProject('Bitmap tools');p.scenes[0].panels[0].layers[0].kind='bitmap';await load(p);await choose('brush (B)');await page.getByLabel('Tool color',{exact:true}).fill('#000000');await drag(.2,.3,.7,.3);out=await save();l=out.scenes[0].panels[0].layers[0];assert.equal(l.kind,'bitmap');assert(l.image.startsWith('data:image/png'));assert.equal(l.strokes.length,0,'Bitmap brush flattens');
  await choose('Select (V)');await page.getByLabel('Selection scope',{exact:true}).selectOption('active');await page.getByLabel('Selection mode',{exact:true}).selectOption('lasso');const poly=[[.1,.1],[.8,.1],[.8,.5],[.1,.5],[.1,.1]];const start=await pos(...poly[0]);await page.mouse.move(start.x,start.y);await page.mouse.down();for(const q of poly.slice(1)){const pt=await pos(...q);await page.mouse.move(pt.x,pt.y,{steps:10});}await page.mouse.up();await wait();assert.equal(await page.locator('.art-interaction [data-mode=move]').count(),1);await page.getByRole('button',{name:'Delete artwork',exact:true}).click();await wait();assert.deepEqual((await pixel(.4,.3)).slice(0,3),[255,255,255]);await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();assert((await pixel(.4,.3))[0]<100);await choose('eraser (E)');await page.getByLabel('Stroke width',{exact:true}).fill('100');await drag(.4,.15,.4,.5);assert((await pixel(.4,.3))[0]>240,'Bitmap eraser clears pixels');await page.screenshot({path:'test-results/drawing-tools-bitmap.png'});
  out=await save();await load(out);assert.deepEqual((await save()).scenes[0].panels[0].layers,out.scenes[0].panels[0].layers);assert.deepEqual(errors,[]);console.log('PASS drawing tools: vector brush/pencil, point editors, shapes, text, picker, selection/transforms, scope/locks, Space pan, rotate view, vector bucket, bitmap paint/select/erase and save/reopen.');
