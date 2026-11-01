@@ -78,6 +78,17 @@ try{
  await page.locator('.camera-key-list button').first().click();assert.equal(await pixels(drawing),raw,'Camera editing leaves drawing pixels unchanged');
  const center=page.locator('.stage-paper .camera-overlay circle[data-frame="0"]');const box=await center.boundingBox();assert(box);await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2+30,box.y+box.height/2+10,{steps:8});await page.mouse.up();await wait();output=await save();assert(output.scenes[0].camera[0].x>960,'Dragging the green camera center pans the IN key');
  await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();assert.equal(await page.getByLabel('Camera X',{exact:true}).inputValue(),'960');await page.getByTitle('Redo (⌘/Ctrl Shift Z)',{exact:true}).click();await wait();
+ // RDR-03: dragging a camera endpoint must not seek away from the selected panel.
+ // The former cameraDrag handler sought to the endpoint frame and could select a
+ // different panel, remounting the overlay and causing the observed snapback.
+ const selectedBeforeDrag=await page.locator('.timeline-clip.selected').count();
+ const frameBeforeDrag=await page.getByLabel('Scene camera time').inputValue();
+ const rdrHandle=page.locator('.stage-paper .camera-overlay circle[data-frame="0"]');
+ const rdrBox=await rdrHandle.boundingBox();assert(rdrBox);
+ await page.mouse.move(rdrBox.x+rdrBox.width/2,rdrBox.y+rdrBox.height/2);
+ await page.mouse.down();await page.mouse.move(rdrBox.x+rdrBox.width/2+12,rdrBox.y+rdrBox.height/2+7,{steps:5});await page.mouse.up();await wait();
+ assert.equal(await page.getByLabel('Scene camera time').inputValue(),frameBeforeDrag,'RDR-03 dragging endpoint preserves playhead');
+ assert.equal(await page.locator('.timeline-clip.selected').count(),selectedBeforeDrag,'RDR-03 drag does not disrupt panel selection');
  // RFU3: repeated release cycles must commit the latest pose and survive panel switching and reopening.
  const dragCenter=async(dx,dy)=>{const h=await center.boundingBox();assert(h,'Camera IN handle remains visible');await page.mouse.move(h.x+h.width/2,h.y+h.height/2);await page.mouse.down();await page.mouse.move(h.x+h.width/2+dx,h.y+h.height/2+dy,{steps:10});await page.mouse.up();await wait();};
  const initialDragX=(await save()).scenes[0].camera.find(k=>k.frame===0).x;
