@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent } from 'react';
 import { cameraAt, type Panel, type Project, type Scene } from './model';
 import { cameraCorners, localPanelStart, type CameraPose } from './camera';
@@ -7,14 +7,33 @@ export default function CameraOverlay({ scene, panel, project, frame, drawingMar
   const showBothEndpoints = editable && scene.camera.length > 0;
   const [live, setLive] = useState<{ frame: number; pose: CameraPose } | null>(null);
   const liveRef = useRef<{ frame: number; pose: CameraPose } | null>(null);
+  const pendingCommit = useRef<{ frame: number; pose: CameraPose } | null>(null);
+  useEffect(() => {
+    const pending = pendingCommit.current;
+    if (!pending) return;
+    const persisted = scene.camera.find(key => key.frame === pending.frame);
+    if (persisted && (['x','y','zoom','rotation'] as const).every(key => Math.abs(persisted[key]-pending.pose[key]) < 1e-7)) {
+      pendingCommit.current = null;
+      liveRef.current = null;
+      setLive(null);
+    }
+  }, [scene.camera]);
   const [selectedEndpoint, setSelectedEndpoint] = useState<'in' | 'out'>('in');
   const drag = useRef<{ frame: number; pose: CameraPose; x: number; y: number; mode: 'pan' | 'zoom'; radius: number } | null>(null);
   const inPose = live?.frame === start ? live.pose : cameraAt(scene, start, project), outPose = live?.frame === end ? live.pose : cameraAt(scene, end, project);
   const pos = (e: PointerEvent<SVGSVGElement>) => { const matrix=e.currentTarget.getScreenCTM();const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix?.inverse());return {x:p.x,y:p.y}; };
   const begin = (e: PointerEvent<SVGSVGElement>) => { if (!editable || e.button !== 0) return; const target = e.target as SVGElement, f = Number(target.dataset.frame); if (!Number.isFinite(f) || !target.hasAttribute('data-frame')) return; e.stopPropagation(); e.preventDefault(); e.currentTarget.focus(); const p = pos(e), pose = cameraAt(scene, f, project); drag.current = { frame: f, pose, ...p, mode: target.dataset.mode === 'zoom' ? 'zoom' : 'pan', radius: Math.hypot(p.x - pose.x, p.y - pose.y) }; e.currentTarget.setPointerCapture(e.pointerId); };
   const move = (e: PointerEvent<SVGSVGElement>) => { const d = drag.current; if (!d) return; const p = pos(e); const pose = d.mode === 'pan' ? { ...d.pose, x: Math.max(-8192, Math.min(16384, d.pose.x + p.x - d.x)), y: Math.max(-8192, Math.min(16384, d.pose.y + p.y - d.y)) } : { ...d.pose, zoom: Math.max(.01, Math.min(100, d.pose.zoom * d.radius / Math.max(1, Math.hypot(p.x - d.pose.x, p.y - d.pose.y)))) }; liveRef.current = { frame: d.frame, pose }; setLive(liveRef.current); };
-  const cancel = () => { drag.current = null; liveRef.current = null; setLive(null); };
-  const finish = () => { if (drag.current && liveRef.current) onChange?.(liveRef.current.frame, liveRef.current.pose); cancel(); };
+  const cancel = () => { drag.current = null; pendingCommit.current = null; liveRef.current = null; setLive(null); };
+  const finish = () => {
+    if (!drag.current) return;
+    drag.current = null;
+    if (!liveRef.current) return;
+    const committed = liveRef.current;
+    pendingCommit.current = committed;
+    // Keep the released pose visible until the parent publishes the committed keyframe.
+    onChange?.(committed.frame, committed.pose);
+  };
   const a = cameraCorners(inPose, project), b = cameraCorners(outPose, project), handle = Math.max(project.width, project.height) / 100;
   const stationary = (['x','y','zoom','rotation'] as const).every(k=>Math.abs(inPose[k]-outPose[k])<1e-7);
   const intermediate = scene.camera.filter(k=>k.frame>start&&k.frame<end);
@@ -34,6 +53,6 @@ export default function CameraOverlay({ scene, panel, project, frame, drawingMar
       <text x={-project.width*drawingMargin+handle*13} y={-project.height*drawingMargin+handle*3} fontSize={handle*1.7} fill="#ef4d50" pointerEvents="none">● OUT</text>
     </g>}
     {intermediate.map(k=>{const pose=live?.frame===k.frame?live.pose:cameraAt(scene,k.frame,project);return <g key={k.id} className="camera-intermediate"><polygon data-frame={k.frame} data-mode="pan" points={cameraCorners(pose,project).map(p=>p.join(',')).join(' ')} fill="none" stroke="#3478df" strokeWidth={handle/7} strokeDasharray={`${handle*.8} ${handle*.5}`}/>{cameraCorners(pose,project).map(([x,y],i)=><rect key={i} data-frame={k.frame} data-mode="zoom" x={x-handle/2} y={y-handle/2} width={handle} height={handle} fill="#3478df" className="camera-handle"/>)}<circle data-frame={k.frame} data-mode="pan" cx={pose.x} cy={pose.y} r={handle/2} fill="#3478df" className="camera-handle"/></g>;})}
-    {frame !== undefined && <polygon className="camera-current" points={cameraCorners(cameraAt(scene, frame, project), project).map(p=>p.join(',')).join(' ')} fill="none" stroke="#ff922c" strokeWidth={handle / 8} strokeDasharray={`${handle} ${handle / 2}`}/>}
+    {frame !== undefined && <polygon className="camera-current" points={cameraCorners(live?.frame===frame?live.pose:cameraAt(scene, frame, project), project).map(p=>p.join(',')).join(' ')} fill="none" stroke="#ff922c" strokeWidth={handle / 8} strokeDasharray={`${handle} ${handle / 2}`}/>}
   </svg>;
 }
