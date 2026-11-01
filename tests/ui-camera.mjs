@@ -125,6 +125,26 @@ try{
  assert.equal((await save()).scenes[0].camera.find(k=>k.frame===0).x,secondRelease,'RFU3 panel switch retains committed pose');
  const reopened=await save();await page.locator('input[type=file]').first().setInputFiles({name:'rfu3-reopen.issb',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(reopened))});await wait();
  assert.equal((await save()).scenes[0].camera.find(k=>k.frame===0).x,secondRelease,'RFU3 save/reopen retains committed pose');
+ // RDR-03.4D: alternating endpoint selection preserves playhead and key count.
+ const stableFrame=await page.getByLabel('Scene camera time').inputValue();
+ const keysBeforeSwitch=(await save()).scenes[0].camera.map(k=>k.frame);
+ for(const endpoint of ['OUT','IN','OUT','IN']){
+  await page.getByLabel(`Select camera ${endpoint} endpoint`).dispatchEvent('pointerdown',{bubbles:true});
+  await wait();
+  assert.equal(await page.getByLabel('Scene camera time').inputValue(),stableFrame,'Endpoint switching preserves playhead');
+ }
+ assert.deepEqual((await save()).scenes[0].camera.map(k=>k.frame),keysBeforeSwitch,'Endpoint switching does not create keys');
+ // A rapid drag/release must persist its last position and remain undoable.
+ const fastBefore=(await save()).scenes[0].camera.find(k=>k.frame===0).x;
+ const fastHandle=await center.boundingBox();assert(fastHandle);
+ const fx=fastHandle.x+fastHandle.width/2,fy=fastHandle.y+fastHandle.height/2;
+ await page.mouse.move(fx,fy);await page.mouse.down();
+ await page.mouse.move(fx+55,fy+24,{steps:2});await page.mouse.up();await wait();
+ const fastAfter=(await save()).scenes[0].camera.find(k=>k.frame===0).x;
+ assert(fastAfter>fastBefore,'Rapid pointer release persists camera pan');
+ await assertCameraVisual('rapid release');
+ await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();
+ assert.equal((await save()).scenes[0].camera.find(k=>k.frame===0).x,fastBefore,'Undo restores rapid camera drag');
  const corner=page.locator('.stage-paper .camera-overlay rect[data-frame="0"]').first(),cornerBox=await corner.boundingBox();assert(cornerBox);
  const zoomBefore=Number(await page.getByLabel('Camera zoom',{exact:true}).inputValue());await page.mouse.move(cornerBox.x+cornerBox.width/2,cornerBox.y+cornerBox.height/2);await page.mouse.down();await page.mouse.move(cornerBox.x+cornerBox.width/2+35,cornerBox.y+cornerBox.height/2+20,{steps:8});await page.mouse.up();await wait();assert(Number(await page.getByLabel('Camera zoom',{exact:true}).inputValue())>zoomBefore,'Dragging a corner inward increases camera zoom');await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();
  const beforeCancel=await save(),cancelBox=await center.boundingBox();await page.mouse.move(cancelBox.x+cancelBox.width/2,cancelBox.y+cancelBox.height/2);await page.mouse.down();await page.mouse.move(cancelBox.x+cancelBox.width/2+20,cancelBox.y+cancelBox.height/2+10,{steps:5});await page.keyboard.press('Escape');await page.mouse.up();await wait();assert.deepEqual((await save()).scenes[0].camera,beforeCancel.scenes[0].camera,'Escape cancels a camera drag');
