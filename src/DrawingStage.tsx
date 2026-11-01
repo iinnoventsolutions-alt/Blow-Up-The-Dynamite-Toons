@@ -130,14 +130,18 @@ export default function DrawingStage({onion,panel,project,layerId,tool,color,siz
     bucketCanvas.current=scratch;
     return scratch;
    })();
-   const width=Math.min(project.width,Math.round(2048*project.width/Math.max(project.width,project.height)));
+   // Include off-camera artwork in the fill reference, matching the visible drawing surface.
+   const extent=1+2*drawingMargin;
+   const width=Math.min(Math.round(project.width*extent),Math.round(2048*project.width/Math.max(project.width,project.height)));
    const renderAt=performance.now();
-   drawPanel(c,ref,project,{width,transparent:true});
+   drawPanel(c,ref,project,{width,transparent:true,drawingMargin});
    measured('render');
    const pixels=c.getContext('2d')!.getImageData(0,0,c.width,c.height);
    measured('pixel readback');
    if(diagnosticsEnabled())recordPerformance('Bucket render and pixel readback',performance.now()-renderAt);
-   const result=await calculateFill(pixels.data,c.width,c.height,p[0]/project.width*c.width,p[1]/project.height*c.height,options.tolerance,options.gap,project.width/c.width,project.height/c.height);
+   const scaleX=project.width*extent/c.width,scaleY=project.height*extent/c.height;
+   const result=await calculateFill(pixels.data,c.width,c.height,(p[0]+project.width*drawingMargin)/scaleX,(p[1]+project.height*drawingMargin)/scaleY,options.tolerance,options.gap,scaleX,scaleY);
+   for(const contour of result.contours)for(const vertex of contour){vertex[0]-=project.width*drawingMargin;vertex[1]-=project.height*drawingMargin;}
    recordPerformance('Bucket flood mask',result.maskMs);
    recordPerformance('Bucket trace contours',result.contourMs);
    recordPerformance(result.worker?'Bucket background worker elapsed':'Bucket calculation elapsed',result.worker?result.waitMs:result.maskMs+result.contourMs);
