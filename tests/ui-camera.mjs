@@ -159,6 +159,20 @@ try{
  await assertCameraVisual('off-canvas release');
  await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();
  assert.equal((await save()).scenes[0].camera.find(k=>k.frame===0).x,offBefore,'Undo restores off-canvas pan');
+ // RDR-03.4D: zooming the drawing workspace must not change camera-space drag scaling.
+ await page.getByTitle('Zoom in',{exact:true}).click();await wait();
+ assert((await page.locator('.view-controls').innerText()).includes('125%'),'Drawing workspace zoom increased');
+ const zoomedBefore=(await save()).scenes[0].camera.find(k=>k.frame===0).x;
+ const zoomedHandle=await center.boundingBox();assert(zoomedHandle);
+ const zoomedStartX=zoomedHandle.x+zoomedHandle.width/2,zoomedStartY=zoomedHandle.y+zoomedHandle.height/2;
+ await page.mouse.move(zoomedStartX,zoomedStartY);await page.mouse.down();
+ await page.mouse.move(zoomedStartX+25,zoomedStartY+8,{steps:5});await page.mouse.up();await wait();
+ const zoomedAfter=(await save()).scenes[0].camera.find(k=>k.frame===0).x;
+ assert(zoomedAfter>zoomedBefore,'Camera pan works in zoomed drawing workspace');
+ await assertCameraVisual('zoomed workspace release');
+ await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();
+ assert.equal((await save()).scenes[0].camera.find(k=>k.frame===0).x,zoomedBefore,'Zoomed drag is undoable');
+ await page.getByTitle('Zoom out',{exact:true}).click();await wait();
  const corner=page.locator('.stage-paper .camera-overlay rect[data-frame="0"]').first(),cornerBox=await corner.boundingBox();assert(cornerBox);
  const zoomBefore=Number(await page.getByLabel('Camera zoom',{exact:true}).inputValue());await page.mouse.move(cornerBox.x+cornerBox.width/2,cornerBox.y+cornerBox.height/2);await page.mouse.down();await page.mouse.move(cornerBox.x+cornerBox.width/2+35,cornerBox.y+cornerBox.height/2+20,{steps:8});await page.mouse.up();await wait();assert(Number(await page.getByLabel('Camera zoom',{exact:true}).inputValue())>zoomBefore,'Dragging a corner inward increases camera zoom');await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();
  const beforeCancel=await save(),cancelBox=await center.boundingBox();await page.mouse.move(cancelBox.x+cancelBox.width/2,cancelBox.y+cancelBox.height/2);await page.mouse.down();await page.mouse.move(cancelBox.x+cancelBox.width/2+20,cancelBox.y+cancelBox.height/2+10,{steps:5});await page.keyboard.press('Escape');await page.mouse.up();await wait();assert.deepEqual((await save()).scenes[0].camera,beforeCancel.scenes[0].camera,'Escape cancels a camera drag');
