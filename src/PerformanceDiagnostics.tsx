@@ -1,5 +1,8 @@
 import {useEffect,useState} from 'react';
 import {clearDiagnostics,diagnosticsSamples,subscribeDiagnostics,setDiagnosticsEnabled,installPerformanceObserver,exportDiagnosticsJson} from './performance-diagnostics';
+const cameraTraceKey='iinnovent.rdr03.cameraTrace';
+const readCameraTrace=():unknown[]=>{try{const value=JSON.parse(localStorage.getItem(cameraTraceKey)||'[]');return Array.isArray(value)?value:[];}catch{return [];}};
+const downloadJson=(content:string,name:string)=>{const blob=new Blob([content],{type:'application/json'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=name;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 const suffix=(label:string)=>label==='Stroke: accepted movement samples'?' samples':'ms';
 export default function PerformanceDiagnostics({close}:{close:()=>void}){
  const [samples,setSamples]=useState(diagnosticsSamples);
@@ -17,6 +20,7 @@ export default function PerformanceDiagnostics({close}:{close:()=>void}){
    }}>Export JSON</button>
    <button onClick={clearDiagnostics}>Clear</button>
   </div>
+  <div style={{marginTop:12,paddingTop:10,borderTop:'1px solid #405466'}}><strong>RDR-03.6 · Camera interaction diagnostics</strong><p>Clear before testing. Perform quick-release failures and one delayed-release success, then export the trace. Events are stored locally and may contain project/panel identifiers and pointer coordinates.</p><div style={{display:'flex',gap:8,flexWrap:'wrap'}}><button onClick={()=>{try{localStorage.removeItem(cameraTraceKey);}catch{}}}>Clear Camera Diagnostics</button><button onClick={()=>downloadJson(JSON.stringify({kind:'rdr-03.6-camera-trace',exportedAt:new Date().toISOString(),events:readCameraTrace()},null,2),'rdr-03.6-camera-diagnostics-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json')}>Export Camera Diagnostics</button></div></div>
   <div aria-live="off" style={{marginTop:8}}>{samples.length?samples.slice(0,35).map((s,i)=><div key={i} style={{borderTop:'1px solid #405466',padding:'4px 0'}}><span style={{opacity:.7}}>{s.at}</span> · <strong>{s.ms} {suffix(s.label).trim()}</strong> · {s.label}</div>):<p>Waiting for interactions…</p>}</div>
  </aside>;
 }
