@@ -89,6 +89,17 @@ try{
  await page.mouse.down();await page.mouse.move(rdrBox.x+rdrBox.width/2+12,rdrBox.y+rdrBox.height/2+7,{steps:5});await page.mouse.up();await wait();
  assert.equal(await page.getByLabel('Scene camera time').inputValue(),frameBeforeDrag,'RDR-03 dragging endpoint preserves playhead');
  assert.equal(await page.locator('.timeline-clip.selected').count(),selectedBeforeDrag,'RDR-03 drag does not disrupt panel selection');
+ // RDR-03.3: selected endpoint owns overlapping pointer targets.
+ await page.getByLabel('Select camera OUT endpoint').dispatchEvent('pointerdown',{bubbles:true});
+ await wait();
+ const outGroup=page.locator('.stage-paper .camera-overlay [data-camera-endpoint="out"]');
+ const inGroup=page.locator('.stage-paper .camera-overlay [data-camera-endpoint="in"]');
+ assert.equal(await outGroup.getAttribute('pointer-events'),null,'RDR-03.3 selected OUT remains interactive');
+ assert.equal(await inGroup.getAttribute('pointer-events'),'none','RDR-03.3 unselected IN cannot intercept OUT drag');
+ await page.getByLabel('Select camera IN endpoint').dispatchEvent('pointerdown',{bubbles:true});
+ await wait();
+ assert.equal(await outGroup.getAttribute('pointer-events'),'none','RDR-03.3 unselected OUT cannot intercept IN drag');
+ assert.equal(await inGroup.getAttribute('pointer-events'),null,'RDR-03.3 selected IN remains interactive');
  // RFU3: repeated release cycles must commit the latest pose and survive panel switching and reopening.
  const dragCenter=async(dx,dy)=>{const h=await center.boundingBox();assert(h,'Camera IN handle remains visible');await page.mouse.move(h.x+h.width/2,h.y+h.height/2);await page.mouse.down();await page.mouse.move(h.x+h.width/2+dx,h.y+h.height/2+dy,{steps:10});await page.mouse.up();await wait();};
  const initialDragX=(await save()).scenes[0].camera.find(k=>k.frame===0).x;
