@@ -3,15 +3,6 @@ import type { PointerEvent } from 'react';
 import { cameraAt, type Panel, type Project, type Scene } from './model';
 import { cameraCorners, localPanelStart, type CameraPose } from './camera';
 export default function CameraOverlay({ scene, panel, project, frame, drawingMargin = 0, editable = false, selectedEndpoint = 'in', onSelectEndpoint, onChange }: { scene: Scene; panel: Panel; project: Project; frame?: number; drawingMargin?: number; editable?: boolean; selectedEndpoint?: 'in'|'out'; onSelectEndpoint?: (endpoint:'in'|'out'|'intermediate',frame:number)=>void; onChange?: (frame: number, pose: CameraPose) => void }) {
-  // RDR-03.6: bounded local trace for comparing fast and delayed releases on macOS.
-  const trace = (event: string, details: Record<string, unknown> = {}) => {
-    try {
-      const key = 'iinnovent.rdr03.cameraTrace';
-      const previous = JSON.parse(localStorage.getItem(key) || '[]') as unknown[];
-      previous.push({ event, time: performance.now(), wallTime: Date.now(), panelId: panel.id, ...details });
-      localStorage.setItem(key, JSON.stringify(previous.slice(-240)));
-    } catch { /* Diagnostics must never interfere with camera editing. */ }
-  };
   const start = localPanelStart(scene, panel), end = start + panel.duration - 1;
   const showBothEndpoints = editable && scene.camera.length > 0;
   const [live, setLive] = useState<{ frame: number; pose: CameraPose } | null>(null);
@@ -22,7 +13,6 @@ export default function CameraOverlay({ scene, panel, project, frame, drawingMar
     if (!pending) return;
     const persisted = scene.camera.find(key => key.frame === pending.frame);
     if (persisted && (['x','y','zoom','rotation'] as const).every(key => Math.abs(persisted[key]-pending.pose[key]) < 1e-7)) {
-      trace('persisted-ack', { frame: pending.frame, x: pending.pose.x, y: pending.pose.y });
       pendingCommit.current = null;
       liveRef.current = null;
       setLive(null);
@@ -31,22 +21,20 @@ export default function CameraOverlay({ scene, panel, project, frame, drawingMar
   const drag = useRef<{ frame: number; pose: CameraPose; x: number; y: number; mode: 'pan' | 'zoom'; radius: number; pointerId: number } | null>(null);
   const inPose = live?.frame === start ? live.pose : cameraAt(scene, start, project), outPose = live?.frame === end ? live.pose : cameraAt(scene, end, project);
   const pos = (e: PointerEvent<SVGSVGElement>) => { const matrix=e.currentTarget.getScreenCTM();if (!matrix) return null;const determinant=matrix.a*matrix.d-matrix.b*matrix.c;if (!Number.isFinite(determinant)||Math.abs(determinant)<1e-12) return null;const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix.inverse());return Number.isFinite(p.x)&&Number.isFinite(p.y)?{x:p.x,y:p.y}:null; };
-  const begin = (e: PointerEvent<SVGSVGElement>) => { if (!editable || e.button !== 0) return; const target = e.target as SVGElement; const endpoint = target.closest('[data-camera-endpoint]')?.getAttribute('data-camera-endpoint'); const f = endpoint === 'in' ? start : endpoint === 'out' ? end : Number(target.dataset.frame); if (!target.hasAttribute('data-frame') || !Number.isFinite(f)) return; e.stopPropagation(); e.preventDefault(); e.currentTarget.focus(); if (endpoint === 'in' || endpoint === 'out') onSelectEndpoint?.(endpoint,f); else onSelectEndpoint?.('intermediate',f); const p = pos(e); if (!p) return; const pose = cameraAt(scene, f, project); trace('pointerdown', { frame:f, pointerId:e.pointerId, x:pose.x, y:pose.y, clientX:e.clientX, clientY:e.clientY }); drag.current = { frame: f, pose, ...p, pointerId:e.pointerId, mode: target.dataset.mode === 'zoom' ? 'zoom' : 'pan', radius: Math.hypot(p.x - pose.x, p.y - pose.y) }; e.currentTarget.setPointerCapture(e.pointerId); };
-  const move = (e: PointerEvent<SVGSVGElement>) => { const d = drag.current; if (!d || d.pointerId !== e.pointerId) return; const p = pos(e); if (!p) return; const pose = d.mode === 'pan' ? { ...d.pose, x: Math.max(-8192, Math.min(16384, d.pose.x + p.x - d.x)), y: Math.max(-8192, Math.min(16384, d.pose.y + p.y - d.y)) } : { ...d.pose, zoom: Math.max(.01, Math.min(100, d.pose.zoom * d.radius / Math.max(1, Math.hypot(p.x - d.pose.x, p.y - d.pose.y)))) }; liveRef.current = { frame: d.frame, pose }; trace('pointermove', { frame:d.frame, pointerId:e.pointerId, x:pose.x, y:pose.y, clientX:e.clientX, clientY:e.clientY }); setLive(liveRef.current); };
-  const cancel = (e?: PointerEvent<SVGSVGElement>) => { const active = drag.current; if (!active || (e && active.pointerId !== e.pointerId)) return; trace('cancel-active', { pointerId:active.pointerId, reason:e?.type }); drag.current = null; pendingCommit.current = null; liveRef.current = null; setLive(null); };
-  // RDR-03.6B: macOS can drop pointer capture before dispatching pointerup.
+  const begin = (e: PointerEvent<SVGSVGElement>) => { if (!editable || e.button !== 0) return; const target = e.target as SVGElement; const endpoint = target.closest('[data-camera-endpoint]')?.getAttribute('data-camera-endpoint'); const f = endpoint === 'in' ? start : endpoint === 'out' ? end : Number(target.dataset.frame); if (!target.hasAttribute('data-frame') || !Number.isFinite(f)) return; e.stopPropagation(); e.preventDefault(); e.currentTarget.focus(); if (endpoint === 'in' || endpoint === 'out') onSelectEndpoint?.(endpoint,f); else onSelectEndpoint?.('intermediate',f); const p = pos(e); if (!p) return; const pose = cameraAt(scene, f, project); drag.current = { frame: f, pose, ...p, pointerId:e.pointerId, mode: target.dataset.mode === 'zoom' ? 'zoom' : 'pan', radius: Math.hypot(p.x - pose.x, p.y - pose.y) }; e.currentTarget.setPointerCapture(e.pointerId); };
+  const move = (e: PointerEvent<SVGSVGElement>) => { const d = drag.current; if (!d || d.pointerId !== e.pointerId) return; const p = pos(e); if (!p) return; const pose = d.mode === 'pan' ? { ...d.pose, x: Math.max(-8192, Math.min(16384, d.pose.x + p.x - d.x)), y: Math.max(-8192, Math.min(16384, d.pose.y + p.y - d.y)) } : { ...d.pose, zoom: Math.max(.01, Math.min(100, d.pose.zoom * d.radius / Math.max(1, Math.hypot(p.x - d.pose.x, p.y - d.pose.y)))) }; liveRef.current = { frame: d.frame, pose }; setLive(liveRef.current); };
+  const cancel = (e?: PointerEvent<SVGSVGElement>) => { const active = drag.current; if (!active || (e && active.pointerId !== e.pointerId)) return; drag.current = null; pendingCommit.current = null; liveRef.current = null; setLive(null); };
+  // macOS can drop pointer capture before dispatching pointerup.
   // Preserve an already moved pose on unexpected capture loss; never invent a
   // camera edit when capture was lost without any valid movement.
   const recoverCaptureLoss = (e: PointerEvent<SVGSVGElement>) => {
     const active = drag.current;
-    trace('lostpointercapture', { pointerId:e.pointerId, active:active?.pointerId ?? null, pendingFrame:pendingCommit.current?.frame ?? null });
     if (!active || active.pointerId !== e.pointerId) return;
     const last = liveRef.current;
     const changed = last?.frame === active.frame && (['x','y','zoom','rotation'] as const).some(k => Math.abs(last.pose[k] - active.pose[k]) > 1e-7);
     if (!changed || !last) { cancel(e); return; }
     drag.current = null;
     pendingCommit.current = last;
-    trace('captureloss-commit', { frame:last.frame, pointerId:e.pointerId, x:last.pose.x, y:last.pose.y });
     onChange?.(last.frame, last.pose);
   };
   const finish = (e: PointerEvent<SVGSVGElement>) => {
@@ -56,7 +44,6 @@ export default function CameraOverlay({ scene, panel, project, frame, drawingMar
     if (!liveRef.current) return;
     const committed = liveRef.current;
     pendingCommit.current = committed;
-    trace('pointerup-commit', { frame:committed.frame, pointerId:e.pointerId, x:committed.pose.x, y:committed.pose.y, clientX:e.clientX, clientY:e.clientY });
     // Keep the released pose visible until the parent publishes the committed keyframe.
     onChange?.(committed.frame, committed.pose);
   };
