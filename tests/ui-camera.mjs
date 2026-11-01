@@ -175,6 +175,22 @@ try{
  assert(lossIndex>upIndex,'Pointer capture is lost after successful pointerup');
  const cancelled=eventTrace.slice(downIndex,upIndex+1).some(e=>e.type==='pointercancel'&&e.pointerId===releasedId);
  assert(!cancelled,'Successful rapid drag is not pointercancelled');
+ // A late capture-loss notification must not reset the already committed camera pose.
+ const releasePose=await page.evaluate(()=>{
+  const dot=document.querySelector('.camera-overlay g[data-camera-endpoint="in"] circle[data-mode="pan"]');
+  return dot?{x:Number(dot.getAttribute('cx')),y:Number(dot.getAttribute('cy'))}:null;
+ });
+ assert(releasePose&&Number.isFinite(releasePose.x),'Camera IN center is visible after capture loss');
+ await page.evaluate(()=>{
+  const svg=document.querySelector('.stage-paper .camera-overlay');
+  svg.dispatchEvent(new PointerEvent('lostpointercapture',{bubbles:true,pointerId:77777}));
+ });
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ const retainedPose=await page.evaluate(()=>{
+  const dot=document.querySelector('.camera-overlay g[data-camera-endpoint="in"] circle[data-mode="pan"]');
+  return dot?{x:Number(dot.getAttribute('cx')),y:Number(dot.getAttribute('cy'))}:null;
+ });
+ assert.deepEqual(retainedPose,releasePose,'Late unrelated capture loss cannot reset a committed camera pose');
  await assertCameraVisual('single-step release after pointer capture loss');
  await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();
  assert.equal((await save()).scenes[0].camera.find(k=>k.frame===0).x,raceBefore,'Undo restores single-step release');
