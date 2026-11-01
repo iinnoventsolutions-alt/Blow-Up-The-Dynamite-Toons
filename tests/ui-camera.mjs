@@ -145,6 +145,17 @@ try{
  await assertCameraVisual('rapid release');
  await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();
  assert.equal((await save()).scenes[0].camera.find(k=>k.frame===0).x,fastBefore,'Undo restores rapid camera drag');
+ // RDR-03.5 diagnostic: capture actual pointer event order and visible handle position.
+ await page.evaluate(() => {
+  window.__rdrCameraEvents=[];
+  const el=document.querySelector('.stage-paper .camera-overlay');
+  for(const type of ['pointerdown','pointermove','pointerup','pointercancel','lostpointercapture']){
+   el.addEventListener(type,e=>{
+    const dot=el.querySelector('circle[data-frame="0"]');
+    window.__rdrCameraEvents.push({type,pointerId:e.pointerId,clientX:e.clientX,clientY:e.clientY,cx:dot?Number(dot.getAttribute('cx')):null,cy:dot?Number(dot.getAttribute('cy')):null});
+   },{capture:true});
+  }
+ });
  // RDR-03.5: a release followed immediately by lostpointercapture must retain the last live pose.
  // Simulate the event ordering observed during rapid mouse releases, before a parent render.
  const raceBefore=(await save()).scenes[0].camera.find(k=>k.frame===0).x;
@@ -155,6 +166,15 @@ try{
  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
  const raceAfter=(await save()).scenes[0].camera.find(k=>k.frame===0).x;
  assert(raceAfter>raceBefore,'Rapid single-step release commits camera pose');
+ const eventTrace=await page.evaluate(()=>window.__rdrCameraEvents);
+ const downIndex=eventTrace.findIndex(e=>e.type==='pointerdown');
+ const upIndex=eventTrace.findIndex((e,i)=>i>downIndex&&e.type==='pointerup');
+ assert(downIndex>=0&&upIndex>downIndex,'Rapid drag emits pointerdown and pointerup');
+ const releasedId=eventTrace[downIndex].pointerId;
+ const lossIndex=eventTrace.findIndex((e,i)=>i>upIndex&&e.type==='lostpointercapture'&&e.pointerId===releasedId);
+ assert(lossIndex>upIndex,'Pointer capture is lost after successful pointerup');
+ const cancelled=eventTrace.slice(downIndex,upIndex+1).some(e=>e.type==='pointercancel'&&e.pointerId===releasedId);
+ assert(!cancelled,'Successful rapid drag is not pointercancelled');
  await assertCameraVisual('single-step release after pointer capture loss');
  await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();
  assert.equal((await save()).scenes[0].camera.find(k=>k.frame===0).x,raceBefore,'Undo restores single-step release');
