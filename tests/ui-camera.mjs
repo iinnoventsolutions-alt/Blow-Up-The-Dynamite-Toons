@@ -145,6 +145,20 @@ try{
  await assertCameraVisual('rapid release');
  await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();
  assert.equal((await save()).scenes[0].camera.find(k=>k.frame===0).x,fastBefore,'Undo restores rapid camera drag');
+ // RDR-03.4D: pointer capture permits releasing outside the SVG while preserving the final pan.
+ const offBefore=(await save()).scenes[0].camera.find(k=>k.frame===0).x;
+ const offHandle=await center.boundingBox();assert(offHandle);
+ const offX=offHandle.x+offHandle.width/2,offY=offHandle.y+offHandle.height/2;
+ const stageBounds=await overlay.boundingBox();assert(stageBounds);
+ await page.mouse.move(offX,offY);await page.mouse.down();
+ const offTargetX=stageBounds.x+stageBounds.width+35;
+ await page.mouse.move(offTargetX,offY,{steps:6});await page.mouse.up();await wait();
+ const offAfter=(await save()).scenes[0].camera.find(k=>k.frame===0).x;
+ assert(offAfter>offBefore,'Off-canvas pointer release commits camera position');
+ assert(Number.isFinite(offAfter)&&offAfter<=16384&&offAfter>=-8192,'Off-canvas pan stays within camera bounds');
+ await assertCameraVisual('off-canvas release');
+ await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();
+ assert.equal((await save()).scenes[0].camera.find(k=>k.frame===0).x,offBefore,'Undo restores off-canvas pan');
  const corner=page.locator('.stage-paper .camera-overlay rect[data-frame="0"]').first(),cornerBox=await corner.boundingBox();assert(cornerBox);
  const zoomBefore=Number(await page.getByLabel('Camera zoom',{exact:true}).inputValue());await page.mouse.move(cornerBox.x+cornerBox.width/2,cornerBox.y+cornerBox.height/2);await page.mouse.down();await page.mouse.move(cornerBox.x+cornerBox.width/2+35,cornerBox.y+cornerBox.height/2+20,{steps:8});await page.mouse.up();await wait();assert(Number(await page.getByLabel('Camera zoom',{exact:true}).inputValue())>zoomBefore,'Dragging a corner inward increases camera zoom');await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();
  const beforeCancel=await save(),cancelBox=await center.boundingBox();await page.mouse.move(cancelBox.x+cancelBox.width/2,cancelBox.y+cancelBox.height/2);await page.mouse.down();await page.mouse.move(cancelBox.x+cancelBox.width/2+20,cancelBox.y+cancelBox.height/2+10,{steps:5});await page.keyboard.press('Escape');await page.mouse.up();await wait();assert.deepEqual((await save()).scenes[0].camera,beforeCancel.scenes[0].camera,'Escape cancels a camera drag');
