@@ -42,7 +42,10 @@ try{
  assert.equal(await cameraMask.isChecked(),false,'Camera masking is off by default');
  await cameraMask.check();assert.equal(await page.locator('.camera-outside-mask').count(),1,'Camera mask is visible when enabled');
  await cameraMask.uncheck();assert.equal(await page.locator('.camera-outside-mask').count(),0,'Camera mask can be disabled without changing artwork');
- await page.locator('.camera-key-list button').last().click();await number('Camera zoom',2);await number('Camera X',1250);await number('Camera rotation',12);
+ // RDR-03.4A: explicit keyframe navigation exits endpoint editing so inspector edits do not create a key on the previous panel.
+ await page.locator('.camera-key-list button').last().click();await wait();
+ assert((await page.getByLabel('Active camera editing frame').innerText()).includes('playhead'),'Keyframe navigation clears the endpoint editing target');
+ await number('Camera zoom',2);await number('Camera X',1250);await number('Camera rotation',12);
  await page.getByLabel('Camera interpolation',{exact:true}).selectOption('ease');let output=await save();assert.equal(output.scenes[0].camera[1].zoom,2);assert.equal(output.scenes[0].camera[1].rotation,12);
  await page.locator('.camera-key-list button').first().click();await wait();
  assert.equal(await overlay.locator('circle[data-frame="0"]').count(),1,'First panel moving camera shows IN handle');
