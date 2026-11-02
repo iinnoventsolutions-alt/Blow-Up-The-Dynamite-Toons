@@ -5,12 +5,12 @@ export type Layer = { id: string; name: string; visible: boolean; locked: boolea
 export type StaticCameraPose = { x: number; y: number; zoom: number; rotation: number };
 export type Panel = { id: string; name: string; duration: number; staticCamera?: StaticCameraPose; dialogue: string; action: string; slugging: string; notes: string; layers: Layer[] };
 export type CameraKey = { id: string; frame: number; x: number; y: number; zoom: number; rotation: number; interpolation: 'linear' | 'hold' | 'ease' };
-export type Scene = { id: string; name: string; panels: Panel[]; camera: CameraKey[] };
+export type Scene = { id: string; name: string; panels: Panel[]; camera: CameraKey[]; sequentialCamera?: {version:1;baseline?:StaticCameraPose;panels:Record<string, {mode:'inherit'}|{mode:'static'|'break';pose:StaticCameraPose}|{mode:'animated';keys:Array<{frame:number;x:number;y:number;zoom:number;rotation:number;interpolation:'linear'|'hold'|'ease'}>}>} };
 export type Transition = {id:string;fromId:string;toId:string;type:'dissolve'|'edge-wipe'|'clock-wipe'|'slide';duration:number;direction:'left'|'right'|'up'|'down'};
 export type AudioAsset={id:string;name:string;source:string;duration:number;sampleRate:number;channels:number;peaks:number[]};
 export type AudioClip={id:string;assetId:string;name:string;start:number;offset:number;duration:number;gain:number};
 export type AudioTrack={id:string;name:string;gain:number;mute:boolean;solo:boolean;clips:AudioClip[]};
-export type Project = { format: 'innovent-storyboard'; schemaVersion: 4; id: string; title: string; subtitle: string; width: number; height: number; fps: number; scenes: Scene[]; transitions: Transition[];audioAssets:AudioAsset[];audioTracks:AudioTrack[] };
+export type Project = { format: 'innovent-storyboard'; schemaVersion: 4 | 5; id: string; title: string; subtitle: string; width: number; height: number; fps: number; scenes: Scene[]; transitions: Transition[];audioAssets:AudioAsset[];audioTracks:AudioTrack[] };
 export const uid = () => crypto.randomUUID();
 export const makeLayer = (name = 'Drawing', kind: 'vector' | 'bitmap' = 'vector') : Layer => ({ id: uid(), name, kind, visible: true, locked: false, opacity: 1, strokes: [] });
 export const makePanel = (name = 'Panel 1', fps = 24): Panel => ({ id: uid(), name, duration: fps * 5, dialogue: '', action: '', slugging: '', notes: '', layers: [makeLayer()] });
