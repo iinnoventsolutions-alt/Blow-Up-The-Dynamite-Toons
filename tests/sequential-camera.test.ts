@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {makePanel,makeProject,makeScene} from '../src/model.ts';
-import {assessLegacyCameraMigration,compareLegacyCameraFrames,migrateVisuallyEquivalentLegacyCamera,cameraOffset,defaultCamera,enableSequentialCameraStorage,resolveSequentialCamera,type SequentialCameraScene} from '../src/sequential-camera.ts';
+import {assessLegacyCameraMigration,resolveCompatibleCamera,compareLegacyCameraFrames,migrateVisuallyEquivalentLegacyCamera,cameraOffset,defaultCamera,enableSequentialCameraStorage,resolveSequentialCamera,type SequentialCameraScene} from '../src/sequential-camera.ts';
 test('sequential camera: default scene, inherited panel, independent new scene',()=>{
  const p=makeProject(),s=p.scenes[0];s.panels.push(makePanel('Second'));
  const c:SequentialCameraScene={panels:{}},neutral=defaultCamera(p);
@@ -129,4 +129,39 @@ test('visual-equivalence preflight: hold transition and mismatched candidate are
  const wrong={baseline:{x:900,y:540,zoom:1,rotation:0},panels:{}};
  const result=compareLegacyCameraFrames(p,scene.id,wrong);
  assert.equal(result.equivalent,false);assert.ok(result.firstMismatch);
+});
+
+test('compatibility dispatch: mixed project isolates legacy animated and sequential scenes',()=>{
+ const p=makeProject(),legacy=p.scenes[0],sequential=makeScene('Sequential');p.scenes.push(sequential);
+ legacy.camera.push({id:'legacyA',frame:0,x:960,y:540,zoom:1,rotation:0,interpolation:'linear'});
+ legacy.camera.push({id:'legacyB',frame:legacy.panels[0].duration-1,x:1200,y:600,zoom:2,rotation:20,interpolation:'linear'});
+ p.schemaVersion=5;
+ sequential.sequentialCamera={version:1,baseline:{x:1000,y:500,zoom:1.5,rotation:0},panels:{}};
+ const l=resolveCompatibleCamera(p,legacy.id,legacy.panels[0].id,legacy.panels[0].duration-1);
+ const n=resolveCompatibleCamera(p,sequential.id,sequential.panels[0].id,0);
+ assert.equal(l.engine,'legacy');assert.equal(n.engine,'sequential');
+ assert.equal(l.pose.x,1200);assert.equal(n.pose.x,1000);
+ const reopened=parseProject(serializeProject(p));
+ assert.deepEqual(resolveCompatibleCamera(reopened,legacy.id,legacy.panels[0].id,legacy.panels[0].duration-1),l);
+ assert.deepEqual(resolveCompatibleCamera(reopened,sequential.id,sequential.panels[0].id,0),n);
+});
+test('compatibility dispatch: legacy independent static camera remains scene-local',()=>{
+ const p=makeProject(),scene=p.scenes[0];scene.panels.push(makePanel('Other'));
+ scene.panels[0].staticCamera={x:1400,y:600,zoom:2,rotation:5};
+ const a=resolveCompatibleCamera(p,scene.id,scene.panels[0].id,10);
+ const b=resolveCompatibleCamera(p,scene.id,scene.panels[1].id,10);
+ assert.equal(a.engine,'legacy');assert.equal(a.pose.x,1400);
+ assert.equal(b.pose.x,960);
+ assert.equal(p.schemaVersion,4);
+});
+test('compatibility dispatch: unsafe migration retains legacy playback across panel boundary',()=>{
+ const p=makeProject(),scene=p.scenes[0];scene.panels.push(makePanel('Other'));
+ const boundary=scene.panels[0].duration;
+ scene.camera.push({id:'a',frame:0,x:960,y:540,zoom:1,rotation:0,interpolation:'ease'});
+ scene.camera.push({id:'b',frame:boundary+10,x:1200,y:600,zoom:2,rotation:10,interpolation:'linear'});
+ assert.equal(migrateVisuallyEquivalentLegacyCamera(p,scene.id).safe,false);
+ const left=resolveCompatibleCamera(p,scene.id,scene.panels[0].id,boundary-1);
+ const right=resolveCompatibleCamera(p,scene.id,scene.panels[1].id,0);
+ assert.equal(left.engine,'legacy');assert.equal(right.engine,'legacy');
+ assert.ok(right.pose.x>=left.pose.x);
 });
