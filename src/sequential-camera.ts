@@ -4,10 +4,15 @@ import type { CameraKey, Project, Scene, StaticCameraPose } from './model.ts';
 // Legacy scene.camera and panel.staticCamera are deliberately untouched.
 export type CameraPose = StaticCameraPose;
 export type PanelCameraKey = Pick<CameraKey,'frame'|'x'|'y'|'zoom'|'rotation'|'interpolation'>;
+// Animated key coordinates are deltas from the panel's inherited IN pose.
+// Zoom is multiplicative; rotation and position are additive.
+export type RelativeCameraKey = PanelCameraKey;
+export const cameraOffset=(origin:CameraPose,target:CameraPose):CameraPose=>({x:target.x-origin.x,y:target.y-origin.y,zoom:target.zoom/origin.zoom,rotation:target.rotation-origin.rotation});
+export const applyCameraOffset=(origin:CameraPose,offset:CameraPose):CameraPose=>({x:origin.x+offset.x,y:origin.y+offset.y,zoom:origin.zoom*offset.zoom,rotation:origin.rotation+offset.rotation});
 export type PanelCameraState =
   | {mode:'inherit'}
   | {mode:'static';pose:CameraPose}
-  | {mode:'animated';keys:PanelCameraKey[]}
+  | {mode:'animated';keys:RelativeCameraKey[]}
   | {mode:'break';pose:CameraPose};
 export type SequentialCameraScene = {
   baseline?:CameraPose;
@@ -31,10 +36,9 @@ export function resolveSequentialCamera(scene:Scene,project:Pick<Project,'width'
       at=()=>clone(state.pose);
     }else if(state.mode==='animated'){
       const keys=[...state.keys].sort((a,b)=>a.frame-b.frame);
-      if(keys.some((k,i)=>!Number.isInteger(k.frame)||k.frame<1||k.frame>=panel.duration||!valid(k)||(i>0&&keys[i-1].frame===k.frame)||!['linear','hold','ease'].includes(k.interpolation)))throw new Error('Invalid sequential camera keyframes.');
-      // Frame zero is always the locked, inherited IN. Subsequent keys are absolute
-      // poses for now; the integration phase will define relative-offset editing.
-      const frames=[{frame:0,...start,interpolation:'linear' as const},...keys];
+      if(keys.some((k,i)=>!Number.isInteger(k.frame)||k.frame<1||k.frame>=panel.duration||![k.x,k.y,k.zoom,k.rotation].every(Number.isFinite)||k.zoom<=0||(i>0&&keys[i-1].frame===k.frame)||!['linear','hold','ease'].includes(k.interpolation)))throw new Error('Invalid sequential camera keyframes.');
+      // Frame zero is locked to inherited IN; key poses are relative offsets.
+      const frames=[{frame:0,...start,interpolation:'linear' as const},...keys.map(k=>({...k,...applyCameraOffset(start,k)}))];
       at=(frame:number)=>{
         const f=Math.max(0,Math.min(panel.duration-1,Math.floor(frame)));
         let i=0;while(i+1<frames.length&&frames[i+1].frame<=f)i++;
