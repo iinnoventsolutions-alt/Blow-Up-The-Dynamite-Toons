@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {makePanel,makeProject,makeScene} from '../src/model.ts';
-import {cameraOffset,defaultCamera,resolveSequentialCamera,type SequentialCameraScene} from '../src/sequential-camera.ts';
+import {cameraOffset,defaultCamera,enableSequentialCameraStorage,resolveSequentialCamera,type SequentialCameraScene} from '../src/sequential-camera.ts';
 test('sequential camera: default scene, inherited panel, independent new scene',()=>{
  const p=makeProject(),s=p.scenes[0];s.panels.push(makePanel('Second'));
  const c:SequentialCameraScene={panels:{}},neutral=defaultCamera(p);
@@ -51,4 +51,30 @@ test('sequential camera: reordering preserves relative animation and recomputes 
  assert.deepEqual(resolveSequentialCamera(s,p,config,b.id,0).inPose,neutral);
  assert.deepEqual(resolveSequentialCamera(s,p,config,b.id,b.duration-1).outPose,{x:1060,y:500,zoom:2,rotation:15});
  assert.deepEqual(resolveSequentialCamera(s,p,config,c.id,0).pose,pose);
+});
+
+import {parseProject,serializeProject} from '../src/project-format.js';
+test('schema 5 sequential camera survives save/reopen without altering legacy camera keys',()=>{
+ const original=makeProject(),scene=original.scenes[0];scene.panels.push(makePanel('Second'));
+ const upgraded=enableSequentialCameraStorage(original,scene.id);
+ assert.equal(original.schemaVersion,4);assert.equal(upgraded.schemaVersion,5);
+ const base={x:1000,y:500,zoom:1.2,rotation:5};
+ upgraded.scenes[0].sequentialCamera!.baseline=base;
+ upgraded.scenes[0].sequentialCamera!.panels[scene.panels[0].id]={mode:'animated',keys:[{frame:119,x:50,y:20,zoom:2,rotation:10,interpolation:'ease'}]};
+ const loaded=parseProject(serializeProject(upgraded));
+ assert.deepEqual(loaded,upgraded);
+ assert.deepEqual(resolveSequentialCamera(loaded.scenes[0],loaded,loaded.scenes[0].sequentialCamera!,scene.panels[1].id,0).pose,{x:1050,y:520,zoom:2.4,rotation:15});
+ assert.deepEqual(parseProject(serializeProject(original)),original);
+});
+test('schema 5 sequential camera rejects malformed states and missing panel references',()=>{
+ const original=makeProject(),p=enableSequentialCameraStorage(original,original.scenes[0].id),c=p.scenes[0].sequentialCamera!;
+ c.panels.missing={mode:'inherit'};assert.throws(()=>serializeProject(p),/panel reference/);delete c.panels.missing;
+ c.panels[p.scenes[0].panels[0].id]={mode:'animated',keys:[{frame:0,x:0,y:0,zoom:1,rotation:0,interpolation:'linear'}]};
+ assert.throws(()=>serializeProject(p),/Invalid project number/);
+});
+test('legacy camera motion cannot be silently converted',()=>{
+ const p=makeProject();p.scenes[0].staticCamera;
+ p.scenes[0].panels[0].staticCamera={x:900,y:500,zoom:1,rotation:0};
+ assert.throws(()=>enableSequentialCameraStorage(p,p.scenes[0].id),/visual-preserving conversion/);
+ assert.equal(p.schemaVersion,4);
 });
