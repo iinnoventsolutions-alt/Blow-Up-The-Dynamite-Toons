@@ -116,3 +116,25 @@ export function migrateVisuallyEquivalentLegacyCamera(project:Project,sceneId:st
   // Preserve original legacy keys for fallback and historical fidelity.
   return {safe:true,project:next,framesChecked:check.framesChecked};
 }
+
+/** Scene-local compatibility dispatch. Existing projects continue using the
+ * legacy camera evaluator unless that scene explicitly opts in to sequential. */
+export function resolveCompatibleCamera(project:Project,sceneId:string,panelId:string,localFrame:number){
+ const scene=project.scenes.find(s=>s.id===sceneId);
+ if(!scene)throw new Error('Scene not found.');
+ const panelIndex=scene.panels.findIndex(p=>p.id===panelId);
+ if(panelIndex<0)throw new Error('Panel not found.');
+ const panel=scene.panels[panelIndex];
+ const frame=Math.max(0,Math.min(panel.duration-1,Math.floor(localFrame)));
+ if(scene.sequentialCamera){
+  if(project.schemaVersion!==5)throw new Error('Sequential camera requires schema 5.');
+  const result=resolveSequentialCamera(scene,project,scene.sequentialCamera,panelId,frame);
+  return {...result,engine:'sequential' as const};
+ }
+ const absolute=scene.panels.slice(0,panelIndex).reduce((sum,p)=>sum+p.duration,0)+frame;
+ const legacy=cameraAt(scene,absolute,project);
+ // The preexisting static-camera overlay takes priority only when the scene
+ // has no animation keys; do not change the legacy keyed-scene evaluator.
+ const pose=scene.camera.length===0&&panel.staticCamera?clone(panel.staticCamera):clone(legacy);
+ return {inPose:pose,pose,outPose:pose,mode:'legacy' as const,engine:'legacy' as const};
+}
