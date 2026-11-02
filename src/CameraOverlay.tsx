@@ -4,22 +4,23 @@ import { cameraAt, type Panel, type Project, type Scene } from './model';
 import { cameraCorners, localPanelStart, type CameraPose } from './camera';
 export default function CameraOverlay({ scene, panel, project, frame, drawingMargin = 0, editable = false, selectedEndpoint = 'in', onSelectEndpoint, onChange }: { scene: Scene; panel: Panel; project: Project; frame?: number; drawingMargin?: number; editable?: boolean; selectedEndpoint?: 'in'|'out'; onSelectEndpoint?: (endpoint:'in'|'out'|'intermediate',frame:number)=>void; onChange?: (frame: number, pose: CameraPose) => void }) {
   const start = localPanelStart(scene, panel), end = start + panel.duration - 1;
-  const showBothEndpoints = editable && scene.camera.length > 0;
+  const panelAnimated = scene.camera.some(key => key.frame >= start && key.frame <= end);
+  const showBothEndpoints = editable && panelAnimated;
   const [live, setLive] = useState<{ frame: number; pose: CameraPose } | null>(null);
   const liveRef = useRef<{ frame: number; pose: CameraPose } | null>(null);
   const pendingCommit = useRef<{ frame: number; pose: CameraPose } | null>(null);
   useEffect(() => {
     const pending = pendingCommit.current;
     if (!pending) return;
-    const persisted = scene.camera.length === 0 ? panel.staticCamera : scene.camera.find(key => key.frame === pending.frame);
+    const persisted = !scene.camera.some(key => key.frame >= start && key.frame <= end) ? panel.staticCamera : scene.camera.find(key => key.frame === pending.frame);
     if (persisted && (['x','y','zoom','rotation'] as const).every(key => Math.abs(persisted[key]-pending.pose[key]) < 1e-7)) {
       pendingCommit.current = null;
       liveRef.current = null;
       setLive(null);
     }
-  }, [scene.camera, panel.staticCamera]);
+  }, [scene.camera, panel.staticCamera, start, end]);
   const drag = useRef<{ frame: number; pose: CameraPose; x: number; y: number; mode: 'pan' | 'zoom'; radius: number; pointerId: number } | null>(null);
-  const staticMode = scene.camera.length === 0;
+  const staticMode = !panelAnimated && (scene.camera.length === 0 || !!panel.staticCamera);
   const staticPose = live?.pose ?? panel.staticCamera ?? cameraAt(scene,start,project);
   const inPose = staticMode ? staticPose : live?.frame === start ? live.pose : cameraAt(scene, start, project), outPose = staticMode ? staticPose : live?.frame === end ? live.pose : cameraAt(scene, end, project);
   const pos = (e: PointerEvent<SVGSVGElement>) => { const matrix=e.currentTarget.getScreenCTM();if (!matrix) return null;const determinant=matrix.a*matrix.d-matrix.b*matrix.c;if (!Number.isFinite(determinant)||Math.abs(determinant)<1e-12) return null;const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix.inverse());return Number.isFinite(p.x)&&Number.isFinite(p.y)?{x:p.x,y:p.y}:null; };
