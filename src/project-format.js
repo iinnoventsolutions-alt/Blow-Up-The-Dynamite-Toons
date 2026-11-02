@@ -23,6 +23,11 @@ export function validateProject(value) {
     panels += scene.panels.length; if (panels > 2000) fail('Too many panels for this developer build.');
     for (const panel of scene.panels) {
       if (!record(panel)) fail('Invalid panel.'); id(panel.id); str(panel.name, 200); num(panel.duration, 1, 360000, true);
+      if (panel.staticCamera !== undefined) {
+        if (!record(panel.staticCamera)) fail('Invalid static camera.');
+        num(panel.staticCamera.x, -8192, 16384); num(panel.staticCamera.y, -8192, 16384);
+        num(panel.staticCamera.zoom, 0.01, 100); num(panel.staticCamera.rotation, -36000, 36000);
+      }
       for (const key of ['dialogue', 'action', 'slugging', 'notes']) str(panel[key]);
       arr(panel.layers, 1, 50);
       for (const layer of panel.layers) {
