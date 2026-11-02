@@ -55,3 +55,15 @@ export function resolveSequentialCamera(scene:Scene,project:Pick<Project,'width'
   }
   throw new Error('Panel not found in sequential camera scene.');
 }
+
+// Explicit opt-in only. Never rewrite legacy scene.camera or panel.staticCamera.
+export function enableSequentialCameraStorage(project:Project,sceneId:string):Project {
+  const scene=project.scenes.find(s=>s.id===sceneId);
+  if(!scene)throw new Error('Scene not found.');
+  if(scene.camera.length||scene.panels.some(p=>p.staticCamera))throw new Error('Legacy camera data requires visual-preserving conversion before enabling sequential storage.');
+  const next=structuredClone(project);
+  next.schemaVersion=5;
+  const target=next.scenes.find(s=>s.id===sceneId)!;
+  target.sequentialCamera??={version:1,panels:{}};
+  return next;
+}
