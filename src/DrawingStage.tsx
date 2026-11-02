@@ -11,7 +11,7 @@ import { bounds, textLocalBounds, simplifyStroke, cloneArtwork, contourFromPoint
 import { canDraw, drawPanel, flattenLayer, layerCanvas, panelImagesReady, preloadImages } from './render';
 import { floodMask } from './flood';
 import {calculateFill,warmFillWorker} from './fill-compute';
-import { cameraCorners, type CameraPose } from './camera';
+import { cameraCorners, localPanelStart, type CameraPose } from './camera';
 type Command={seq:number;op:string};
 type Props={onion:OnionSettings;panel:Panel;project:Project;layerId:string;tool:Tool;color:string;size:number;zoom:number;onZoom:(n:number)=>void;guides:boolean;rotation:number;options:ToolOptions;cameraFrame:number;cameraTarget:{panelId:string;endpoint:'in'|'out'|'intermediate';frame:number}|null;onCameraSelect:(endpoint:'in'|'out'|'intermediate',frame:number)=>void;maskOutsideCamera:boolean;command:Command;onCameraChange:(frame:number,pose:CameraPose)=>void;onLayers:(layers:Layer[])=>void;onColor:(color:string)=>void;onSize:(size:number)=>void;onSelection:(selected:Selected[])=>void;onRotation:(n:number)=>void;onOptions:(p:Partial<ToolOptions>)=>void;onError:(message:string)=>void};
 type Gesture={kind:'stroke'|'shape'|'region'|'transform'|'point'|'pan'|'rotate'|'zoom';start:Point;screen:[number,number];originPan:{x:number;y:number};mode?:string;original?:Panel;pointIndex?:number;pathIndex?:number;box?:{x:number;y:number;width:number;height:number};rotation?:number;};
