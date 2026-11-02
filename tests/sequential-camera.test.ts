@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {makePanel,makeProject,makeScene} from '../src/model.ts';
-import {assessLegacyCameraMigration,cameraOffset,defaultCamera,enableSequentialCameraStorage,resolveSequentialCamera,type SequentialCameraScene} from '../src/sequential-camera.ts';
+import {assessLegacyCameraMigration,compareLegacyCameraFrames,migrateVisuallyEquivalentLegacyCamera,cameraOffset,defaultCamera,enableSequentialCameraStorage,resolveSequentialCamera,type SequentialCameraScene} from '../src/sequential-camera.ts';
 test('sequential camera: default scene, inherited panel, independent new scene',()=>{
  const p=makeProject(),s=p.scenes[0];s.panels.push(makePanel('Second'));
  const c:SequentialCameraScene={panels:{}},neutral=defaultCamera(p);
@@ -98,4 +98,35 @@ test('legacy migration: independent static panel cameras require review',()=>{
  const p=makeProject(),scene=p.scenes[0];scene.panels[0].staticCamera={x:1200,y:600,zoom:2,rotation:0};
  const before=serializeProject(p),result=assessLegacyCameraMigration(p,scene.id);
  assert.equal(result.safe,false);assert.match(result.reason!,/static/);assert.equal(serializeProject(p),before);
+});
+
+test('visual-equivalence preflight: constant keyed scene converts frame-exact and survives save',()=>{
+ const p=makeProject(),scene=p.scenes[0];scene.panels.push(makePanel('Second'));
+ const pose={x:1000,y:550,zoom:1.5,rotation:10};
+ scene.camera.push({id:'fixedA',frame:0,...pose,interpolation:'linear'});
+ scene.camera.push({id:'fixedB',frame:scene.panels.reduce((n,x)=>n+x.duration,0)-1,...pose,interpolation:'ease'});
+ const original=serializeProject(p),result=migrateVisuallyEquivalentLegacyCamera(p,scene.id);
+ assert.equal(result.safe,true);assert.equal(result.framesChecked,scene.panels.reduce((n,x)=>n+x.duration,0));
+ assert.equal(serializeProject(p),original);
+ const reopened=parseProject(serializeProject(result.project!));
+ assert.deepEqual(reopened.scenes[0].camera,scene.camera);
+ assert.equal(compareLegacyCameraFrames(reopened,scene.id,reopened.scenes[0].sequentialCamera!).equivalent,true);
+});
+test('visual-equivalence preflight: moving linear and ease keys are not silently migrated',()=>{
+ for(const interpolation of ['linear','ease'] as const){
+  const p=makeProject(),scene=p.scenes[0];scene.panels.push(makePanel('Second'));
+  scene.camera.push({id:'from',frame:0,x:960,y:540,zoom:1,rotation:0,interpolation});
+  scene.camera.push({id:'to',frame:scene.panels.reduce((n,x)=>n+x.duration,0)-1,x:1100,y:600,zoom:2,rotation:20,interpolation:'linear'});
+  const before=serializeProject(p),result=migrateVisuallyEquivalentLegacyCamera(p,scene.id);
+  assert.equal(result.safe,false);assert.equal(serializeProject(p),before);
+ }
+});
+test('visual-equivalence preflight: hold transition and mismatched candidate are rejected',()=>{
+ const p=makeProject(),scene=p.scenes[0];scene.panels.push(makePanel('Second'));
+ scene.camera.push({id:'holdA',frame:0,x:960,y:540,zoom:1,rotation:0,interpolation:'hold'});
+ scene.camera.push({id:'holdB',frame:scene.panels[0].duration,x:1200,y:540,zoom:1,rotation:0,interpolation:'linear'});
+ assert.equal(migrateVisuallyEquivalentLegacyCamera(p,scene.id).safe,false);
+ const wrong={baseline:{x:900,y:540,zoom:1,rotation:0},panels:{}};
+ const result=compareLegacyCameraFrames(p,scene.id,wrong);
+ assert.equal(result.equivalent,false);assert.ok(result.firstMismatch);
 });
