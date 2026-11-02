@@ -91,3 +91,22 @@ test('A3: three-panel camera integration preserves neighboring motion, interpola
  assert.equal(cameraAt(s,20,p).zoom,1);assert.equal(cameraAt(s,59,p).x,p.width/2);
  assert.deepEqual(s.camera.filter(k=>k.frame>20&&k.frame<59),[],'Reset clears intermediate keys only in target panel');
 });
+
+
+test('RFU4-RA.1: static camera pose persists without creating scene animation keys',()=>{
+ const p=makeProject(),panel=p.scenes[0].panels[0];
+ panel.staticCamera={x:420,y:300,zoom:1.5,rotation:12};
+ const restored=parseProject(serializeProject(p));
+ assert.deepEqual(restored.scenes[0].panels[0].staticCamera,panel.staticCamera);
+ assert.equal(restored.scenes[0].camera.length,0);
+});
+test('RFU4-RA.1: legacy projects without staticCamera retain existing keyframes',()=>{
+ const p=makeProject();putCameraKey(p.scenes[0],p,0,{x:100});putCameraKey(p.scenes[0],p,119,{x:500});
+ const restored=parseProject(serializeProject(p));
+ assert.equal(restored.scenes[0].panels[0].staticCamera,undefined);
+ assert.deepEqual(restored.scenes[0].camera,p.scenes[0].camera);
+});
+test('RFU4-RA.1: invalid static camera pose is rejected',()=>{
+ const p=makeProject();p.scenes[0].panels[0].staticCamera={x:960,y:540,zoom:0,rotation:0};
+ assert.throws(()=>serializeProject(p),/static camera|Invalid project number/i);
+});
