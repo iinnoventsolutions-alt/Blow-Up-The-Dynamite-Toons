@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {makePanel,makeProject,makeScene} from '../src/model.ts';
-import {cameraOffset,defaultCamera,enableSequentialCameraStorage,resolveSequentialCamera,type SequentialCameraScene} from '../src/sequential-camera.ts';
+import {assessLegacyCameraMigration,cameraOffset,defaultCamera,enableSequentialCameraStorage,resolveSequentialCamera,type SequentialCameraScene} from '../src/sequential-camera.ts';
 test('sequential camera: default scene, inherited panel, independent new scene',()=>{
  const p=makeProject(),s=p.scenes[0];s.panels.push(makePanel('Second'));
  const c:SequentialCameraScene={panels:{}},neutral=defaultCamera(p);
@@ -76,4 +76,26 @@ test('legacy camera motion cannot be silently converted',()=>{
  const p=makeProject();p.scenes[0].panels[0].staticCamera={x:900,y:500,zoom:1,rotation:0};
  assert.throws(()=>enableSequentialCameraStorage(p,p.scenes[0].id),/visual-preserving conversion/);
  assert.equal(p.schemaVersion,4);
+});
+
+test('legacy migration: neutral scene converts with identical poses and no mutation',()=>{
+ const p=makeProject(),scene=p.scenes[0];scene.panels.push(makePanel('Next'));
+ const before=serializeProject(p),result=assessLegacyCameraMigration(p,scene.id);
+ assert.equal(result.safe,true);assert.equal(serializeProject(p),before);
+ assert.equal(result.project!.schemaVersion,5);
+ for(const panel of result.project!.scenes[0].panels)for(const frame of [0,Math.floor(panel.duration/2),panel.duration-1])
+  assert.deepEqual(resolveSequentialCamera(result.project!.scenes[0],result.project!,result.project!.scenes[0].sequentialCamera!,panel.id,frame).pose,defaultCamera(p));
+});
+test('legacy migration: keyed scene is retained without silent visual changes',()=>{
+ const p=makeProject(),scene=p.scenes[0],before=serializeProject(p);
+ scene.camera.push({id:'keyA',frame:0,x:960,y:540,zoom:1,rotation:0,interpolation:'ease'});
+ scene.camera.push({id:'keyB',frame:scene.panels[0].duration-1,x:1200,y:600,zoom:2,rotation:15,interpolation:'linear'});
+ const keyed=serializeProject(p),result=assessLegacyCameraMigration(p,scene.id);
+ assert.equal(result.safe,false);assert.match(result.reason!,/keyframes/);assert.equal(serializeProject(p),keyed);
+ assert.notEqual(keyed,before);
+});
+test('legacy migration: independent static panel cameras require review',()=>{
+ const p=makeProject(),scene=p.scenes[0];scene.panels[0].staticCamera={x:1200,y:600,zoom:2,rotation:0};
+ const before=serializeProject(p),result=assessLegacyCameraMigration(p,scene.id);
+ assert.equal(result.safe,false);assert.match(result.reason!,/static/);assert.equal(serializeProject(p),before);
 });
