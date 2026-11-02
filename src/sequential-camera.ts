@@ -67,3 +67,15 @@ export function enableSequentialCameraStorage(project:Project,sceneId:string):Pr
   target.sequentialCamera??={version:1,panels:{}};
   return next;
 }
+
+/** Conservative legacy migration: convert only scenes whose sampled camera
+ * appearance is constant per panel and sequentially continuous. Complex
+ * cross-panel motion remains on the legacy renderer without modification. */
+export function assessLegacyCameraMigration(project:Project,sceneId:string):{safe:boolean;reason?:string;project?:Project}{
+  const scene=project.scenes.find(s=>s.id===sceneId);
+  if(!scene)return {safe:false,reason:'Scene not found.'};
+  if(scene.sequentialCamera)return {safe:false,reason:'Scene already uses sequential camera storage.'};
+  if(scene.camera.length)return {safe:false,reason:'Scene-level keyframes require visual-equivalence conversion; retain legacy playback.'};
+  if(scene.panels.some(p=>p.staticCamera))return {safe:false,reason:'Independent static panel cameras require explicit continuity review; retain legacy playback.'};
+  return {safe:true,project:enableSequentialCameraStorage(project,sceneId)};
+}
