@@ -1,4 +1,5 @@
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
+// Schema 4 remains supported without implicit camera conversion.
 export const MAX_PROJECT_BYTES = 128 * 1024 * 1024;
 const fail = (message) => { throw new Error(message); };
 const record = (v) => v && typeof v === 'object' && !Array.isArray(v);
@@ -7,7 +8,7 @@ export function validateProject(value) {
   if (value.schemaVersion === 1) { value.schemaVersion = 2; for (const scene of value.scenes || []) for (const panel of scene.panels || []) for (const layer of panel.layers || []) layer.kind ||= layer.image ? 'bitmap' : 'vector'; }
   if (value.schemaVersion === 2) { value.schemaVersion = 3; value.transitions ||= []; }
   if (value.schemaVersion === 3) { value.schemaVersion = 4; value.audioAssets ||= []; value.audioTracks ||= []; }
-  if (value.schemaVersion !== SCHEMA_VERSION) fail('Unsupported project version. Your file has not been changed.');
+  if (value.schemaVersion !== 4 && value.schemaVersion !== SCHEMA_VERSION) fail('Unsupported project version. Your file has not been changed.');
   const ids = new Set();
   const id = (v) => { if (typeof v !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(v) || ids.has(v)) fail('Invalid or duplicate object ID.'); ids.add(v); };
   const str = (v, max = 10000) => { if (typeof v !== 'string' || v.length > max) fail('Invalid project text.'); };
@@ -61,6 +62,42 @@ export function validateProject(value) {
           if(stroke.tool==='image' && (typeof stroke.source!=='string'||stroke.source.length>12*1024*1024||!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(stroke.source)))fail('Invalid embedded image.');
 
         }
+      }
+    }
+    if (scene.sequentialCamera !== undefined) {
+      if (value.schemaVersion !== 5) fail('Sequential camera requires project schema 5.');
+      const config = scene.sequentialCamera;
+      if (!record(config) || config.version !== 1 || !record(config.panels)) fail('Invalid sequential camera configuration.');
+      const pose = (p, relative = false) => {
+        if (!record(p)) fail('Invalid sequential camera pose.');
+        num(p.x, relative ? -32768 : -8192, relative ? 32768 : 16384);
+        num(p.y, relative ? -32768 : -8192, relative ? 32768 : 16384);
+        num(p.zoom, relative ? 0.000001 : 0.01, relative ? 10000 : 100);
+        num(p.rotation, relative ? -72000 : -36000, relative ? 72000 : 36000);
+      };
+      if (config.baseline !== undefined) pose(config.baseline);
+      const entries = Object.entries(config.panels);
+      if (entries.length > scene.panels.length) fail('Too many sequential camera panel entries.');
+      const panelMap = new Map(scene.panels.map(p => [p.id,p]));
+      for (const [panelId,state] of entries) {
+        const panel = panelMap.get(panelId);
+        if (!panel || !record(state)) fail('Invalid sequential camera panel reference.');
+        if (state.mode === 'inherit') {
+          if (Object.keys(state).some(k=>k!=='mode')) fail('Invalid inherited camera state.');
+        } else if (state.mode === 'static' || state.mode === 'break') {
+          pose(state.pose);
+        } else if (state.mode === 'animated') {
+          arr(state.keys, 0, Math.min(10000,panel.duration-1));
+          const times = new Set();
+          for (const key of state.keys) {
+            if (!record(key)) fail('Invalid sequential camera key.');
+            num(key.frame, 1, panel.duration-1, true);
+            if (times.has(key.frame)) fail('Duplicate sequential camera keyframe.');
+            times.add(key.frame);
+            pose(key, true);
+            if (!['linear','hold','ease'].includes(key.interpolation)) fail('Invalid sequential camera interpolation.');
+          }
+        } else fail('Invalid sequential camera mode.');
       }
     }
     arr(scene.camera, 0, 10000); const times = new Set(); const duration = scene.panels.reduce((a, p) => a + p.duration, 0);
