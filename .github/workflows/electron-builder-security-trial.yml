@@ -5,6 +5,7 @@ on:
     branches:
       - Security-Audit-W
       - Working
+      - Release-Defect-Resolution
 permissions:
   contents: read
 jobs:
@@ -54,6 +55,21 @@ jobs:
           npm audit --json > candidate-audit.json || true
           npm audit --omit=dev
           node -p "'Trial builder: ' + require('electron-builder/package.json').version"
+      - name: Verify committed dependency configuration (no CI override)
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const manifest = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          if (manifest.overrides?.minimatch !== '11.0.1') throw new Error('Committed minimatch override missing');
+          if (manifest.devDependencies?.['electron-builder'] !== '26.17.0') throw new Error('Electron Builder manifest version changed');
+          if (lock.packages?.['node_modules/electron-builder']?.version !== '26.17.0') throw new Error('Electron Builder lockfile version changed');
+          NODE
+          npm ci
+          npm audit --audit-level=low
+          npm audit --omit=dev
+          npm ls minimatch --all > minimatch-compatibility-tree.txt 2>&1 || true
+          npm audit --json > minimatch-compatibility-audit.json || true
       - name: Compare dependency vulnerabilities
         run: |
           node --input-type=module <<'NODE'
@@ -173,6 +189,9 @@ jobs:
       - name: Verify locked dependencies without repository writes
         run: |
           npm ci
+          # Preserve full advisory evidence even when the strict audit gate fails.
+          npm audit --json > locked-dependency-audit.json || true
+          npm audit --omit=dev --json > locked-production-audit.json || true
           npm audit --audit-level=low
           npm audit --omit=dev
           node --input-type=module <<'NODE'
@@ -243,6 +262,12 @@ jobs:
             baseline-audit.json
             candidate-audit.json
             security-audit-comparison.md
+            locked-dependency-audit.json
+            locked-production-audit.json
+            minimatch-compatibility-audit.json
+            minimatch-compatibility-tree.txt
+            package.json
+            package-lock.json
             release/CLAMAV-SCAN.txt
             release/clamav-*.log
           if-no-files-found: warn

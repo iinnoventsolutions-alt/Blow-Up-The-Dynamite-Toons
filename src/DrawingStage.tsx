@@ -13,9 +13,9 @@ import { floodMask } from './flood';
 import {calculateFill,warmFillWorker} from './fill-compute';
 import { cameraCorners, type CameraPose } from './camera';
 type Command={seq:number;op:string};
-type Props={onion:OnionSettings;panel:Panel;project:Project;layerId:string;tool:Tool;color:string;size:number;zoom:number;onZoom:(n:number)=>void;guides:boolean;rotation:number;options:ToolOptions;cameraFrame:number;maskOutsideCamera:boolean;command:Command;onCameraChange:(frame:number,pose:CameraPose)=>void;onLayers:(layers:Layer[])=>void;onColor:(color:string)=>void;onSize:(size:number)=>void;onSelection:(selected:Selected[])=>void;onRotation:(n:number)=>void;onOptions:(p:Partial<ToolOptions>)=>void;onError:(message:string)=>void};
+type Props={onion:OnionSettings;panel:Panel;project:Project;layerId:string;tool:Tool;color:string;size:number;zoom:number;onZoom:(n:number)=>void;guides:boolean;rotation:number;options:ToolOptions;cameraFrame:number;cameraTarget:{panelId:string;endpoint:'in'|'out'|'intermediate';frame:number}|null;onCameraSelect:(endpoint:'in'|'out'|'intermediate',frame:number)=>void;maskOutsideCamera:boolean;command:Command;onCameraChange:(frame:number,pose:CameraPose)=>void;onLayers:(layers:Layer[])=>void;onColor:(color:string)=>void;onSize:(size:number)=>void;onSelection:(selected:Selected[])=>void;onRotation:(n:number)=>void;onOptions:(p:Partial<ToolOptions>)=>void;onError:(message:string)=>void};
 type Gesture={kind:'stroke'|'shape'|'region'|'transform'|'point'|'pan'|'rotate'|'zoom';start:Point;screen:[number,number];originPan:{x:number;y:number};mode?:string;original?:Panel;pointIndex?:number;pathIndex?:number;box?:{x:number;y:number;width:number;height:number};rotation?:number;};
-export default function DrawingStage({onion,panel,project,layerId,tool,color,size,zoom,onZoom,guides,rotation,options=oDefault,cameraFrame,maskOutsideCamera,command,onCameraChange,onLayers,onColor,onSize,onSelection,onRotation,onOptions,onError}:Props){
+export default function DrawingStage({onion,panel,project,layerId,tool,color,size,zoom,onZoom,guides,rotation,options=oDefault,cameraFrame,cameraTarget,onCameraSelect,maskOutsideCamera,command,onCameraChange,onLayers,onColor,onSize,onSelection,onRotation,onOptions,onError}:Props){
  const insertedPoint=useRef<{time:number;x:number;y:number}|null>(null);
  const firstStroke=useRef(true),strokeStarted=useRef(0),strokeFrames=useRef(0),strokeSamples=useRef(0);
  const fillPending=useRef(false),mounted=useRef(true),bucketCanvas=useRef<HTMLCanvasElement|null>(null);
@@ -130,14 +130,18 @@ export default function DrawingStage({onion,panel,project,layerId,tool,color,siz
     bucketCanvas.current=scratch;
     return scratch;
    })();
-   const width=Math.min(project.width,Math.round(2048*project.width/Math.max(project.width,project.height)));
+   // Include off-camera artwork in the fill reference, matching the visible drawing surface.
+   const extent=1+2*drawingMargin;
+   const width=Math.min(Math.round(project.width*extent),Math.round(2048*project.width/Math.max(project.width,project.height)));
    const renderAt=performance.now();
-   drawPanel(c,ref,project,{width,transparent:true});
+   drawPanel(c,ref,project,{width,transparent:true,drawingMargin});
    measured('render');
    const pixels=c.getContext('2d')!.getImageData(0,0,c.width,c.height);
    measured('pixel readback');
    if(diagnosticsEnabled())recordPerformance('Bucket render and pixel readback',performance.now()-renderAt);
-   const result=await calculateFill(pixels.data,c.width,c.height,p[0]/project.width*c.width,p[1]/project.height*c.height,options.tolerance,options.gap,project.width/c.width,project.height/c.height);
+   const scaleX=project.width*extent/c.width,scaleY=project.height*extent/c.height;
+   const result=await calculateFill(pixels.data,c.width,c.height,(p[0]+project.width*drawingMargin)/scaleX,(p[1]+project.height*drawingMargin)/scaleY,options.tolerance,options.gap,scaleX,scaleY);
+   for(const contour of result.contours)for(const vertex of contour){vertex[0]-=project.width*drawingMargin;vertex[1]-=project.height*drawingMargin;}
    recordPerformance('Bucket flood mask',result.maskMs);
    recordPerformance('Bucket trace contours',result.contourMs);
    recordPerformance(result.worker?'Bucket background worker elapsed':'Bucket calculation elapsed',result.worker?result.waitMs:result.maskMs+result.contourMs);
@@ -229,7 +233,7 @@ export default function DrawingStage({onion,panel,project,layerId,tool,color,siz
   </svg>
   {maskOutsideCamera&&<svg className="camera-outside-mask" viewBox={`${-project.width*drawingMargin} ${-project.height*drawingMargin} ${extendedWidth} ${extendedHeight}`} preserveAspectRatio="none" aria-label="Camera outside masking" aria-hidden="true" style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none'}}><path fill="#182430" fillRule="evenodd" d={`M ${-project.width*drawingMargin} ${-project.height*drawingMargin} H ${project.width*(1+drawingMargin)} V ${project.height*(1+drawingMargin)} H ${-project.width*drawingMargin} Z M ${cameraCorners(cameraAt(findPanel(project,panel.id)!.scene,cameraFrame,project),project).map(([x,y])=>`${x} ${y}`).join(' L ')} Z`}/></svg>}
   {findPanel(project,panel.id)!.scene.camera.length===0&&<svg className="camera-default-outline" viewBox={`${-project.width*drawingMargin} ${-project.height*drawingMargin} ${extendedWidth} ${extendedHeight}`} preserveAspectRatio="none" aria-label="Default camera frame" style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none',overflow:'visible'}}><rect x="0" y="0" width={project.width} height={project.height} fill="none" stroke="#344150" strokeWidth={Math.max(2,project.width/960)}/></svg>}
-  {(findPanel(project,panel.id)!.scene.camera.length>0||tool==='camera')&&<CameraOverlay scene={findPanel(project,panel.id)!.scene} panel={panel} project={project} frame={cameraFrame} drawingMargin={drawingMargin} editable={tool==='camera'&&!temporaryHand} onChange={onCameraChange}/>}
+  {(findPanel(project,panel.id)!.scene.camera.length>0||tool==='camera')&&<CameraOverlay scene={findPanel(project,panel.id)!.scene} panel={panel} project={project} frame={cameraFrame} drawingMargin={drawingMargin} editable={tool==='camera'&&!temporaryHand} selectedEndpoint={cameraTarget?.endpoint==='out'?'out':'in'} onSelectEndpoint={onCameraSelect} onChange={onCameraChange}/>}
   {guides&&<div className="safe-guide" aria-hidden="true"><span>Action safe · 10%</span></div>}
  </div><span className="stage-hint">{busy?'Updating artwork…':effective==='hand'?'Hand · Drag to pan':`${effective} · ${layer?.kind||'vector'} · ${layer?.name} · Hold Space to pan`}</span></div>;
 }

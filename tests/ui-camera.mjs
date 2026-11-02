@@ -42,7 +42,10 @@ try{
  assert.equal(await cameraMask.isChecked(),false,'Camera masking is off by default');
  await cameraMask.check();assert.equal(await page.locator('.camera-outside-mask').count(),1,'Camera mask is visible when enabled');
  await cameraMask.uncheck();assert.equal(await page.locator('.camera-outside-mask').count(),0,'Camera mask can be disabled without changing artwork');
- await page.locator('.camera-key-list button').last().click();await number('Camera zoom',2);await number('Camera X',1250);await number('Camera rotation',12);
+ // RDR-03.4A: explicit keyframe navigation exits endpoint editing so inspector edits do not create a key on the previous panel.
+ await page.locator('.camera-key-list button').last().click();await wait();
+ assert((await page.getByLabel('Active camera editing frame').innerText()).includes('playhead'),'Keyframe navigation clears the endpoint editing target');
+ await number('Camera zoom',2);await number('Camera X',1250);await number('Camera rotation',12);
  await page.getByLabel('Camera interpolation',{exact:true}).selectOption('ease');let output=await save();assert.equal(output.scenes[0].camera[1].zoom,2);assert.equal(output.scenes[0].camera[1].rotation,12);
  await page.locator('.camera-key-list button').first().click();await wait();
  assert.equal(await overlay.locator('circle[data-frame="0"]').count(),1,'First panel moving camera shows IN handle');
@@ -78,16 +81,147 @@ try{
  await page.locator('.camera-key-list button').first().click();assert.equal(await pixels(drawing),raw,'Camera editing leaves drawing pixels unchanged');
  const center=page.locator('.stage-paper .camera-overlay circle[data-frame="0"]');const box=await center.boundingBox();assert(box);await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2+30,box.y+box.height/2+10,{steps:8});await page.mouse.up();await wait();output=await save();assert(output.scenes[0].camera[0].x>960,'Dragging the green camera center pans the IN key');
  await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();assert.equal(await page.getByLabel('Camera X',{exact:true}).inputValue(),'960');await page.getByTitle('Redo (⌘/Ctrl Shift Z)',{exact:true}).click();await wait();
+ // RDR-03: dragging a camera endpoint must not seek away from the selected panel.
+ // The former cameraDrag handler sought to the endpoint frame and could select a
+ // different panel, remounting the overlay and causing the observed snapback.
+ const selectedBeforeDrag=await page.locator('.timeline-clip.selected').count();
+ const frameBeforeDrag=await page.getByLabel('Scene camera time').inputValue();
+ const rdrHandle=page.locator('.stage-paper .camera-overlay circle[data-frame="0"]');
+ const rdrBox=await rdrHandle.boundingBox();assert(rdrBox);
+ await page.mouse.move(rdrBox.x+rdrBox.width/2,rdrBox.y+rdrBox.height/2);
+ await page.mouse.down();await page.mouse.move(rdrBox.x+rdrBox.width/2+12,rdrBox.y+rdrBox.height/2+7,{steps:5});await page.mouse.up();await wait();
+ assert.equal(await page.getByLabel('Scene camera time').inputValue(),frameBeforeDrag,'RDR-03 dragging endpoint preserves playhead');
+ assert.equal(await page.locator('.timeline-clip.selected').count(),selectedBeforeDrag,'RDR-03 drag does not disrupt panel selection');
+ // RDR-03.3: selected endpoint owns overlapping pointer targets.
+ await page.getByLabel('Select camera OUT endpoint').dispatchEvent('pointerdown',{bubbles:true});
+ await wait();
+ const rdrOutGroup=page.locator('.stage-paper .camera-overlay [data-camera-endpoint="out"]');
+ const rdrInGroup=page.locator('.stage-paper .camera-overlay [data-camera-endpoint="in"]');
+ assert.equal(await rdrOutGroup.getAttribute('pointer-events'),null,'RDR-03.3 selected OUT remains interactive');
+ assert.equal(await rdrInGroup.getAttribute('pointer-events'),'none','RDR-03.3 unselected IN cannot intercept OUT drag');
+ await page.getByLabel('Select camera IN endpoint').dispatchEvent('pointerdown',{bubbles:true});
+ await wait();
+ assert.equal(await rdrOutGroup.getAttribute('pointer-events'),'none','RDR-03.3 unselected OUT cannot intercept IN drag');
+ assert.equal(await rdrInGroup.getAttribute('pointer-events'),null,'RDR-03.3 selected IN remains interactive');
  // RFU3: repeated release cycles must commit the latest pose and survive panel switching and reopening.
  const dragCenter=async(dx,dy)=>{const h=await center.boundingBox();assert(h,'Camera IN handle remains visible');await page.mouse.move(h.x+h.width/2,h.y+h.height/2);await page.mouse.down();await page.mouse.move(h.x+h.width/2+dx,h.y+h.height/2+dy,{steps:10});await page.mouse.up();await wait();};
  const initialDragX=(await save()).scenes[0].camera.find(k=>k.frame===0).x;
  await dragCenter(22,8);const firstRelease=(await save()).scenes[0].camera.find(k=>k.frame===0).x;assert(firstRelease>initialDragX,'RFU3 first release persists the latest IN position');
+ // RDR-03 diagnostic: compare the rendered camera handle with the persisted key immediately
+ // after pointer release, after a browser paint, and after switching panels. A saved key
+ // alone cannot detect a visual snapback while React reconciles the temporary drag pose.
+ const assertCameraVisual=async(label)=>{
+  const saved=(await save()).scenes[0].camera.find(k=>k.frame===0);
+  const displayed=Number(await center.getAttribute('cx'));
+  assert(Math.abs(displayed-saved.x)<0.001,`RDR-03 ${label}: visible IN center ${displayed} differs from saved key ${saved.x}`);
+ };
+ await assertCameraVisual('first release');
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ await assertCameraVisual('after two animation frames');
  await dragCenter(19,7);const secondRelease=(await save()).scenes[0].camera.find(k=>k.frame===0).x;assert(secondRelease>firstRelease,'RFU3 second release persists without snap-back');
+ await assertCameraVisual('second release');
  await page.getByLabel('Select Scene 1, Panel 2',{exact:true}).click();await wait();
  await page.getByLabel('Select Scene 1, Panel 1',{exact:true}).click();await wait();
  assert.equal((await save()).scenes[0].camera.find(k=>k.frame===0).x,secondRelease,'RFU3 panel switch retains committed pose');
  const reopened=await save();await page.locator('input[type=file]').first().setInputFiles({name:'rfu3-reopen.issb',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(reopened))});await wait();
  assert.equal((await save()).scenes[0].camera.find(k=>k.frame===0).x,secondRelease,'RFU3 save/reopen retains committed pose');
+ // RDR-03.4D: alternating endpoint selection preserves playhead and key count.
+ const stableFrame=await page.getByLabel('Scene camera time').inputValue();
+ const keysBeforeSwitch=(await save()).scenes[0].camera.map(k=>k.frame);
+ for(const endpoint of ['OUT','IN','OUT','IN']){
+  await page.getByLabel(`Select camera ${endpoint} endpoint`).dispatchEvent('pointerdown',{bubbles:true});
+  await wait();
+  assert.equal(await page.getByLabel('Scene camera time').inputValue(),stableFrame,'Endpoint switching preserves playhead');
+ }
+ assert.deepEqual((await save()).scenes[0].camera.map(k=>k.frame),keysBeforeSwitch,'Endpoint switching does not create keys');
+ // A rapid drag/release must persist its last position and remain undoable.
+ const fastBefore=(await save()).scenes[0].camera.find(k=>k.frame===0).x;
+ const fastHandle=await center.boundingBox();assert(fastHandle);
+ const fx=fastHandle.x+fastHandle.width/2,fy=fastHandle.y+fastHandle.height/2;
+ await page.mouse.move(fx,fy);await page.mouse.down();
+ await page.mouse.move(fx+55,fy+24,{steps:2});await page.mouse.up();await wait();
+ const fastAfter=(await save()).scenes[0].camera.find(k=>k.frame===0).x;
+ assert(fastAfter>fastBefore,'Rapid pointer release persists camera pan');
+ await assertCameraVisual('rapid release');
+ await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();
+ assert.equal((await save()).scenes[0].camera.find(k=>k.frame===0).x,fastBefore,'Undo restores rapid camera drag');
+ // RDR-03.5 diagnostic: capture actual pointer event order and visible handle position.
+ await page.evaluate(() => {
+  window.__rdrCameraEvents=[];
+  const el=document.querySelector('.stage-paper .camera-overlay');
+  for(const type of ['pointerdown','pointermove','pointerup','pointercancel','lostpointercapture']){
+   el.addEventListener(type,e=>{
+    const dot=el.querySelector('circle[data-frame="0"]');
+    window.__rdrCameraEvents.push({type,pointerId:e.pointerId,clientX:e.clientX,clientY:e.clientY,cx:dot?Number(dot.getAttribute('cx')):null,cy:dot?Number(dot.getAttribute('cy')):null});
+   },{capture:true});
+  }
+ });
+ // RDR-03.5: a release followed immediately by lostpointercapture must retain the last live pose.
+ // Simulate the event ordering observed during rapid mouse releases, before a parent render.
+ const raceBefore=(await save()).scenes[0].camera.find(k=>k.frame===0).x;
+ const raceBox=await center.boundingBox();assert(raceBox);
+ const raceX=raceBox.x+raceBox.width/2,raceY=raceBox.y+raceBox.height/2;
+ await page.mouse.move(raceX,raceY);await page.mouse.down();
+ await page.mouse.move(raceX+68,raceY+31,{steps:1});await page.mouse.up();
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ const raceAfter=(await save()).scenes[0].camera.find(k=>k.frame===0).x;
+ assert(raceAfter>raceBefore,'Rapid single-step release commits camera pose');
+ const eventTrace=await page.evaluate(()=>window.__rdrCameraEvents);
+ const downIndex=eventTrace.findIndex(e=>e.type==='pointerdown');
+ const upIndex=eventTrace.findIndex((e,i)=>i>downIndex&&e.type==='pointerup');
+ assert(downIndex>=0&&upIndex>downIndex,'Rapid drag emits pointerdown and pointerup');
+ const releasedId=eventTrace[downIndex].pointerId;
+ const lossIndex=eventTrace.findIndex((e,i)=>i>upIndex&&e.type==='lostpointercapture'&&e.pointerId===releasedId);
+ assert(lossIndex>upIndex,'Pointer capture is lost after successful pointerup');
+ const cancelled=eventTrace.slice(downIndex,upIndex+1).some(e=>e.type==='pointercancel'&&e.pointerId===releasedId);
+ assert(!cancelled,'Successful rapid drag is not pointercancelled');
+ // A late capture-loss notification must not reset the already committed camera pose.
+ const releasePose=await page.evaluate(()=>{
+  const dot=document.querySelector('.camera-overlay g[data-camera-endpoint="in"] circle[data-mode="pan"]');
+  return dot?{x:Number(dot.getAttribute('cx')),y:Number(dot.getAttribute('cy'))}:null;
+ });
+ assert(releasePose&&Number.isFinite(releasePose.x),'Camera IN center is visible after capture loss');
+ await page.evaluate(()=>{
+  const svg=document.querySelector('.stage-paper .camera-overlay');
+  svg.dispatchEvent(new PointerEvent('lostpointercapture',{bubbles:true,pointerId:77777}));
+ });
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ const retainedPose=await page.evaluate(()=>{
+  const dot=document.querySelector('.camera-overlay g[data-camera-endpoint="in"] circle[data-mode="pan"]');
+  return dot?{x:Number(dot.getAttribute('cx')),y:Number(dot.getAttribute('cy'))}:null;
+ });
+ assert.deepEqual(retainedPose,releasePose,'Late unrelated capture loss cannot reset a committed camera pose');
+ await assertCameraVisual('single-step release after pointer capture loss');
+ await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();
+ assert.equal((await save()).scenes[0].camera.find(k=>k.frame===0).x,raceBefore,'Undo restores single-step release');
+ // RDR-03.4D: pointer capture permits releasing outside the SVG while preserving the final pan.
+ const offBefore=(await save()).scenes[0].camera.find(k=>k.frame===0).x;
+ const offHandle=await center.boundingBox();assert(offHandle);
+ const offX=offHandle.x+offHandle.width/2,offY=offHandle.y+offHandle.height/2;
+ const stageBounds=await overlay.boundingBox();assert(stageBounds);
+ await page.mouse.move(offX,offY);await page.mouse.down();
+ const offTargetX=stageBounds.x+stageBounds.width+35;
+ await page.mouse.move(offTargetX,offY,{steps:6});await page.mouse.up();await wait();
+ const offAfter=(await save()).scenes[0].camera.find(k=>k.frame===0).x;
+ assert(offAfter>offBefore,'Off-canvas pointer release commits camera position');
+ assert(Number.isFinite(offAfter)&&offAfter<=16384&&offAfter>=-8192,'Off-canvas pan stays within camera bounds');
+ await assertCameraVisual('off-canvas release');
+ await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();
+ assert.equal((await save()).scenes[0].camera.find(k=>k.frame===0).x,offBefore,'Undo restores off-canvas pan');
+ // RDR-03.4D: zooming the drawing workspace must not change camera-space drag scaling.
+ await page.getByTitle('Zoom in',{exact:true}).click();await wait();
+ assert((await page.locator('.view-controls').innerText()).includes('125%'),'Drawing workspace zoom increased');
+ const zoomedBefore=(await save()).scenes[0].camera.find(k=>k.frame===0).x;
+ const zoomedHandle=await center.boundingBox();assert(zoomedHandle);
+ const zoomedStartX=zoomedHandle.x+zoomedHandle.width/2,zoomedStartY=zoomedHandle.y+zoomedHandle.height/2;
+ await page.mouse.move(zoomedStartX,zoomedStartY);await page.mouse.down();
+ await page.mouse.move(zoomedStartX+25,zoomedStartY+8,{steps:5});await page.mouse.up();await wait();
+ const zoomedAfter=(await save()).scenes[0].camera.find(k=>k.frame===0).x;
+ assert(zoomedAfter>zoomedBefore,'Camera pan works in zoomed drawing workspace');
+ await assertCameraVisual('zoomed workspace release');
+ await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();
+ assert.equal((await save()).scenes[0].camera.find(k=>k.frame===0).x,zoomedBefore,'Zoomed drag is undoable');
+ await page.getByTitle('Zoom out',{exact:true}).click();await wait();
  const corner=page.locator('.stage-paper .camera-overlay rect[data-frame="0"]').first(),cornerBox=await corner.boundingBox();assert(cornerBox);
  const zoomBefore=Number(await page.getByLabel('Camera zoom',{exact:true}).inputValue());await page.mouse.move(cornerBox.x+cornerBox.width/2,cornerBox.y+cornerBox.height/2);await page.mouse.down();await page.mouse.move(cornerBox.x+cornerBox.width/2+35,cornerBox.y+cornerBox.height/2+20,{steps:8});await page.mouse.up();await wait();assert(Number(await page.getByLabel('Camera zoom',{exact:true}).inputValue())>zoomBefore,'Dragging a corner inward increases camera zoom');await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();
  const beforeCancel=await save(),cancelBox=await center.boundingBox();await page.mouse.move(cancelBox.x+cancelBox.width/2,cancelBox.y+cancelBox.height/2);await page.mouse.down();await page.mouse.move(cancelBox.x+cancelBox.width/2+20,cancelBox.y+cancelBox.height/2+10,{steps:5});await page.keyboard.press('Escape');await page.mouse.up();await wait();assert.deepEqual((await save()).scenes[0].camera,beforeCancel.scenes[0].camera,'Escape cancels a camera drag');

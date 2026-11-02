@@ -27,6 +27,50 @@ try{
  await choose('Rotate View (R)');await page.getByLabel('View rotation',{exact:true}).fill('20');await wait();await choose('Pencil (P)');await drag(.3,.3,.6,.3);assert((await save()).scenes[0].panels[0].layers[0].strokes.length>before,'Drawing with rotated view persists');await page.getByRole('button',{name:'Fit',exact:true}).click();await wait();await page.screenshot({path:'test-results/drawing-tools-vector.png'});
  p=makeProject('Selection scopes');p.scenes[0].panels[0].layers.push(makeLayer('Other'),makeLayer('Locked'));for(const [i,layer] of p.scenes[0].panels[0].layers.entries())layer.strokes=[{id:crypto.randomUUID(),tool:'shape',color:'#000000',size:4,points:[[300+i*350,400,1],[500+i*350,700,1]],shape:'rectangle',fill:'#ff8a18'}];p.scenes[0].panels[0].layers[2].locked=true;await load(p);await choose('Select (V)');await page.getByLabel('Selection mode',{exact:true}).selectOption('rectangle');await page.getByLabel('Selection scope',{exact:true}).selectOption('visible');await drag(.1,.2,.8,.8);await page.getByRole('button',{name:'Delete artwork',exact:true}).click();await wait();out=await save();assert.deepEqual(out.scenes[0].panels[0].layers.map(l=>l.strokes.length),[0,0,1]);
  p=makeProject('Bucket');await load(p);await choose('Shape (U)');await page.getByLabel('Fill shape',{exact:true}).uncheck();await page.getByLabel('Shape',{exact:true}).selectOption('rectangle');await drag(.2,.2,.6,.7);await choose('Paint Bucket (F)');await page.getByLabel('Tool color',{exact:true}).fill('#1147a8');await click(.4,.4);out=await save();assert.equal(out.scenes[0].panels[0].layers[0].strokes[1].tool,'fill');assert.deepEqual((await pixel(.4,.4)).slice(0,3),[17,71,168]);assert.deepEqual((await pixel(.1,.1)).slice(0,3),[255,255,255]);
+ // RDR-1: camera outline is a visual guide, never a Paint Bucket boundary.
+ p=makeProject('RDR camera crossing');
+ p.scenes[0].camera=[{id:'rdr-camera',frame:0,x:p.width/2,y:p.height/2,zoom:2,rotation:0,interpolation:'linear'}];
+ await load(p);await choose('Shape (U)');await page.getByLabel('Fill shape',{exact:true}).uncheck();await page.getByLabel('Shape',{exact:true}).selectOption('rectangle');
+ await drag(.15,.2,.85,.8);
+ await choose('Paint Bucket (F)');await page.getByLabel('Tool color',{exact:true}).fill('#1147a8');await click(.4,.45);
+ out=await save();assert.equal(out.scenes[0].panels[0].layers[0].strokes.at(-1).tool,'fill','RDR-1 creates fill with active camera');
+ assert.deepEqual((await pixel(.25,.45)).slice(0,3),[17,71,168],'RDR-1 fills across left camera guide');
+ assert.deepEqual((await pixel(.75,.45)).slice(0,3),[17,71,168],'RDR-1 fills across right camera guide');
+ assert.deepEqual((await pixel(.1,.1)).slice(0,3),[255,255,255],'RDR-1 respects actual artwork rectangle');
+ // RDR-01 extended reproduction: camera moved after drawing must not leave a phantom fill boundary.
+ // Exercise multiple seed points across the old and new guide positions, not just one fill.
+ p=makeProject('RDR camera moved phantom boundary');
+ p.scenes[0].camera=[{id:'rdr-moving-camera',frame:0,x:p.width/2,y:p.height/2,zoom:2,rotation:0,interpolation:'linear'}];
+ await load(p);await choose('Shape (U)');await page.getByLabel('Fill shape',{exact:true}).uncheck();
+ await page.getByLabel('Shape',{exact:true}).selectOption('rectangle');await drag(.12,.18,.88,.82);
+ // Moving the camera must not alter the paint reference; preserve the existing artwork.
+ p=await save();p.scenes[0].camera[0].x+=p.width*.22;p.scenes[0].camera[0].y-=p.height*.12;
+ await load(p);await choose('Paint Bucket (F)');await page.getByLabel('Tool color',{exact:true}).fill('#1147a8');
+ await click(.24,.48);
+ out=await save();assert.equal(out.scenes[0].panels[0].layers[0].strokes.at(-1).tool,'fill','RDR-01 moved camera creates fill');
+ for(const x of [.2,.35,.5,.65,.8])assert.deepEqual((await pixel(x,.48)).slice(0,3),[17,71,168],`RDR-01 moved camera does not partition interior at x=${x}`);
+ assert.deepEqual((await pixel(.06,.08)).slice(0,3),[255,255,255],'RDR-01 moved camera retains artwork perimeter');
+ // Reposition the camera again and refill from the opposite side to detect stale camera geometry.
+ p=out;p.scenes[0].camera[0].x-=p.width*.37;await load(p);
+ await page.getByLabel('Tool color',{exact:true}).fill('#e06422');await click(.76,.48);
+ out=await save();assert.equal(out.scenes[0].panels[0].layers[0].strokes.at(-1).tool,'fill','RDR-01 second moved camera creates fill');
+ for(const x of [.2,.35,.5,.65,.8])assert.deepEqual((await pixel(x,.48)).slice(0,3),[224,100,34],`RDR-01 no stale guide after second camera move at x=${x}`);
+ // RDR-01 direct-interaction reproduction: drag the live camera overlay and fill immediately,
+ // without save/reload or a delayed state reconciliation between the two tools.
+ p=makeProject('RDR direct camera drag then fill');
+ p.scenes[0].camera=[{id:'rdr-live-camera',frame:0,x:p.width/2,y:p.height/2,zoom:2,rotation:0,interpolation:'linear'}];
+ await load(p);await choose('Shape (U)');await page.getByLabel('Fill shape',{exact:true}).uncheck();
+ await page.getByLabel('Shape',{exact:true}).selectOption('rectangle');await drag(.12,.18,.88,.82);
+ await choose('camera (C)');
+ const liveCameraHandle=page.locator('.stage-paper .camera-overlay circle[data-frame="0"]').first();
+ const liveCameraBox=await liveCameraHandle.boundingBox();assert(liveCameraBox,'RDR-01 live camera drag handle visible');
+ await page.mouse.move(liveCameraBox.x+liveCameraBox.width/2,liveCameraBox.y+liveCameraBox.height/2);
+ await page.mouse.down();await page.mouse.move(liveCameraBox.x+liveCameraBox.width/2+48,liveCameraBox.y+liveCameraBox.height/2-19,{steps:12});await page.mouse.up();
+ await choose('Paint Bucket (F)');await page.getByLabel('Tool color',{exact:true}).fill('#1147a8');
+ await click(.24,.48);out=await save();
+ assert.equal(out.scenes[0].panels[0].layers[0].strokes.at(-1).tool,'fill','RDR-01 live drag creates fill');
+ for(const x of [.2,.35,.5,.65,.8])assert.deepEqual((await pixel(x,.48)).slice(0,3),[17,71,168],`RDR-01 direct camera drag cannot divide fill at x=${x}`);
+ assert.deepEqual((await pixel(.06,.08)).slice(0,3),[255,255,255],'RDR-01 direct drag preserves real artwork boundary');
  p=makeProject('Bitmap tools');p.scenes[0].panels[0].layers[0].kind='bitmap';await load(p);await choose('brush (B)');await page.getByLabel('Tool color',{exact:true}).fill('#000000');await drag(.2,.3,.7,.3);out=await save();l=out.scenes[0].panels[0].layers[0];assert.equal(l.kind,'bitmap');assert(l.image.startsWith('data:image/png'));assert.equal(l.strokes.length,0,'Bitmap brush flattens');
  await choose('Select (V)');await page.getByLabel('Selection scope',{exact:true}).selectOption('active');await page.getByLabel('Selection mode',{exact:true}).selectOption('lasso');const poly=[[.1,.1],[.8,.1],[.8,.5],[.1,.5],[.1,.1]];const start=await pos(...poly[0]);await page.mouse.move(start.x,start.y);await page.mouse.down();for(const q of poly.slice(1)){const pt=await pos(...q);await page.mouse.move(pt.x,pt.y,{steps:10});}await page.mouse.up();await wait();assert.equal(await page.locator('.art-interaction [data-mode=move]').count(),1);await page.getByRole('button',{name:'Delete artwork',exact:true}).click();await wait();assert.deepEqual((await pixel(.4,.3)).slice(0,3),[255,255,255]);await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();assert((await pixel(.4,.3))[0]<100);await choose('eraser (E)');await page.getByLabel('Stroke width',{exact:true}).fill('100');await drag(.4,.15,.4,.5);assert((await pixel(.4,.3))[0]>240,'Bitmap eraser clears pixels');await page.screenshot({path:'test-results/drawing-tools-bitmap.png'});
  out=await save();await load(out);assert.deepEqual((await save()).scenes[0].panels[0].layers,out.scenes[0].panels[0].layers);assert.deepEqual(errors,[]);console.log('PASS drawing tools: vector brush/pencil, point editors, shapes, text, picker, selection/transforms, scope/locks, Space pan, rotate view, vector bucket, bitmap paint/select/erase and save/reopen.');
