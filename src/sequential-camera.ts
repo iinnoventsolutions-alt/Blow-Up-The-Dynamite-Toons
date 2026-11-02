@@ -1,4 +1,4 @@
-import type { CameraKey, Project, Scene, StaticCameraPose } from './model.ts';
+import { cameraAt, type CameraKey, type Project, type Scene, type StaticCameraPose } from './model.ts';
 
 // RFU4-RA.4B phase 1: opt-in, pure sequential camera model.
 // Legacy scene.camera and panel.staticCamera are deliberately untouched.
@@ -78,4 +78,41 @@ export function assessLegacyCameraMigration(project:Project,sceneId:string):{saf
   if(scene.camera.length)return {safe:false,reason:'Scene-level keyframes require visual-equivalence conversion; retain legacy playback.'};
   if(scene.panels.some(p=>p.staticCamera))return {safe:false,reason:'Independent static panel cameras require explicit continuity review; retain legacy playback.'};
   return {safe:true,project:enableSequentialCameraStorage(project,sceneId)};
+}
+
+/** Frame-exact migration preflight. Refuses any scene that cannot be proven
+ * visually identical under the locked-IN sequential model. Never mutates input. */
+export function compareLegacyCameraFrames(project:Project,sceneId:string,config:SequentialCameraScene,tolerance=1e-7){
+  const scene=project.scenes.find(s=>s.id===sceneId);
+  if(!scene)return {equivalent:false,reason:'Scene not found.',framesChecked:0};
+  if(scene.panels.some(p=>p.staticCamera))return {equivalent:false,reason:'Independent static camera needs explicit review.',framesChecked:0};
+  const count=scene.panels.reduce((n,p)=>n+p.duration,0);
+  if(count>10000)return {equivalent:false,reason:'Scene exceeds the 10,000-frame verification budget.',framesChecked:0};
+  let absolute=0;
+  for(const panel of scene.panels)for(let local=0;local<panel.duration;local++,absolute++){
+    const legacy=cameraAt(scene,absolute,project);
+    let sequential:CameraPose;
+    try{sequential=resolveSequentialCamera(scene,project,config,panel.id,local).pose;}
+    catch{return {equivalent:false,reason:'Invalid sequential camera candidate.',framesChecked:absolute};}
+    if(fields.some(k=>Math.abs(legacy[k]-sequential[k])>tolerance))
+      return {equivalent:false,reason:'Camera appearance differs.',framesChecked:absolute+1,firstMismatch:{panelId:panel.id,frame:local,legacy,sequential}};
+  }
+  return {equivalent:true,framesChecked:absolute};
+}
+/** Only constant legacy animation is eligible for automatic conversion.
+ * Nonconstant linear/ease/hold and cross-panel animation remain legacy. */
+export function migrateVisuallyEquivalentLegacyCamera(project:Project,sceneId:string){
+  const scene=project.scenes.find(s=>s.id===sceneId);
+  if(!scene)return {safe:false,reason:'Scene not found.'};
+  if(scene.sequentialCamera)return {safe:false,reason:'Sequential storage already enabled.'};
+  if(scene.panels.some(p=>p.staticCamera))return {safe:false,reason:'Independent static camera needs explicit review.'};
+  const first=cameraAt(scene,0,project);
+  const candidate:SequentialCameraScene={baseline:clone(first),panels:{}};
+  const check=compareLegacyCameraFrames(project,sceneId,candidate);
+  if(!check.equivalent)return {safe:false,reason:check.reason,framesChecked:check.framesChecked};
+  const next=structuredClone(project);next.schemaVersion=5;
+  const target=next.scenes.find(s=>s.id===sceneId)!;
+  target.sequentialCamera={version:1,...candidate};
+  // Preserve original legacy keys for fallback and historical fidelity.
+  return {safe:true,project:next,framesChecked:check.framesChecked};
 }
