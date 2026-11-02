@@ -73,8 +73,7 @@ test('schema 5 sequential camera rejects malformed states and missing panel refe
  assert.throws(()=>serializeProject(p),/Invalid project number/);
 });
 test('legacy camera motion cannot be silently converted',()=>{
- const p=makeProject();p.scenes[0].staticCamera;
- p.scenes[0].panels[0].staticCamera={x:900,y:500,zoom:1,rotation:0};
+ const p=makeProject();p.scenes[0].panels[0].staticCamera={x:900,y:500,zoom:1,rotation:0};
  assert.throws(()=>enableSequentialCameraStorage(p,p.scenes[0].id),/visual-preserving conversion/);
  assert.equal(p.schemaVersion,4);
 });
