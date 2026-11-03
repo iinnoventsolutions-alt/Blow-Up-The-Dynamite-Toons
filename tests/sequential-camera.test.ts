@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {makePanel,makeProject,makeScene} from '../src/model.ts';
-import {assessLegacyCameraMigration,resolveCompatibleCamera,compareLegacyCameraFrames,migrateVisuallyEquivalentLegacyCamera,cameraOffset,defaultCamera,enableSequentialCameraStorage,resolveSequentialCamera,type SequentialCameraScene} from '../src/sequential-camera.ts';
+import {setSequentialCameraOut,assessLegacyCameraMigration,resolveCompatibleCamera,compareLegacyCameraFrames,migrateVisuallyEquivalentLegacyCamera,cameraOffset,defaultCamera,enableSequentialCameraStorage,resolveSequentialCamera,type SequentialCameraScene} from '../src/sequential-camera.ts';
 test('sequential camera: default scene, inherited panel, independent new scene',()=>{
  const p=makeProject(),s=p.scenes[0];s.panels.push(makePanel('Second'));
  const c:SequentialCameraScene={panels:{}},neutral=defaultCamera(p);
@@ -164,4 +164,30 @@ test('compatibility dispatch: unsafe migration retains legacy playback across pa
  const right=resolveCompatibleCamera(p,scene.id,scene.panels[1].id,0);
  assert.equal(left.engine,'legacy');assert.equal(right.engine,'legacy');
  assert.ok(right.pose.x>=left.pose.x);
+});
+
+test('sequential OUT writer locks inherited IN and propagates to downstream panels',()=>{
+ const original=makeProject(),scene=original.scenes[0];
+ scene.panels.push(makePanel('Animated'),makePanel('Follower'));
+ const p=enableSequentialCameraStorage(original,scene.id),s=p.scenes[0],animated=s.panels[1],follower=s.panels[2];
+ const initial=defaultCamera(p);
+ s.sequentialCamera!.panels[animated.id]={mode:'animated',keys:[{frame:animated.duration-1,x:10,y:0,zoom:1,rotation:0,interpolation:'ease'}]};
+ const end={x:1250,y:600,zoom:1.8,rotation:12};
+ const next=setSequentialCameraOut(p,s.id,animated.id,end);
+ assert.deepEqual(resolveCompatibleCamera(next,s.id,animated.id,0).pose,initial,'IN stays inherited');
+ assert.deepEqual(resolveCompatibleCamera(next,s.id,animated.id,animated.duration-1).pose,end,'OUT moves');
+ assert.deepEqual(resolveCompatibleCamera(next,s.id,follower.id,0).pose,end,'next panel inherits OUT');
+ assert.deepEqual(resolveCompatibleCamera(next,s.id,s.panels[0].id,0).pose,initial,'previous panel unaffected');
+ assert.equal(next.scenes[0].sequentialCamera!.panels[animated.id].mode,'animated');
+ assert.deepEqual(resolveCompatibleCamera(p,s.id,follower.id,0).pose,{...initial,x:initial.x+10},'input project unchanged');
+ assert.deepEqual(parseProject(serializeProject(next)),next,'OUT persists across save/reopen');
+});
+test('sequential OUT writer rejects unsafe edits without changing source',()=>{
+ const original=makeProject(),s=original.scenes[0],p=enableSequentialCameraStorage(original,s.id);
+ const pose=defaultCamera(p);
+ assert.throws(()=>setSequentialCameraOut(p,s.id,s.panels[0].id,pose),/does not have an animated/);
+ p.scenes[0].sequentialCamera!.panels[s.panels[0].id]={mode:'animated',keys:[]};
+ assert.throws(()=>setSequentialCameraOut(p,s.id,s.panels[0].id,{...pose,zoom:0}),/Invalid sequential/);
+ assert.equal(p.scenes[0].sequentialCamera!.panels[s.panels[0].id].mode,'animated');
+ assert.equal((p.scenes[0].sequentialCamera!.panels[s.panels[0].id] as {keys:unknown[]}).keys.length,0);
 });
