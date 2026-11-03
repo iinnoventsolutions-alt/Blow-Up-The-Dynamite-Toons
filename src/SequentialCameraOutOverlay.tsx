@@ -8,8 +8,8 @@ type Drag={pointerId:number;mode:'pan'|'zoom';origin:CameraPose;x:number;y:numbe
 const equal=(a:CameraPose,b:CameraPose)=> (['x','y','zoom','rotation'] as const).every(k=>Math.abs(a[k]-b[k])<1e-7);
 
 /** Sequential OUT is the only draggable endpoint; inherited IN is never interactive. */
-export default function SequentialCameraOutOverlay({project,inPose,outPose,editable,onChange,drawingMargin=.25,staticMode=false}:{
- project:Project;inPose:CameraPose;outPose:CameraPose;editable:boolean;onChange:(pose:CameraPose)=>void;drawingMargin?:number;staticMode?:boolean;
+export default function SequentialCameraOutOverlay({project,inPose,outPose,editable,onChange,drawingMargin=.25,staticMode=false,intermediateMode=false}:{
+ project:Project;inPose:CameraPose;outPose:CameraPose;editable:boolean;onChange:(pose:CameraPose)=>void;drawingMargin?:number;staticMode?:boolean;intermediateMode?:boolean;
 }){
  const [live,setLive]=useState<CameraPose|null>(null);
  const liveRef=useRef<CameraPose|null>(null);
@@ -28,9 +28,9 @@ export default function SequentialCameraOutOverlay({project,inPose,outPose,edita
   {!staticMode&&<polygon data-camera-endpoint="in" points={incoming.map(p=>p.join(',')).join(' ')} fill="none" stroke="#32c85b" strokeWidth={handle/5} pointerEvents="none"/>}
   {!staticMode&&<text x={incoming[0][0]+handle} y={incoming[0][1]+handle*1.7} fill="#32c85b" fontSize={handle*1.25} pointerEvents="none">IN · LOCKED</text>}
   <g data-camera-endpoint="out">
-   <polygon data-mode="pan" points={corners.map(p=>p.join(',')).join(' ')} fill="none" stroke={staticMode?'#222222':'#ef4d50'} strokeWidth={handle/5} className="camera-frame" style={{pointerEvents:'stroke'}}/>
-   <text x={corners[0][0]+handle} y={corners[0][1]+handle*1.7} fill={staticMode?'#222222':'#ef4d50'} fontSize={handle*1.25} pointerEvents="none">{staticMode?'STATIC':'OUT'}</text>
-   {corners.map(([x,y],i)=><rect key={i} data-mode="zoom" x={x-handle/2} y={y-handle/2} width={handle} height={handle} fill="#ef4d50" className="camera-handle"/>)}
+   <polygon data-mode="pan" points={corners.map(p=>p.join(',')).join(' ')} fill="none" stroke={staticMode?'#222222':intermediateMode?'#3889e8':'#ef4d50'} strokeWidth={handle/5} className="camera-frame" style={{pointerEvents:'stroke'}}/>
+   <text x={corners[0][0]+handle} y={corners[0][1]+handle*1.7} fill={staticMode?'#222222':'#ef4d50'} fontSize={handle*1.25} pointerEvents="none">{staticMode?'STATIC':intermediateMode?'INTERMEDIATE':'OUT'}</text>
+   {corners.map(([x,y],i)=><rect key={i} data-mode="zoom" x={x-handle/2} y={y-handle/2} width={handle} height={handle} fill={staticMode?'#222222':intermediateMode?'#3889e8':'#ef4d50'} className="camera-handle"/>)}
    <circle data-mode="pan" cx={pose.x} cy={pose.y} r={handle/2} fill="#ef4d50" className="camera-handle"/>
   </g>
  </svg>;
