@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { resolveCompatibleCamera } from './sequential-camera';
 import { cameraAt, sceneFrames, timecode, type CameraKey, type Project, type Scene, type Panel } from './model';
 function NumberField({ label, value, min, max, step = 'any', onChange }: { label: string; value: number; min: number; max: number; step?: string; onChange: (n: number) => void }) {
   const display = String(Number(value.toFixed(4)));
@@ -6,6 +7,24 @@ function NumberField({ label, value, min, max, step = 'any', onChange }: { label
   return <label className="field"><span>{label}</span><input aria-label={label} type="number" value={text} min={min} max={max} step={step} onChange={e=>setText(e.target.value)} onBlur={()=>{const n=Number(text);if(text !== display && text.trim() && Number.isFinite(n) && n>=min && n<=max && (step !== '1' || Number.isInteger(n))) onChange(n);setText(display);}} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}}/></label>;
 }
 export default function CameraInspector({ project, scene, panel, frame, editFrame = frame, selectedEndpoint = null, onSelectEndpoint, onSeek, onEdit, onKeyFrame, onDelete, onSetup, onClear, onExport, onCopy, onPaste, onCopyOut, onPasteStart, onReset, canPaste, canPasteStart, onAddBoundary }: { project: Project; scene: Scene; panel: Panel; frame: number; editFrame?:number; selectedEndpoint?:'in'|'out'|'intermediate'|null; onSelectEndpoint?:(endpoint:'in'|'out',frame:number)=>void; onSeek: (n: number)=>void; onEdit: (values: Partial<CameraKey>)=>void; onKeyFrame: (id: string, frame: number)=>void; onDelete: ()=>void; onSetup: ()=>void; onClear: ()=>void; onExport: (mode: 'camera' | 'overlay')=>void; onCopy:()=>void; onPaste:()=>void; onCopyOut:()=>void; onPasteStart:()=>void; onReset:()=>void; canPaste:boolean; canPasteStart:boolean; onAddBoundary:(edge:'start'|'end')=>void }) {
+  // RFU4-RA.4C.2A: sequential scenes have a distinct editing contract.
+  // Do not expose legacy scene-key mutation controls until sequential writes are wired.
+  if(scene.sequentialCamera){
+    const start=scene.panels.slice(0,scene.panels.indexOf(panel)).reduce((n,p)=>n+p.duration,0);
+    const resolved=resolveCompatibleCamera(project,scene.id,panel.id,frame-start);
+    const animated=resolved.mode==='animated';
+    return <section className="camera-inspector camera-sequential-inspector" aria-label="Sequential camera editing state">
+      <h3>Sequential Camera · {scene.name}</h3>
+      <p className="camera-help">Panel camera positions inherit the preceding panel's OUT. A new scene starts from its own baseline.</p>
+      <div role="group" aria-label="Sequential camera endpoints">
+        <div aria-label="Inherited camera IN" data-camera-locked="true"><strong>IN · Locked</strong> — inherited from the preceding panel</div>
+        <div aria-label="Sequential camera OUT"><strong>{animated?'OUT · Animated':'Camera · Static'}</strong> — {animated?'panel-owned endpoint':'no implicit keyframes'}</div>
+      </div>
+      <label className="field"><span>Scene camera time · {timecode(frame,project.fps)}</span><input aria-label="Scene camera time" type="range" min="0" max={sceneFrames(scene)-1} value={frame} onChange={e=>onSeek(Number(e.target.value))}/></label>
+      <div className="camera-numbers"><div>IN: {resolved.inPose.x.toFixed(2)}, {resolved.inPose.y.toFixed(2)} · {resolved.inPose.zoom.toFixed(3)}×</div><div>OUT: {resolved.outPose.x.toFixed(2)}, {resolved.outPose.y.toFixed(2)} · {resolved.outPose.zoom.toFixed(3)}×</div></div>
+      <p className="camera-help">Sequential editing controls are being connected in RFU4-RA.4C.2. Inherited IN cannot be edited independently. Legacy camera controls are unavailable for this scene.</p>
+    </section>;
+  }
   const key=scene.camera.find(k=>k.frame===frame), segment=[...scene.camera].sort((a,b)=>a.frame-b.frame).filter(k=>k.frame<=editFrame).at(-1), pose=cameraAt(scene,editFrame,project), total=sceneFrames(scene), keys=[...scene.camera].sort((a,b)=>a.frame-b.frame);
   return <section className="camera-inspector"><h3>Camera · {scene.name}</h3><div role="group" aria-label="Camera editing target"><button type="button" aria-pressed={selectedEndpoint==='in'} onClick={()=>onSelectEndpoint?.('in',scene.panels.slice(0,scene.panels.indexOf(panel)).reduce((n,p)=>n+p.duration,0))}>Edit IN</button><button type="button" aria-pressed={selectedEndpoint==='out'} onClick={()=>onSelectEndpoint?.('out',scene.panels.slice(0,scene.panels.indexOf(panel)).reduce((n,p)=>n+p.duration,0)+panel.duration-1)}>Edit OUT</button><span aria-label="Active camera editing frame">Editing {selectedEndpoint?.toUpperCase()||'playhead'} · {timecode(editFrame,project.fps)}</span></div><p className="camera-help">Green IN / red OUT show this panel’s start and end. Camera keys belong to the scene.</p><label className="field"><span>Scene camera time · {timecode(frame,project.fps)}</span><input aria-label="Scene camera time" type="range" min="0" max={total-1} value={frame} onChange={e=>onSeek(Number(e.target.value))}/></label>
     <div className="camera-buttons" role="toolbar" aria-label="Panel camera actions">
