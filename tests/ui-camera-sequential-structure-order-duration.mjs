@@ -43,6 +43,7 @@ try{
  assert.deepEqual((await save()).scenes[0].panels.map(x=>x.id),[animated.id,first.id,following.id],'Redo restores reordered panels');
  // Change the moved animated panel duration via the actual Panel inspector.
  await seek(0);
+ await page.getByRole('tab',{name:'Panel',exact:true}).click();await wait();
  const duration=page.getByRole('spinbutton',{name:/Duration in (seconds|frames)/});
  assert.equal(await duration.count(),1,'Panel duration editor is visible');
  const label=await duration.getAttribute('aria-label');
