@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {makePanel,makeProject,makeScene,removeStoryboardPanel,duplicateStoryboardPanel} from '../src/model.ts';
+import {makePanel,makeProject,makeScene,movePanels,removeStoryboardPanel,duplicateStoryboardPanel} from '../src/model.ts';
 import {setSequentialCameraOut,assessLegacyCameraMigration,resolveCompatibleCamera,compareLegacyCameraFrames,migrateVisuallyEquivalentLegacyCamera,cameraOffset,defaultCamera,enableSequentialCameraStorage,resolveSequentialCamera,type SequentialCameraScene} from '../src/sequential-camera.ts';
 test('sequential camera: default scene, inherited panel, independent new scene',()=>{
  const p=makeProject(),s=p.scenes[0];s.panels.push(makePanel('Second'));
@@ -220,4 +220,41 @@ test('RFU4-RA.4D.1: duplication creates independent camera state and recalculate
  assert.equal(resolveCompatibleCamera(next,scene.id,panelId,0).inPose.x,1060);
  assert.equal(resolveCompatibleCamera(next,scene.id,scene.panels[3].id,0).inPose.x,1160);
  assert.equal(p.scenes[0].panels.length,3);
+});
+
+test('RFU4-RA.4D.2: same-scene reorder recalculates inherited IN without changing relative OUT',()=>{
+ const p=makeProject(),s=p.scenes[0];s.panels.push(makePanel('Animated'),makePanel('Following'));
+ s.panels.forEach(panel=>panel.duration=30);p.schemaVersion=5;
+ const [a,b,c]=s.panels;
+ s.sequentialCamera={version:1,panels:{[b.id]:{mode:'animated',keys:[{frame:29,x:100,y:0,zoom:1,rotation:0,interpolation:'linear'}]}}};
+ const next=movePanels(p,[{panelId:b.id,sceneId:s.id,beforePanelId:a.id}]),result=next.scenes[0];
+ assert.deepEqual(result.panels.map(panel=>panel.id),[b.id,a.id,c.id]);
+ assert.equal(result.sequentialCamera?.panels[b.id]?.mode,'animated');
+ assert.equal(resolveCompatibleCamera(next,s.id,b.id,0).inPose.x,960);
+ assert.equal(resolveCompatibleCamera(next,s.id,a.id,0).inPose.x,1060);
+ assert.equal(resolveCompatibleCamera(next,s.id,c.id,0).inPose.x,1060);
+ assert.deepEqual(p.scenes[0].panels.map(panel=>panel.id),[a.id,b.id,c.id]);
+});
+test('RFU4-RA.4D.2: cross-scene sequential move transfers ownership and inherits destination baseline',()=>{
+ const p=makeProject(),source=p.scenes[0],destination=makeScene('Destination');
+ p.scenes.push(destination);p.schemaVersion=5;
+ source.panels.push(makePanel('Animated'));source.panels.forEach(panel=>panel.duration=30);
+ const moved=source.panels[1];
+ source.sequentialCamera={version:1,panels:{[moved.id]:{mode:'animated',keys:[{frame:29,x:100,y:0,zoom:1,rotation:0,interpolation:'linear'}]}}};
+ destination.sequentialCamera={version:1,baseline:{x:1200,y:540,zoom:1,rotation:0},panels:{}};
+ const next=movePanels(p,[{panelId:moved.id,sceneId:destination.id}]);
+ assert.equal(next.scenes[0].sequentialCamera?.panels[moved.id],undefined);
+ assert.equal(next.scenes[1].sequentialCamera?.panels[moved.id]?.mode,'animated');
+ assert.equal(resolveCompatibleCamera(next,destination.id,moved.id,0).inPose.x,1200);
+ assert.equal(resolveCompatibleCamera(next,destination.id,moved.id,29).outPose.x,1300);
+});
+test('RFU4-RA.4D.2: incompatible cross-engine camera moves reject atomically',()=>{
+ const p=makeProject(),source=p.scenes[0],legacy=makeScene('Legacy');
+ p.scenes.push(legacy);p.schemaVersion=5;
+ source.panels.push(makePanel('Animated'));
+ const animated=source.panels[1];
+ source.sequentialCamera={version:1,panels:{[animated.id]:{mode:'animated',keys:[{frame:1,x:50,y:0,zoom:1,rotation:0,interpolation:'linear'}]}}};
+ const before=JSON.stringify(p);
+ assert.throws(()=>movePanels(p,[{panelId:animated.id,sceneId:legacy.id}]),/camera conversion/);
+ assert.equal(JSON.stringify(p),before);
 });
