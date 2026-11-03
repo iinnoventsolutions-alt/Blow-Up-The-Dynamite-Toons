@@ -1,6 +1,9 @@
 name: Electron Builder Security Trial
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - Working
   push:
     branches:
       - Security-Audit-W
@@ -161,9 +164,17 @@ jobs:
           path: test-results/
           if-no-files-found: ignore
           retention-days: 7
+      - name: Reject untrusted fork PR packaging
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        run: |
+          echo 'Refusing installer packaging/signing for a fork pull request.'
+          exit 1
       - name: Package both Mac architectures without signing
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          # Only same-repository PRs may override electron-builder's PR signing skip.
+          # No Developer ID certificates or secrets are provided; signing remains ad-hoc.
+          CSC_FOR_PULL_REQUEST: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && 'true' || 'false' }}
         run: npm run build && npx electron-builder --mac dmg --arm64 --x64 --publish never
       - name: Verify native macOS app bundle signatures
         run: |

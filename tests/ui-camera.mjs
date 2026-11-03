@@ -230,7 +230,15 @@ try{
  await page.getByRole('button',{name:'Timeline',exact:true}).click();await wait();assert.equal(await page.locator('.timeline-camera-lane button').count(),2);assert.equal(await page.locator('.filmstrip').count(),0);
  await page.getByTitle('Go to start',{exact:true}).click();await wait();const cameraCanvas=page.locator('.timeline-preview canvas'),inPixels=await pixels(cameraCanvas);
  await page.locator('.timeline-camera-lane button').last().click();await wait();assert.notEqual(await pixels(cameraCanvas),inPixels,'Camera pan, zoom and rotation change the rendered view');assert.equal(await page.locator('.timeline-clip.selected').getAttribute('data-panel-id'),s.panels[1].id);
- await page.getByTitle('Go to start',{exact:true}).click();await page.getByRole('button',{name:'Play',exact:true}).click();await page.waitForTimeout(300);assert(Number(await page.getByRole('slider',{name:'Timeline playhead'}).getAttribute('aria-valuenow'))>0);await page.getByRole('button',{name:'Pause',exact:true}).click();await page.screenshot({path:'test-results/camera-timeline.png'});
+ await page.getByTitle('Go to start',{exact:true}).click();await page.getByRole('button',{name:'Play',exact:true}).click();
+  // AudioContext resume and schedule preparation are asynchronous on macOS/headless Chromium.
+  // Poll for actual frame advancement instead of assuming startup completes within 300 ms.
+  await page.waitForFunction(() => Number(document.querySelector('[role="slider"][aria-label="Timeline playhead"]')?.getAttribute('aria-valuenow')) > 0, {timeout:5000}).catch(async () => {
+    const frame=await page.getByRole('slider',{name:'Timeline playhead'}).getAttribute('aria-valuenow');
+    const status=await page.getByRole('status').allInnerTexts();
+    throw new Error(`Timeline playback did not advance within 5 seconds (frame=${frame}, status=${status.join(' | ')})`);
+  });
+  await page.getByRole('button',{name:'Pause',exact:true}).click();await page.screenshot({path:'test-results/camera-timeline.png'});
  await page.getByRole('button',{name:'Pitch',exact:true}).click();await wait();const pitchIn=await pixels(page.locator('.pitch-screen canvas'));await page.locator('.camera-key-list button').last().click();await wait();assert.notEqual(await pixels(page.locator('.pitch-screen canvas')),pitchIn,'Pitch uses the same scene camera');
  await page.getByRole('button',{name:'Drawing',exact:true}).click();await page.locator('.camera-key-list button').first().click();await page.getByRole('tab',{name:'Panel'}).click();await number('Duration in seconds',5);await page.getByRole('tab',{name:'Camera'}).click();output=await save();assert.deepEqual(output.scenes[0].camera.map(k=>k.frame),[0,179]);
  const pending=page.waitForEvent('download');await page.getByRole('button',{name:'Export overlay PNG',exact:true}).click();const exported=await pending;assert(exported.suggestedFilename().endsWith('-overlay.png'));assert((await readFile(await exported.path())).length>1000);

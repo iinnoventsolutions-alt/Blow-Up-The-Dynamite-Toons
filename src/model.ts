@@ -2,14 +2,15 @@ import { validateProject } from './project-format.js';
 export type Point = [number, number, number];
 export type Stroke = { id: string; tool: 'brush' | 'pencil' | 'eraser' | 'shape' | 'text' | 'fill' | 'image'; color: string; size: number; points: Point[]; contours?: Point[][]; outline?: Point[]; opacity?: number; texture?: 'solid' | 'graphite' | 'chalk'; cap?: 'round' | 'butt' | 'square'; capStart?: 'round' | 'butt' | 'square'; capEnd?: 'round' | 'butt' | 'square'; join?: 'round' | 'bevel' | 'miter'; shape?: 'rectangle' | 'ellipse' | 'line'; fill?: string; text?: string; font?: string; fontSize?: number; bold?: boolean; italic?: boolean; align?: 'left' | 'center' | 'right'; tracking?: number; lineSpacing?: number; indent?: number; autoKern?: boolean; textScaleX?: number; rotation?: number; source?: string };
 export type Layer = { id: string; name: string; visible: boolean; locked: boolean; opacity: number; strokes: Stroke[]; image?: string; kind?: 'vector' | 'bitmap' };
-export type Panel = { id: string; name: string; duration: number; dialogue: string; action: string; slugging: string; notes: string; layers: Layer[] };
+export type StaticCameraPose = { x: number; y: number; zoom: number; rotation: number };
+export type Panel = { id: string; name: string; duration: number; staticCamera?: StaticCameraPose; dialogue: string; action: string; slugging: string; notes: string; layers: Layer[] };
 export type CameraKey = { id: string; frame: number; x: number; y: number; zoom: number; rotation: number; interpolation: 'linear' | 'hold' | 'ease' };
-export type Scene = { id: string; name: string; panels: Panel[]; camera: CameraKey[] };
+export type Scene = { id: string; name: string; panels: Panel[]; camera: CameraKey[]; sequentialCamera?: {version:1;baseline?:StaticCameraPose;panels:Record<string, {mode:'inherit'}|{mode:'static'|'break';pose:StaticCameraPose}|{mode:'animated';keys:Array<{frame:number;x:number;y:number;zoom:number;rotation:number;interpolation:'linear'|'hold'|'ease'}>}>} };
 export type Transition = {id:string;fromId:string;toId:string;type:'dissolve'|'edge-wipe'|'clock-wipe'|'slide';duration:number;direction:'left'|'right'|'up'|'down'};
 export type AudioAsset={id:string;name:string;source:string;duration:number;sampleRate:number;channels:number;peaks:number[]};
 export type AudioClip={id:string;assetId:string;name:string;start:number;offset:number;duration:number;gain:number};
 export type AudioTrack={id:string;name:string;gain:number;mute:boolean;solo:boolean;clips:AudioClip[]};
-export type Project = { format: 'innovent-storyboard'; schemaVersion: 4; id: string; title: string; subtitle: string; width: number; height: number; fps: number; scenes: Scene[]; transitions: Transition[];audioAssets:AudioAsset[];audioTracks:AudioTrack[] };
+export type Project = { format: 'innovent-storyboard'; schemaVersion: 4 | 5; id: string; title: string; subtitle: string; width: number; height: number; fps: number; scenes: Scene[]; transitions: Transition[];audioAssets:AudioAsset[];audioTracks:AudioTrack[] };
 export const uid = () => crypto.randomUUID();
 export const makeLayer = (name = 'Drawing', kind: 'vector' | 'bitmap' = 'vector') : Layer => ({ id: uid(), name, kind, visible: true, locked: false, opacity: 1, strokes: [] });
 export const makePanel = (name = 'Panel 1', fps = 24): Panel => ({ id: uid(), name, duration: fps * 5, dialogue: '', action: '', slugging: '', notes: '', layers: [makeLayer()] });
@@ -57,7 +58,24 @@ export function movePanels(project: Project, moves: PanelMove[]): Project {
       const index = move.beforePanelId ? target.panels.findIndex(p => p.id === move.beforePanelId) : target.panels.length;
       target.panels.splice(index, 0, copies.get(move.panelId)!);
     }
-    rebuildPanelCameras(project,draft,affected);
+    // Panel-owned camera state follows its panel. Cross-engine moves with
+    // explicit camera data require a dedicated visual-preserving conversion.
+    for(const {move} of payload){
+      const origin=findPanel(project,move.panelId)!.scene;
+      const destination=draft.scenes.find(scene=>scene.id===move.sceneId)!;
+      if(origin.id===destination.id)continue;
+      const sourceState=origin.sequentialCamera?.panels[move.panelId];
+      if(origin.sequentialCamera&&!destination.sequentialCamera)throw new Error('Cannot move a sequential camera panel into a legacy scene without camera conversion.');
+      if(!origin.sequentialCamera&&destination.sequentialCamera&&(origin.camera.length||!!findPanel(project,move.panelId)?.panel.staticCamera))
+        throw new Error('Cannot move a legacy animated camera panel into a sequential scene without camera conversion.');
+      if(origin.sequentialCamera){
+        if(sourceState)destination.sequentialCamera!.panels[move.panelId]=structuredClone(sourceState);
+        delete draft.scenes.find(scene=>scene.id===origin.id)!.sequentialCamera!.panels[move.panelId];
+      }
+    }
+    // Legacy scene keys must not be rebuilt over an opt-in sequential camera.
+    const legacyAffected=new Set([...affected].filter(id=>!draft.scenes.find(scene=>scene.id===id)?.sequentialCamera));
+    rebuildPanelCameras(project,draft,legacyAffected);
   });
 }
 export function moveScene(project: Project, sceneId: string, beforeSceneId: string | null): Project {
@@ -117,11 +135,22 @@ export function duplicatePanel(panel: Panel): Panel {
 export function changeDuration(scene: Scene, panel: Panel, duration: number) {
   if (!Number.isInteger(duration) || duration < 1) throw new Error('Duration must be a positive whole number of frames.');
   let start=0; for (const p of scene.panels) { if(p.id===panel.id)break;start+=p.duration; }
+  const sequential=scene.sequentialCamera?.panels[panel.id];
+  let retimed:typeof sequential;
+  if(sequential?.mode==='animated'){
+    if(duration<2)throw new Error('An animated sequential camera panel needs at least two frames. Remove its animation before shortening to one frame.');
+    const last=panel.duration-1, nextLast=duration-1;
+    const keys=sequential.keys.map(key=>({...key,frame:Math.max(1,Math.round(key.frame/Math.max(1,last)*nextLast))}));
+    if(new Set(keys.map(key=>key.frame)).size!==keys.length)
+      throw new Error('Shortening this panel would merge sequential camera keys. Move or delete a key first.');
+    retimed={mode:'animated',keys};
+  }
   const delta=duration-panel.duration, end=start+panel.duration;
   const frames=scene.camera.map(k=>k.frame<start?k.frame:k.frame>=end?k.frame+delta:start+Math.round((k.frame-start)/Math.max(1,panel.duration-1)*(duration-1)));
   if(new Set(frames).size!==frames.length)throw new Error('Shortening this panel would merge camera keys. Move or delete a key first.');
   scene.camera.forEach((k,i)=>{k.frame=frames[i];});
   panel.duration = duration;
+  if(retimed&&scene.sequentialCamera)scene.sequentialCamera.panels[panel.id]=retimed;
 }
 export type History = { past: Project[]; present: Project; future: Project[] };
 export const newHistory = (project: Project): History => ({ past: [], present: project, future: [] });
@@ -198,11 +227,11 @@ export function rebuildPanelCameras(before:Project,after:Project,affected:Set<st
 export function removeStoryboardPanel(project:Project,panelId:string){
  const found=findPanel(project,panelId);if(!found)throw new Error('Panel no longer exists.');
  if(found.scene.panels.length<=1)throw new Error('Keep at least one panel per scene.');
- return editProject(project,draft=>{const s=draft.scenes.find(s=>s.id===found.scene.id)!;s.panels=s.panels.filter(p=>p.id!==panelId);rebuildPanelCameras(project,draft,new Set([s.id]));});
+ return editProject(project,draft=>{const s=draft.scenes.find(s=>s.id===found.scene.id)!;s.panels=s.panels.filter(p=>p.id!==panelId);if(s.sequentialCamera){const remaining={...s.sequentialCamera.panels};delete remaining[panelId];s.sequentialCamera={...s.sequentialCamera,panels:remaining};}else rebuildPanelCameras(project,draft,new Set([s.id]));});
 }
 export function duplicateStoryboardPanel(project:Project,panelId:string){
  const found=findPanel(project,panelId);if(!found)throw new Error('Panel no longer exists.');
  const copy=duplicatePanel(found.panel);
- const next=editProject(project,draft=>{const scene=draft.scenes.find(s=>s.id===found.scene.id)!;scene.panels.splice(scene.panels.findIndex(p=>p.id===panelId)+1,0,copy);rebuildPanelCameras(project,draft,new Set([scene.id]),new Map([[copy.id,panelId]]));});
+ const next=editProject(project,draft=>{const scene=draft.scenes.find(s=>s.id===found.scene.id)!;scene.panels.splice(scene.panels.findIndex(p=>p.id===panelId)+1,0,copy);if(scene.sequentialCamera){const source=scene.sequentialCamera.panels[panelId];if(source)scene.sequentialCamera={...scene.sequentialCamera,panels:{...scene.sequentialCamera.panels,[copy.id]:structuredClone(source)}};}else rebuildPanelCameras(project,draft,new Set([scene.id]),new Map([[copy.id,panelId]]));});
  return {project:next,panelId:copy.id};
 }
