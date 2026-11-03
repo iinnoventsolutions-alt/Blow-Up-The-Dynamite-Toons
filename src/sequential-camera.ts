@@ -166,3 +166,17 @@ export function setSequentialCameraOut(project:Project,sceneId:string,panelId:st
   for(const downstream of nextScene.panels)resolveSequentialCamera(nextScene,next,nextScene.sequentialCamera!,downstream.id,downstream.duration-1);
   return next;
 }
+
+/** Set a static panel camera without changing the inherited upstream camera. */
+export function setSequentialStaticCamera(project:Project,sceneId:string,panelId:string,pose:CameraPose):Project {
+ const scene=project.scenes.find(s=>s.id===sceneId);
+ if(!scene?.sequentialCamera||project.schemaVersion!==5)throw new Error('Sequential camera storage is not enabled.');
+ if(!scene.panels.some(p=>p.id===panelId))throw new Error('Panel not found.');
+ if(!valid(pose))throw new Error('Invalid static camera pose.');
+ const current=scene.sequentialCamera.panels[panelId];
+ if(current?.mode==='animated')throw new Error('Animated camera must be edited through OUT.');
+ const next:Project={...project,scenes:project.scenes.map(s=>s.id!==sceneId?s:{...s,sequentialCamera:{...s.sequentialCamera!,panels:{...s.sequentialCamera!.panels,[panelId]:{mode:'static' as const,pose:clone(pose)}}}})};
+ const updated=next.scenes.find(s=>s.id===sceneId)!;
+ for(const panel of updated.panels)resolveSequentialCamera(updated,next,updated.sequentialCamera!,panel.id,panel.duration-1);
+ return next;
+}
