@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { resolveCompatibleCamera } from './sequential-camera';
+import { resolveCompatibleCamera, type CameraPose } from './sequential-camera';
 import { cameraAt, sceneFrames, timecode, type CameraKey, type Project, type Scene, type Panel } from './model';
 function NumberField({ label, value, min, max, step = 'any', onChange }: { label: string; value: number; min: number; max: number; step?: string; onChange: (n: number) => void }) {
   const display = String(Number(value.toFixed(4)));
   const [text, setText] = useState(display); useEffect(()=>setText(display),[display]);
   return <label className="field"><span>{label}</span><input aria-label={label} type="number" value={text} min={min} max={max} step={step} onChange={e=>setText(e.target.value)} onBlur={()=>{const n=Number(text);if(text !== display && text.trim() && Number.isFinite(n) && n>=min && n<=max && (step !== '1' || Number.isInteger(n))) onChange(n);setText(display);}} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}}/></label>;
 }
-export default function CameraInspector({ project, scene, panel, frame, editFrame = frame, selectedEndpoint = null, onSelectEndpoint, onSeek, onEdit, onKeyFrame, onDelete, onSetup, onClear, onExport, onCopy, onPaste, onCopyOut, onPasteStart, onReset, canPaste, canPasteStart, onAddBoundary }: { project: Project; scene: Scene; panel: Panel; frame: number; editFrame?:number; selectedEndpoint?:'in'|'out'|'intermediate'|null; onSelectEndpoint?:(endpoint:'in'|'out',frame:number)=>void; onSeek: (n: number)=>void; onEdit: (values: Partial<CameraKey>)=>void; onKeyFrame: (id: string, frame: number)=>void; onDelete: ()=>void; onSetup: ()=>void; onClear: ()=>void; onExport: (mode: 'camera' | 'overlay')=>void; onCopy:()=>void; onPaste:()=>void; onCopyOut:()=>void; onPasteStart:()=>void; onReset:()=>void; canPaste:boolean; canPasteStart:boolean; onAddBoundary:(edge:'start'|'end')=>void }) {
+export default function CameraInspector({ project, scene, panel, frame, editFrame = frame, selectedEndpoint = null, onSelectEndpoint, onSeek, onEdit, onKeyFrame, onDelete, onSetup, onClear, onExport, onCopy, onPaste, onCopyOut, onPasteStart, onReset, canPaste, canPasteStart, onAddBoundary, onSequentialOut }: { project: Project; scene: Scene; panel: Panel; frame: number; editFrame?:number; selectedEndpoint?:'in'|'out'|'intermediate'|null; onSelectEndpoint?:(endpoint:'in'|'out',frame:number)=>void; onSeek: (n: number)=>void; onEdit: (values: Partial<CameraKey>)=>void; onKeyFrame: (id: string, frame: number)=>void; onDelete: ()=>void; onSetup: ()=>void; onClear: ()=>void; onExport: (mode: 'camera' | 'overlay')=>void; onCopy:()=>void; onPaste:()=>void; onCopyOut:()=>void; onPasteStart:()=>void; onReset:()=>void; canPaste:boolean; canPasteStart:boolean; onAddBoundary:(edge:'start'|'end')=>void; onSequentialOut?:(pose:CameraPose)=>void }) {
   // RFU4-RA.4C.2A: sequential scenes have a distinct editing contract.
   // Do not expose legacy scene-key mutation controls until sequential writes are wired.
   if(scene.sequentialCamera){
@@ -22,7 +22,13 @@ export default function CameraInspector({ project, scene, panel, frame, editFram
       </div>
       <label className="field"><span>Scene camera time · {timecode(frame,project.fps)}</span><input aria-label="Scene camera time" type="range" min="0" max={sceneFrames(scene)-1} value={frame} onChange={e=>onSeek(Number(e.target.value))}/></label>
       <div className="camera-numbers"><div>IN: {resolved.inPose.x.toFixed(2)}, {resolved.inPose.y.toFixed(2)} · {resolved.inPose.zoom.toFixed(3)}×</div><div>OUT: {resolved.outPose.x.toFixed(2)}, {resolved.outPose.y.toFixed(2)} · {resolved.outPose.zoom.toFixed(3)}×</div></div>
-      <p className="camera-help">Sequential editing controls are being connected in RFU4-RA.4C.2. Inherited IN cannot be edited independently. Legacy camera controls are unavailable for this scene.</p>
+      {animated && <div className="camera-numbers" aria-label="Sequential OUT numeric controls">
+        <NumberField label="OUT X" value={resolved.outPose.x} min={-8192} max={16384} onChange={x=>onSequentialOut?.({...resolved.outPose,x})}/>
+        <NumberField label="OUT Y" value={resolved.outPose.y} min={-8192} max={16384} onChange={y=>onSequentialOut?.({...resolved.outPose,y})}/>
+        <NumberField label="OUT zoom" value={resolved.outPose.zoom} min={.01} max={100} onChange={zoom=>onSequentialOut?.({...resolved.outPose,zoom})}/>
+        <NumberField label="OUT rotation" value={resolved.outPose.rotation} min={-36000} max={36000} onChange={rotation=>onSequentialOut?.({...resolved.outPose,rotation})}/>
+      </div>}
+      <p className="camera-help">Inherited IN is locked. Animated OUT numeric edits propagate to later panels. Drag handles and static-camera editing will follow in a separate checkpoint.</p>
     </section>;
   }
   const key=scene.camera.find(k=>k.frame===frame), segment=[...scene.camera].sort((a,b)=>a.frame-b.frame).filter(k=>k.frame<=editFrame).at(-1), pose=cameraAt(scene,editFrame,project), total=sceneFrames(scene), keys=[...scene.camera].sort((a,b)=>a.frame-b.frame);
