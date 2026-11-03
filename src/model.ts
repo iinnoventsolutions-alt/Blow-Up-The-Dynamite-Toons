@@ -58,7 +58,24 @@ export function movePanels(project: Project, moves: PanelMove[]): Project {
       const index = move.beforePanelId ? target.panels.findIndex(p => p.id === move.beforePanelId) : target.panels.length;
       target.panels.splice(index, 0, copies.get(move.panelId)!);
     }
-    rebuildPanelCameras(project,draft,affected);
+    // Panel-owned camera state follows its panel. Cross-engine moves with
+    // explicit camera data require a dedicated visual-preserving conversion.
+    for(const {move} of payload){
+      const origin=findPanel(project,move.panelId)!.scene;
+      const destination=draft.scenes.find(scene=>scene.id===move.sceneId)!;
+      if(origin.id===destination.id)continue;
+      const sourceState=origin.sequentialCamera?.panels[move.panelId];
+      if(sourceState&&!destination.sequentialCamera)throw new Error('Cannot move a sequential camera panel into a legacy scene without camera conversion.');
+      if(!origin.sequentialCamera&&destination.sequentialCamera&&origin.camera.length)
+        throw new Error('Cannot move a legacy animated camera panel into a sequential scene without camera conversion.');
+      if(origin.sequentialCamera){
+        if(sourceState)destination.sequentialCamera!.panels[move.panelId]=structuredClone(sourceState);
+        delete draft.scenes.find(scene=>scene.id===origin.id)!.sequentialCamera!.panels[move.panelId];
+      }
+    }
+    // Legacy scene keys must not be rebuilt over an opt-in sequential camera.
+    const legacyAffected=new Set([...affected].filter(id=>!draft.scenes.find(scene=>scene.id===id)?.sequentialCamera));
+    rebuildPanelCameras(project,draft,legacyAffected);
   });
 }
 export function moveScene(project: Project, sceneId: string, beforeSceneId: string | null): Project {
