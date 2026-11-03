@@ -228,3 +228,15 @@ export function deleteSequentialIntermediateKey(project:Project,sceneId:string,p
  const keys=state.keys.filter(k=>k.frame!==frame);
  return {...project,scenes:project.scenes.map(s=>s.id!==sceneId?s:{...s,sequentialCamera:{...s.sequentialCamera!,panels:{...s.sequentialCamera!.panels,[panelId]:{mode:'animated' as const,keys}}}})};
 }
+
+/** PNG camera export uses the same opt-in resolver as playback. Legacy exports
+ * deliberately retain the original scene-frame cameraAt() behavior. */
+export function resolveCameraForPNGExport(project:Project,sceneId:string,panelId:string,sceneFrame:number):CameraPose {
+ const scene=project.scenes.find(s=>s.id===sceneId);
+ if(!scene)throw new Error('Scene not found.');
+ if(!scene.sequentialCamera)return cameraAt(scene,sceneFrame,project);
+ const index=scene.panels.findIndex(p=>p.id===panelId);
+ if(index<0)throw new Error('Panel not found.');
+ const start=scene.panels.slice(0,index).reduce((n,p)=>n+p.duration,0);
+ return resolveCompatibleCamera(project,sceneId,panelId,sceneFrame-start).pose;
+}
