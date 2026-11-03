@@ -33,12 +33,14 @@ try{
  assert.equal(await page.getByRole('spinbutton',{name:'IN X'}).count(),0,'Inherited IN has no numeric editor');
  const inOutline=await outline().getAttribute('points');
  await seek(119);const originalOut=await outline().getAttribute('points');
- await setNumber('OUT X',1400);
+ await setNumber('OUT X',1400);await seek(119);
  const changedX=await outline().getAttribute('points');
  assert.notEqual(changedX,originalOut,'OUT X changes rendered endpoint');
- await setNumber('OUT zoom',2);
+ await setNumber('OUT zoom',2);await seek(119);
  const changedZoom=await outline().getAttribute('points');
  assert.notEqual(changedZoom,changedX,'OUT zoom changes rendered endpoint');
+ const afterZoom=await save();
+ assert.equal(afterZoom.scenes[0].sequentialCamera.panels[s.panels[1].id].keys.at(-1).zoom,2/1.4,'Saved relative zoom reflects requested absolute OUT zoom');
  await seek(60);assert.equal(await outline().getAttribute('points'),inOutline,'Inherited IN remains fixed');
  await seek(120);assert.equal(await outline().getAttribute('points'),changedZoom,'Next panel inherits edited OUT');
  let saved=await save();
