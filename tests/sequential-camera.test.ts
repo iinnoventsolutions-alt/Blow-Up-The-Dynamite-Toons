@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {makePanel,makeProject,makeScene,changeDuration,movePanels,removeStoryboardPanel,duplicateStoryboardPanel} from '../src/model.ts';
+import {makePanel,makeProject,makeScene,cameraAt,changeDuration,movePanels,removeStoryboardPanel,duplicateStoryboardPanel} from '../src/model.ts';
 import {setSequentialCameraOut,assessLegacyCameraMigration,resolveCompatibleCamera,compareLegacyCameraFrames,migrateVisuallyEquivalentLegacyCamera,cameraOffset,defaultCamera,enableSequentialCameraStorage,resolveSequentialCamera,type SequentialCameraScene} from '../src/sequential-camera.ts';
 test('sequential camera: default scene, inherited panel, independent new scene',()=>{
  const p=makeProject(),s=p.scenes[0];s.panels.push(makePanel('Second'));
@@ -295,4 +295,25 @@ test('RFU4-RA.4D.3: static and inherited panels may use a single frame',()=>{
  changeDuration(scene,panel,1);
  assert.equal(panel.duration,1);
  assert.equal(resolveCompatibleCamera(p,scene.id,panel.id,0).pose.x,1100);
+});
+
+test('RFU4-RA.5B.1: PNG camera export resolves sequential intermediate, OUT and inherited IN; legacy remains unchanged',async()=>{
+ const {resolveCameraForPNGExport}=await import('../src/sequential-camera.ts');
+ const p=makeProject('PNG camera compatibility'),s=p.scenes[0];
+ s.panels.push(makePanel('Follower'));
+ const first=s.panels[0],second=s.panels[1],base=defaultCamera(p);
+ const legacyPose={x:1200,y:600,zoom:1.5,rotation:4};
+ s.camera.push({id:'legacy-png',frame:0,...legacyPose,interpolation:'linear'});
+ assert.deepEqual(resolveCameraForPNGExport(p,s.id,first.id,0),cameraAt(s,0,p));
+ s.camera=[];
+ p.schemaVersion=5;
+ s.sequentialCamera={version:1,panels:{[first.id]:{mode:'animated',keys:[
+  {frame:60,x:100,y:40,zoom:1.5,rotation:10,interpolation:'linear'},
+  {frame:first.duration-1,x:200,y:80,zoom:2,rotation:20,interpolation:'linear'}
+ ]}}};
+ for(const frame of [0,30,60,90,first.duration-1]){
+  assert.deepEqual(resolveCameraForPNGExport(p,s.id,first.id,frame),resolveCompatibleCamera(p,s.id,first.id,frame).pose);
+ }
+ assert.deepEqual(resolveCameraForPNGExport(p,s.id,second.id,first.duration),resolveCompatibleCamera(p,s.id,second.id,0).pose);
+ assert.notDeepEqual(resolveCameraForPNGExport(p,s.id,first.id,60),base);
 });
