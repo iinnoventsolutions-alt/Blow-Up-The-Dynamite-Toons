@@ -135,11 +135,22 @@ export function duplicatePanel(panel: Panel): Panel {
 export function changeDuration(scene: Scene, panel: Panel, duration: number) {
   if (!Number.isInteger(duration) || duration < 1) throw new Error('Duration must be a positive whole number of frames.');
   let start=0; for (const p of scene.panels) { if(p.id===panel.id)break;start+=p.duration; }
+  const sequential=scene.sequentialCamera?.panels[panel.id];
+  let retimed:typeof sequential;
+  if(sequential?.mode==='animated'){
+    if(duration<2)throw new Error('An animated sequential camera panel needs at least two frames. Remove its animation before shortening to one frame.');
+    const last=panel.duration-1, nextLast=duration-1;
+    const keys=sequential.keys.map(key=>({...key,frame:Math.max(1,Math.round(key.frame/Math.max(1,last)*nextLast))}));
+    if(new Set(keys.map(key=>key.frame)).size!==keys.length)
+      throw new Error('Shortening this panel would merge sequential camera keys. Move or delete a key first.');
+    retimed={mode:'animated',keys};
+  }
   const delta=duration-panel.duration, end=start+panel.duration;
   const frames=scene.camera.map(k=>k.frame<start?k.frame:k.frame>=end?k.frame+delta:start+Math.round((k.frame-start)/Math.max(1,panel.duration-1)*(duration-1)));
   if(new Set(frames).size!==frames.length)throw new Error('Shortening this panel would merge camera keys. Move or delete a key first.');
   scene.camera.forEach((k,i)=>{k.frame=frames[i];});
   panel.duration = duration;
+  if(retimed&&scene.sequentialCamera)scene.sequentialCamera.panels[panel.id]=retimed;
 }
 export type History = { past: Project[]; present: Project; future: Project[] };
 export const newHistory = (project: Project): History => ({ past: [], present: project, future: [] });
