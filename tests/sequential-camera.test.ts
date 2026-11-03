@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {makePanel,makeProject,makeScene,movePanels,removeStoryboardPanel,duplicateStoryboardPanel} from '../src/model.ts';
+import {makePanel,makeProject,makeScene,changeDuration,movePanels,removeStoryboardPanel,duplicateStoryboardPanel} from '../src/model.ts';
 import {setSequentialCameraOut,assessLegacyCameraMigration,resolveCompatibleCamera,compareLegacyCameraFrames,migrateVisuallyEquivalentLegacyCamera,cameraOffset,defaultCamera,enableSequentialCameraStorage,resolveSequentialCamera,type SequentialCameraScene} from '../src/sequential-camera.ts';
 test('sequential camera: default scene, inherited panel, independent new scene',()=>{
  const p=makeProject(),s=p.scenes[0];s.panels.push(makePanel('Second'));
@@ -257,4 +257,42 @@ test('RFU4-RA.4D.2: incompatible cross-engine camera moves reject atomically',()
  const before=JSON.stringify(p);
  assert.throws(()=>movePanels(p,[{panelId:animated.id,sceneId:legacy.id}]),/camera conversion/);
  assert.equal(JSON.stringify(p),before);
+});
+
+test('RFU4-RA.4D.3: extending sequential animation retains OUT and retimes intermediate keys',()=>{
+ const p=makeProject(),scene=p.scenes[0],panel=scene.panels[0];panel.duration=11;p.schemaVersion=5;
+ scene.panels.push(makePanel('Following'));
+ scene.sequentialCamera={version:1,panels:{[panel.id]:{mode:'animated',keys:[
+  {frame:5,x:40,y:0,zoom:1,rotation:0,interpolation:'ease'},
+  {frame:10,x:100,y:30,zoom:1.2,rotation:0,interpolation:'linear'}
+ ]}}};
+ const out=resolveCompatibleCamera(p,scene.id,panel.id,10).outPose;
+ changeDuration(scene,panel,21);
+ const state=scene.sequentialCamera.panels[panel.id];
+ assert.equal(state.mode,'animated');
+ if(state.mode!=='animated')return;
+ assert.deepEqual(state.keys.map(k=>k.frame),[10,20]);
+ assert.equal(state.keys[0].interpolation,'ease');
+ assert.deepEqual(resolveCompatibleCamera(p,scene.id,panel.id,20).outPose,out);
+ assert.deepEqual(resolveCompatibleCamera(p,scene.id,scene.panels[1].id,0).inPose,out);
+});
+test('RFU4-RA.4D.3: shortening with distinct key collision rejects without mutation',()=>{
+ const p=makeProject(),scene=p.scenes[0],panel=scene.panels[0];panel.duration=11;p.schemaVersion=5;
+ scene.sequentialCamera={version:1,panels:{[panel.id]:{mode:'animated',keys:[
+  {frame:4,x:10,y:0,zoom:1,rotation:0,interpolation:'linear'},
+  {frame:5,x:20,y:0,zoom:1,rotation:0,interpolation:'linear'},
+  {frame:10,x:50,y:0,zoom:1,rotation:0,interpolation:'linear'}
+ ]}}};
+ const original=JSON.stringify(p);
+ assert.throws(()=>changeDuration(scene,panel,3),/merge sequential camera keys/);
+ assert.equal(JSON.stringify(p),original);
+ assert.throws(()=>changeDuration(scene,panel,1),/at least two frames/);
+ assert.equal(JSON.stringify(p),original);
+});
+test('RFU4-RA.4D.3: static and inherited panels may use a single frame',()=>{
+ const p=makeProject(),scene=p.scenes[0],panel=scene.panels[0];p.schemaVersion=5;
+ scene.sequentialCamera={version:1,panels:{[panel.id]:{mode:'static',pose:{x:1100,y:600,zoom:1,rotation:0}}}};
+ changeDuration(scene,panel,1);
+ assert.equal(panel.duration,1);
+ assert.equal(resolveCompatibleCamera(p,scene.id,panel.id,0).pose.x,1100);
 });
