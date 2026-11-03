@@ -180,3 +180,22 @@ export function setSequentialStaticCamera(project:Project,sceneId:string,panelId
  for(const panel of updated.panels)resolveSequentialCamera(updated,next,updated.sequentialCamera!,panel.id,panel.duration-1);
  return next;
 }
+
+/** Activate panel-owned IN/OUT animation from its current static/inherited pose.
+ * IN remains inherited and locked; OUT starts visually identical until edited. */
+export function enableSequentialPanelAnimation(project:Project,sceneId:string,panelId:string):Project {
+ const scene=project.scenes.find(s=>s.id===sceneId);
+ if(!scene?.sequentialCamera||project.schemaVersion!==5)throw new Error('Sequential camera storage is not enabled.');
+ const panel=scene.panels.find(p=>p.id===panelId);
+ if(!panel||panel.duration<2)throw new Error('Camera animation requires a panel of at least two frames.');
+ const existing=scene.sequentialCamera.panels[panelId];
+ if(existing?.mode==='animated')return project;
+ const resolved=resolveSequentialCamera(scene,project,scene.sequentialCamera,panelId,0);
+ const pose=existing?.mode==='static'||existing?.mode==='break'?existing.pose:resolved.inPose;
+ // Preserve current static appearance at activation without changing downstream panels.
+ const offset=cameraOffset(resolved.inPose,pose);
+ const next:Project={...project,scenes:project.scenes.map(s=>s.id!==sceneId?s:{...s,sequentialCamera:{...s.sequentialCamera!,panels:{...s.sequentialCamera!.panels,[panelId]:{mode:'animated' as const,keys:[{frame:panel.duration-1,...offset,interpolation:'linear' as const}]}}}})};
+ const updated=next.scenes.find(s=>s.id===sceneId)!;
+ for(const p of updated.panels)resolveSequentialCamera(updated,next,updated.sequentialCamera!,p.id,p.duration-1);
+ return next;
+}
