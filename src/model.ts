@@ -199,7 +199,7 @@ export function rebuildPanelCameras(before:Project,after:Project,affected:Set<st
 export function removeStoryboardPanel(project:Project,panelId:string){
  const found=findPanel(project,panelId);if(!found)throw new Error('Panel no longer exists.');
  if(found.scene.panels.length<=1)throw new Error('Keep at least one panel per scene.');
- return editProject(project,draft=>{const s=draft.scenes.find(s=>s.id===found.scene.id)!;s.panels=s.panels.filter(p=>p.id!==panelId);if(s.sequentialCamera){const {[panelId]:_removed,...remaining}=s.sequentialCamera.panels;s.sequentialCamera={...s.sequentialCamera,panels:remaining};}else rebuildPanelCameras(project,draft,new Set([s.id]));});
+ return editProject(project,draft=>{const s=draft.scenes.find(s=>s.id===found.scene.id)!;s.panels=s.panels.filter(p=>p.id!==panelId);if(s.sequentialCamera){const remaining={...s.sequentialCamera.panels};delete remaining[panelId];s.sequentialCamera={...s.sequentialCamera,panels:remaining};}else rebuildPanelCameras(project,draft,new Set([s.id]));});
 }
 export function duplicateStoryboardPanel(project:Project,panelId:string){
  const found=findPanel(project,panelId);if(!found)throw new Error('Panel no longer exists.');
