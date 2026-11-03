@@ -138,3 +138,31 @@ export function resolveCompatibleCamera(project:Project,sceneId:string,panelId:s
  const pose=scene.camera.length===0&&panel.staticCamera?clone(panel.staticCamera):clone(legacy);
  return {inPose:pose,pose,outPose:pose,mode:'legacy' as const,engine:'legacy' as const};
 }
+
+/** RFU4-RA.4C.2B: immutable, panel-owned OUT write.
+ * Frame zero is inherited and never stored as an editable key. */
+export function setSequentialCameraOut(project:Project,sceneId:string,panelId:string,target:CameraPose):Project {
+  const scene=project.scenes.find(s=>s.id===sceneId);
+  if(!scene?.sequentialCamera || project.schemaVersion!==5)throw new Error('Sequential camera storage is not enabled.');
+  const panel=scene.panels.find(p=>p.id===panelId);
+  if(!panel || panel.duration<2)throw new Error('Animated OUT requires a panel of at least two frames.');
+  if(!valid(target))throw new Error('Invalid sequential camera OUT pose.');
+  const state=scene.sequentialCamera.panels[panelId];
+  if(state?.mode!=='animated')throw new Error('Panel does not have an animated camera OUT.');
+  const inherited=resolveSequentialCamera(scene,project,scene.sequentialCamera,panelId,0).inPose;
+  const offset=cameraOffset(inherited,target);
+  const endFrame=panel.duration-1;
+  const keys=state.keys.filter(k=>k.frame!==endFrame).map(k=>({...k}));
+  const previous=state.keys.find(k=>k.frame===endFrame);
+  keys.push({frame:endFrame,...offset,interpolation:previous?.interpolation??'linear'});
+  keys.sort((a,b)=>a.frame-b.frame);
+  const next:Project={...project,scenes:project.scenes.map(s=>s.id!==sceneId?s:{
+    ...s,sequentialCamera:{...s.sequentialCamera!,panels:{...s.sequentialCamera!.panels,
+      [panelId]:{mode:'animated' as const,keys}
+    }}
+  })};
+  // Re-evaluate downstream inheritance before returning; invalid geometry rejects atomically.
+  const nextScene=next.scenes.find(s=>s.id===sceneId)!;
+  for(const downstream of nextScene.panels)resolveSequentialCamera(nextScene,next,nextScene.sequentialCamera!,downstream.id,downstream.duration-1);
+  return next;
+}
