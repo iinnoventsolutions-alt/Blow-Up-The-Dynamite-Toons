@@ -38,7 +38,8 @@ try{
  assert.notEqual(copy.id,animated.id,'Duplicate receives a fresh panel identity');
  await seek(179);const duplicateOut=await outline().getAttribute('points');
  await seek(180);assert.equal(await outline().getAttribute('points'),duplicateOut,'Downstream panel inherits duplicated OUT');
- await page.getByTitle('Delete selected panel').click();await wait();
+ await page.getByTitle('Delete selected panel').click();
+ await page.getByRole('button',{name:'Discard / Delete',exact:true}).click();await wait();
  saved=await save();assert.equal(saved.scenes[0].panels.length,3,'Delete removes selected downstream panel');
  assert.equal(saved.scenes[0].sequentialCamera.panels[copy.id].mode,'animated','Deletion preserves surviving animated state');
  await page.getByTitle('Undo (⌘/Ctrl Z)').click();await wait();
