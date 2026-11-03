@@ -18,7 +18,7 @@ const save=async()=>{const pending=page.waitForEvent('download');await page.getB
 const seek=async f=>{await page.getByLabel('Scene camera time').fill(String(f));await wait();};
 const outline=()=>page.locator('.stage-paper .camera-sequential-outline polygon');
 const handles=()=>page.locator('.stage-paper .camera-sequential-out-overlay');
-const drag=async(locator,dx,dy,steps=8)=>{const b=await locator.boundingBox();assert(b,'Drag handle must be visible');const x=b.x+b.width/2,y=b.y+b.height/2;await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+dx,y+dy,{steps});await page.mouse.up();await wait();};
+const drag=async(locator,dx,dy,steps=8)=>{const b=await locator.boundingBox();assert(b,'Drag handle must be visible');const x=b.x+b.width/2,y=b.y+b.height/2;const target=await page.evaluate(([x,y])=>{const e=document.elementFromPoint(x,y);return {tag:e?.tagName,mode:e?.getAttribute('data-mode'),overlay:!!e?.closest('.camera-sequential-out-overlay')};},[x,y]);assert(target.overlay&&target.mode,`Camera OUT handle must receive pointer input; actual top element: ${JSON.stringify(target)}`);await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+dx,y+dy,{steps});await page.mouse.up();await wait();};
 try{
  const p=makeProject('Sequential camera drag acceptance'),s=p.scenes[0];
  s.panels.push(makePanel('Panel 2'),makePanel('Panel 3'));s.panels.forEach(panel=>panel.duration=60);
