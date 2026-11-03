@@ -317,3 +317,25 @@ test('RFU4-RA.5B.1: PNG camera export resolves sequential intermediate, OUT and 
  assert.deepEqual(resolveCameraForPNGExport(p,s.id,second.id,first.duration),resolveCompatibleCamera(p,s.id,second.id,0).pose);
  assert.notDeepEqual(resolveCameraForPNGExport(p,s.id,first.id,60),base);
 });
+
+test('RFU4-RA.5B.1: dissolve and wipe transition boundary uses inherited incoming IN',async()=>{
+ const {transitionAt}=await import('../src/transitions.ts');
+ const {resolveCameraForPNGExport}=await import('../src/sequential-camera.ts');
+ const p=makeProject('Sequential transition continuity'),s=p.scenes[0];
+ s.panels.push(makePanel('Incoming'));
+ const outgoing=s.panels[0],incoming=s.panels[1];
+ p.schemaVersion=5;
+ s.sequentialCamera={version:1,panels:{[outgoing.id]:{mode:'animated',keys:[{frame:outgoing.duration-1,x:120,y:-30,zoom:1.4,rotation:8,interpolation:'linear'}]}}};
+ for(const type of ['dissolve','edge-wipe','clock-wipe','slide'] as const){
+  p.transitions=[{id:'transition-test',fromId:outgoing.id,toId:incoming.id,type,duration:12,direction:'right'}];
+  const boundary=outgoing.duration;
+  const mix=transitionAt(p,boundary-1);
+  assert.equal(mix?.boundary,boundary);
+  assert.equal(mix?.progress,1);
+  const out=resolveCompatibleCamera(p,s.id,outgoing.id,outgoing.duration-1).pose;
+  const incomingAtBoundary=resolveCompatibleCamera(p,s.id,incoming.id,0).pose;
+  assert.deepEqual(incomingAtBoundary,out,'Incoming IN must equal outgoing OUT for '+type);
+  assert.deepEqual(resolveCameraForPNGExport(p,s.id,incoming.id,boundary),out);
+  assert.equal(transitionAt(p,boundary),undefined);
+ }
+});
