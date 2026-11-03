@@ -52,6 +52,8 @@ try{
  saved=await save();
  assert.equal(saved.scenes[0].panels[0].duration,120,'Duration editor commits 120 frames');
  assert.deepEqual(saved.scenes[0].sequentialCamera.panels[animated.id].keys.map(k=>k.frame),[61,119],'Intermediate and OUT keys retime proportionally');
+ // Camera time is available only while the Camera inspector is selected.
+ await page.getByRole('tab',{name:'Camera',exact:true}).click();await wait();
  await seek(119);const extendedOut=await outline().getAttribute('points');
  assert.equal(extendedOut,movedOut,'Extending duration preserves OUT pose');
  await seek(120);assert.equal(await outline().getAttribute('points'),extendedOut,'Downstream IN inherits retimed OUT');
