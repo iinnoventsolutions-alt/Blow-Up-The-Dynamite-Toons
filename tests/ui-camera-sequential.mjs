@@ -31,6 +31,8 @@ try{
  assert.equal(await polygon().count(),1,'Sequential outline is visible');
  assert.equal(await page.locator('.stage-paper .camera-overlay').count(),0,'Legacy interactive overlay is not displayed for sequential storage');
  const first=await points();assert(first,'First panel camera outline exists');
+ // Camera mask control lives in the Camera inspector, not the default Panel inspector.
+ await page.getByTitle('camera (C)',{exact:true}).click();await wait();
  const checkbox=page.getByRole('checkbox',{name:'Mask outside camera'});
  await checkbox.check();await wait();
  assert.equal(await mask().count(),1,'Sequential dark mask is visible');
