@@ -199,3 +199,32 @@ export function enableSequentialPanelAnimation(project:Project,sceneId:string,pa
  for(const p of updated.panels)resolveSequentialCamera(updated,next,updated.sequentialCamera!,p.id,p.duration-1);
  return next;
 }
+
+/** Intermediate camera keys reuse the existing panel-relative sequential animation model. */
+export function setSequentialIntermediateKey(project:Project,sceneId:string,panelId:string,frame:number,pose?:CameraPose):Project {
+ const scene=project.scenes.find(s=>s.id===sceneId);
+ if(!scene?.sequentialCamera||project.schemaVersion!==5)throw new Error('Sequential camera storage is not enabled.');
+ const panel=scene.panels.find(p=>p.id===panelId);
+ if(!panel||!Number.isInteger(frame)||frame<=0||frame>=panel.duration-1)throw new Error('Intermediate key must be strictly between IN and OUT.');
+ const state=scene.sequentialCamera.panels[panelId];
+ if(state?.mode!=='animated')throw new Error('Activate IN/OUT before adding intermediate keys.');
+ const current=resolveSequentialCamera(scene,project,scene.sequentialCamera,panelId,frame);
+ const target=pose??current.pose;
+ if(!valid(target))throw new Error('Invalid intermediate camera pose.');
+ const old=state.keys.find(k=>k.frame===frame);
+ const keys=[...state.keys.filter(k=>k.frame!==frame),{frame,...cameraOffset(current.inPose,target),interpolation:old?.interpolation??'linear' as const}].sort((a,b)=>a.frame-b.frame);
+ const next:Project={...project,scenes:project.scenes.map(s=>s.id!==sceneId?s:{...s,sequentialCamera:{...s.sequentialCamera!,panels:{...s.sequentialCamera!.panels,[panelId]:{mode:'animated' as const,keys}}}})};
+ const updated=next.scenes.find(s=>s.id===sceneId)!;
+ for(const p of updated.panels)resolveSequentialCamera(updated,next,updated.sequentialCamera!,p.id,p.duration-1);
+ return next;
+}
+export function deleteSequentialIntermediateKey(project:Project,sceneId:string,panelId:string,frame:number):Project {
+ const scene=project.scenes.find(s=>s.id===sceneId);
+ if(!scene?.sequentialCamera||project.schemaVersion!==5)throw new Error('Sequential camera storage is not enabled.');
+ const panel=scene.panels.find(p=>p.id===panelId);
+ if(!panel||!Number.isInteger(frame)||frame<=0||frame>=panel.duration-1)throw new Error('Cannot delete inherited IN or final OUT.');
+ const state=scene.sequentialCamera.panels[panelId];
+ if(state?.mode!=='animated'||!state.keys.some(k=>k.frame===frame))throw new Error('Intermediate key not found.');
+ const keys=state.keys.filter(k=>k.frame!==frame);
+ return {...project,scenes:project.scenes.map(s=>s.id!==sceneId?s:{...s,sequentialCamera:{...s.sequentialCamera!,panels:{...s.sequentialCamera!.panels,[panelId]:{mode:'animated' as const,keys}}}})};
+}
