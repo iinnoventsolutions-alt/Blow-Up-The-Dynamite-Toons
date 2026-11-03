@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {makePanel,makeProject,makeScene} from '../src/model.ts';
+import {makePanel,makeProject,makeScene,removeStoryboardPanel,duplicateStoryboardPanel} from '../src/model.ts';
 import {setSequentialCameraOut,assessLegacyCameraMigration,resolveCompatibleCamera,compareLegacyCameraFrames,migrateVisuallyEquivalentLegacyCamera,cameraOffset,defaultCamera,enableSequentialCameraStorage,resolveSequentialCamera,type SequentialCameraScene} from '../src/sequential-camera.ts';
 test('sequential camera: default scene, inherited panel, independent new scene',()=>{
  const p=makeProject(),s=p.scenes[0];s.panels.push(makePanel('Second'));
@@ -190,4 +190,34 @@ test('sequential OUT writer rejects unsafe edits without changing source',()=>{
  assert.throws(()=>setSequentialCameraOut(p,s.id,s.panels[0].id,{...pose,zoom:0}),/Invalid sequential/);
  assert.equal(p.scenes[0].sequentialCamera!.panels[s.panels[0].id].mode,'animated');
  assert.equal((p.scenes[0].sequentialCamera!.panels[s.panels[0].id] as {keys:unknown[]}).keys.length,0);
+});
+
+test('RFU4-RA.4D.1: deleting sequential animated panel removes its state and reconnects inheritance',()=>{
+ const p=makeProject(),s=p.scenes[0];s.panels.push(makePanel('Animated'),makePanel('Downstream'));
+ s.panels.forEach(x=>x.duration=30);p.schemaVersion=5;
+ const [a,b,c]=s.panels;
+ s.sequentialCamera={version:1,baseline:{x:960,y:540,zoom:1,rotation:0},panels:{
+  [b.id]:{mode:'animated',keys:[{frame:29,x:180,y:0,zoom:1.2,rotation:0,interpolation:'linear'}]}
+ }};
+ const before=resolveCompatibleCamera(p,s.id,c.id,0).pose;
+ assert.equal(before.x,1140);
+ const next=removeStoryboardPanel(p,b.id),scene=next.scenes[0];
+ assert.equal(scene.sequentialCamera?.panels[b.id],undefined);
+ assert.deepEqual(resolveCompatibleCamera(next,scene.id,c.id,0).pose,resolveCompatibleCamera(next,scene.id,a.id,0).pose);
+ assert.equal(p.scenes[0].sequentialCamera?.panels[b.id]?.mode,'animated','Source remains immutable');
+});
+test('RFU4-RA.4D.1: duplication creates independent camera state and recalculates downstream',()=>{
+ const p=makeProject(),s=p.scenes[0];s.panels.push(makePanel('Animated'),makePanel('Next'));
+ s.panels.forEach(x=>x.duration=30);p.schemaVersion=5;
+ const animated=s.panels[1];
+ s.sequentialCamera={version:1,panels:{
+  [animated.id]:{mode:'animated',keys:[{frame:29,x:100,y:0,zoom:1,rotation:0,interpolation:'linear'}]}
+ }};
+ const {project:next,panelId}=duplicateStoryboardPanel(p,animated.id),scene=next.scenes[0];
+ assert.equal(scene.panels[2].id,panelId);
+ assert.equal(scene.sequentialCamera?.panels[panelId]?.mode,'animated');
+ assert.notEqual(scene.sequentialCamera?.panels[panelId],scene.sequentialCamera?.panels[animated.id]);
+ assert.equal(resolveCompatibleCamera(next,scene.id,panelId,0).inPose.x,1060);
+ assert.equal(resolveCompatibleCamera(next,scene.id,scene.panels[3].id,0).inPose.x,1160);
+ assert.equal(p.scenes[0].panels.length,3);
 });
