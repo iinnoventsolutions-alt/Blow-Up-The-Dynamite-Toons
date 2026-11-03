@@ -1,6 +1,9 @@
 name: Electron Builder Security Trial
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - Working
   push:
     branches:
       - Security-Audit-W
