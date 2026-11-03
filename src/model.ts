@@ -65,8 +65,8 @@ export function movePanels(project: Project, moves: PanelMove[]): Project {
       const destination=draft.scenes.find(scene=>scene.id===move.sceneId)!;
       if(origin.id===destination.id)continue;
       const sourceState=origin.sequentialCamera?.panels[move.panelId];
-      if(sourceState&&!destination.sequentialCamera)throw new Error('Cannot move a sequential camera panel into a legacy scene without camera conversion.');
-      if(!origin.sequentialCamera&&destination.sequentialCamera&&origin.camera.length)
+      if(origin.sequentialCamera&&!destination.sequentialCamera)throw new Error('Cannot move a sequential camera panel into a legacy scene without camera conversion.');
+      if(!origin.sequentialCamera&&destination.sequentialCamera&&(origin.camera.length||!!findPanel(project,move.panelId)?.panel.staticCamera))
         throw new Error('Cannot move a legacy animated camera panel into a sequential scene without camera conversion.');
       if(origin.sequentialCamera){
         if(sourceState)destination.sequentialCamera!.panels[move.panelId]=structuredClone(sourceState);
