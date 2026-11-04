@@ -359,3 +359,15 @@ test('RC1.1-A: first panel IN is editable and scene-local; later IN remains lock
  const reopened=JSON.parse(JSON.stringify(edited));
  assert.deepEqual(resolveCompatibleCamera(reopened,first.id,first.panels[0].id,0).inPose,start);
 });
+
+test('RC1.1-A: editability follows scene order after panel reordering',()=>{
+ const p=makeProject('Scene order');p.schemaVersion=5;
+ const scene=p.scenes[0];scene.panels.push(makePanel('Second'));scene.sequentialCamera={version:1,panels:{}};
+ const previousFirst=scene.panels[0].id,newFirst=scene.panels[1].id;
+ const moved=structuredClone(p);moved.scenes[0].panels.reverse();
+ const pose={x:1030,y:570,zoom:1.1,rotation:15};
+ const edited=setSequentialFirstPanelIn(moved,scene.id,newFirst,pose);
+ assert.deepEqual(resolveCompatibleCamera(edited,scene.id,newFirst,0).inPose,pose);
+ assert.deepEqual(resolveCompatibleCamera(edited,scene.id,previousFirst,0).inPose,pose);
+ assert.throws(()=>setSequentialFirstPanelIn(edited,scene.id,previousFirst,pose),/Only the first panel/);
+});
