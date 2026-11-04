@@ -51,6 +51,10 @@ try{
  await load(p); // Restore original animated fixture for existing mask and inheritance assertions.
 
 
+ const rotationHandle=page.locator('.camera-sequential-out-overlay [data-mode="rotate"]');
+ // RC1: rotation affordance is available on the editable sequential overlay.
+ assert.equal(await rotationHandle.count(),1,'Sequential camera exposes one cyan rotation handle');
+ assert.equal(await rotationHandle.getAttribute('fill'),'#15c7e8','Rotation handle uses cyan accent');
  const checkbox=page.getByRole('checkbox',{name:'Mask outside camera'});
  await checkbox.check();await wait();
  assert.equal(await mask().count(),1,'Sequential dark mask is visible');
