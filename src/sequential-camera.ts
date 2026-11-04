@@ -139,6 +139,18 @@ export function resolveCompatibleCamera(project:Project,sceneId:string,panelId:s
  return {inPose:pose,pose,outPose:pose,mode:'legacy' as const,engine:'legacy' as const};
 }
 
+/** Scene-local editable IN exists only on the first panel. Animated keys remain relative to that IN. */
+export function setSequentialFirstPanelIn(project:Project,sceneId:string,panelId:string,pose:CameraPose):Project {
+ const scene=project.scenes.find(s=>s.id===sceneId);
+ if(!scene?.sequentialCamera||project.schemaVersion!==5)throw new Error('Sequential camera storage is not enabled.');
+ if(scene.panels[0]?.id!==panelId)throw new Error('Only the first panel of a scene has an editable IN.');
+ if(!valid(pose))throw new Error('Invalid sequential camera IN pose.');
+ const next:Project={...project,scenes:project.scenes.map(s=>s.id!==sceneId?s:{...s,sequentialCamera:{...s.sequentialCamera!,baseline:clone(pose)}})};
+ const updated=next.scenes.find(s=>s.id===sceneId)!;
+ for(const panel of updated.panels)resolveSequentialCamera(updated,next,updated.sequentialCamera!,panel.id,panel.duration-1);
+ return next;
+}
+
 /** RFU4-RA.4C.2B: immutable, panel-owned OUT write.
  * Frame zero is inherited and never stored as an editable key. */
 export function setSequentialCameraOut(project:Project,sceneId:string,panelId:string,target:CameraPose):Project {
