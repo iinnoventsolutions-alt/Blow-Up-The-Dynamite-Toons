@@ -33,6 +33,12 @@ try{
  const first=await points();assert(first,'First panel camera outline exists');
  // Camera mask control lives in the Camera inspector, not the default Panel inspector.
  await page.getByTitle('camera (C)',{exact:true}).click();await wait();
+ const copyCamera=page.getByRole('button',{name:'Copy camera from selected panel'});
+ const pasteCamera=page.getByRole('button',{name:'Paste camera on selected panel'});
+ assert.equal(await copyCamera.count(),1,'Sequential copy action is visible');
+ assert.equal(await pasteCamera.isDisabled(),true,'Paste disabled before sequential copy');
+ await copyCamera.click();await wait();
+ assert.equal(await pasteCamera.isEnabled(),true,'Sequential copy enables paste');
  const checkbox=page.getByRole('checkbox',{name:'Mask outside camera'});
  await checkbox.check();await wait();
  assert.equal(await mask().count(),1,'Sequential dark mask is visible');

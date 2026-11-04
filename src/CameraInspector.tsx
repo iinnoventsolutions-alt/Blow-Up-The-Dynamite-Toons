@@ -21,6 +21,10 @@ export default function CameraInspector({ project, scene, panel, frame, editFram
     return <section className="camera-inspector camera-sequential-inspector" aria-label="Sequential camera editing state">
       <h3>Sequential Camera · {scene.name}</h3>
       <p className="camera-help">Panel camera positions inherit the preceding panel's OUT. A new scene starts from its own baseline.</p>
+      <div className="camera-buttons" role="toolbar" aria-label="Sequential panel camera transfer">
+        <button type="button" aria-label="Copy camera from selected panel" onClick={onCopy}>Copy Camera</button>
+        <button type="button" aria-label="Paste camera on selected panel" disabled={!canPaste} onClick={onPaste}>Paste Camera</button>
+      </div>
       {!animated&&<button type="button" onClick={onSequentialAnimate} aria-label="Animate sequential camera IN/OUT">Animate IN/OUT</button>}
       <div role="group" aria-label="Sequential camera endpoints">
         <div aria-label="Inherited camera IN" data-camera-locked="true"><strong>IN · Locked</strong> — inherited from the preceding panel</div>
