@@ -22,9 +22,12 @@ try{
  // The scene-time slider seeks to frame 119, selecting Panel 2 (frames 60–119).
  assert.equal(await page.getByLabel('Scene camera time').inputValue(),'119','Camera test is on the second panel at the stationary checkpoint');
  assert.equal(await overlay.locator('.camera-intermediate').count(),0,'No intermediate outlines before an intermediate key exists');
- assert.equal(await overlay.locator('circle[data-frame="119"]').count(),1,'Stationary camera retains editable OUT-frame handle');
- assert.equal(await overlay.locator('circle[data-frame="60"]').count(),1,'Stationary camera retains the active second panel IN handle at frame 60');
- assert.equal(await overlay.locator('circle[data-frame="0"]').count(),0,'Second panel overlay must not expose the first panel IN handle');
+ assert.equal(await overlay.locator('circle[data-frame="119"][data-mode="pan"]').count(),1,'Stationary camera retains editable OUT-frame handle');
+ assert.equal(await overlay.locator('circle[data-frame="60"][data-mode="pan"]').count(),1,'Stationary camera retains the active second panel IN handle at frame 60');
+ assert.equal(await overlay.locator('circle[data-frame="0"][data-mode="pan"]').count(),0,'Second panel overlay must not expose the first panel IN handle');
+ assert.equal(await overlay.locator('circle[data-frame="119"][data-mode="rotate"]').count(),1,'Stationary OUT exposes cyan rotation handle');
+ assert.equal(await overlay.locator('circle[data-frame="60"][data-mode="rotate"]').count(),1,'Stationary IN exposes cyan rotation handle');
+
  assert.equal(await overlay.locator('text').filter({hasText:/^IN$/}).count(),1,'Stationary camera displays exactly one IN endpoint label');
  assert.equal(await overlay.locator('text').filter({hasText:/^● IN$/}).count(),1,'Stationary camera displays exactly one IN selector');
  assert.equal(await overlay.locator('text').filter({hasText:/^OUT$/}).count(),1,'Stationary camera displays exactly one OUT endpoint label');
