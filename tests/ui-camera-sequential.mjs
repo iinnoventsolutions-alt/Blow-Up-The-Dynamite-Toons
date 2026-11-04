@@ -48,6 +48,8 @@ try{
  await seek(120);
  assert.equal(await points(),originalFirst,'Downstream camera inherits pasted static OUT');
  await seek(0);
+ await load(p); // Restore original animated fixture for existing mask and inheritance assertions.
+
 
  const checkbox=page.getByRole('checkbox',{name:'Mask outside camera'});
  await checkbox.check();await wait();
