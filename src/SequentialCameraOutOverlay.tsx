@@ -9,8 +9,8 @@ type Drag={pointerId:number;mode:'pan'|'zoom'|'rotate';origin:CameraPose;x:numbe
 const equal=(a:CameraPose,b:CameraPose)=> (['x','y','zoom','rotation'] as const).every(k=>Math.abs(a[k]-b[k])<1e-7);
 
 /** Sequential OUT is the only draggable endpoint; inherited IN is never interactive. */
-export default function SequentialCameraOutOverlay({project,inPose,outPose,editable,onChange,drawingMargin=.25,staticMode=false,intermediateMode=false}:{
- project:Project;inPose:CameraPose;outPose:CameraPose;editable:boolean;onChange:(pose:CameraPose)=>void;drawingMargin?:number;staticMode?:boolean;intermediateMode?:boolean;
+export default function SequentialCameraOutOverlay({project,inPose,outPose,editable,onChange,drawingMargin=.25,staticMode=false,intermediateMode=false,editingIn=false,inLocked=true}:{
+ project:Project;inPose:CameraPose;outPose:CameraPose;editable:boolean;onChange:(pose:CameraPose)=>void;drawingMargin?:number;staticMode?:boolean;intermediateMode?:boolean;editingIn?:boolean;inLocked?:boolean;
 }){
  const [live,setLive]=useState<CameraPose|null>(null);
  const liveRef=useRef<CameraPose|null>(null);
@@ -27,12 +27,12 @@ export default function SequentialCameraOutOverlay({project,inPose,outPose,edita
  const pose=live??outPose,corners=cameraCorners(pose,project),incoming=cameraCorners(inPose,project),handle=Math.max(project.width,project.height)/100,rotationHandle=cameraRotationHandle(pose,corners,handle*2.5);
  return <svg className="camera-sequential-out-overlay" aria-label="Sequential camera OUT handles" viewBox={`${-project.width*drawingMargin} ${-project.height*drawingMargin} ${project.width*(1+2*drawingMargin)} ${project.height*(1+2*drawingMargin)}`} preserveAspectRatio="none" onPointerDown={begin} onPointerMove={move} onPointerUp={finish} onPointerCancel={cancel} onLostPointerCapture={lost} onKeyDown={e=>{if(e.key==='Escape'){drag.current=null;pending.current=null;liveRef.current=null;setLive(null);}}} tabIndex={editable?0:undefined} style={{position:'absolute',inset:0,width:'100%',height:'100%',overflow:'visible',pointerEvents:editable?'auto':'none'}}>
   {!staticMode&&<polygon data-camera-endpoint="in" points={incoming.map(p=>p.join(',')).join(' ')} fill="none" stroke="#32c85b" strokeWidth={handle/5} pointerEvents="none"/>}
-  {!staticMode&&<text x={incoming[0][0]+handle} y={incoming[0][1]+handle*1.7} fill="#32c85b" fontSize={handle*1.25} pointerEvents="none">IN · LOCKED</text>}
+  {!staticMode&&<text x={incoming[0][0]+handle} y={incoming[0][1]+handle*1.7} fill="#32c85b" fontSize={handle*1.25} pointerEvents="none">{inLocked?'IN · LOCKED':'IN'}</text>}
   <g data-camera-endpoint="out">
-   <polygon data-mode="pan" points={corners.map(p=>p.join(',')).join(' ')} fill="none" stroke={staticMode?'#222222':intermediateMode?'#3889e8':'#ef4d50'} strokeWidth={handle/5} className="camera-frame" style={{pointerEvents:'stroke'}}/>
-   <text x={corners[0][0]+handle} y={corners[0][1]+handle*1.7} fill={staticMode?'#222222':'#ef4d50'} fontSize={handle*1.25} pointerEvents="none">{staticMode?'STATIC':intermediateMode?'INTERMEDIATE':'OUT'}</text>
+   <polygon data-mode="pan" points={corners.map(p=>p.join(',')).join(' ')} fill="none" stroke={editingIn?'#32c85b':staticMode?'#222222':intermediateMode?'#3889e8':'#ef4d50'} strokeWidth={handle/5} className="camera-frame" style={{pointerEvents:'stroke'}}/>
+   <text x={corners[0][0]+handle} y={corners[0][1]+handle*1.7} fill={staticMode?'#222222':'#ef4d50'} fontSize={handle*1.25} pointerEvents="none">{editingIn?'IN':staticMode?'STATIC':intermediateMode?'INTERMEDIATE':'OUT'}</text>
    {corners.map(([x,y],i)=><rect key={i} data-mode="zoom" x={x-handle/2} y={y-handle/2} width={handle} height={handle} fill={staticMode?'#222222':intermediateMode?'#3889e8':'#ef4d50'} className="camera-handle"/>)}
-   <circle data-mode="pan" cx={pose.x} cy={pose.y} r={handle/2} fill="#ef4d50" className="camera-handle"/>
+   <circle data-mode="pan" cx={pose.x} cy={pose.y} r={handle/2} fill={editingIn?'#32c85b':'#ef4d50'} className="camera-handle"/>
    {editable&&<g className="camera-rotation-control"><line x1={rotationHandle.anchorX} y1={rotationHandle.anchorY} x2={rotationHandle.x} y2={rotationHandle.y} stroke="#15c7e8" strokeWidth={handle/7} pointerEvents="none"/><circle data-mode="rotate" aria-label="Rotate sequential camera" cx={rotationHandle.x} cy={rotationHandle.y} r={handle*.75} fill="#15c7e8" stroke="#ffffff" strokeWidth={handle/8} className="camera-rotation-handle"/></g>}
   </g>
  </svg>;
