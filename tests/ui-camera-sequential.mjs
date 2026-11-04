@@ -39,6 +39,16 @@ try{
  assert.equal(await pasteCamera.isDisabled(),true,'Paste disabled before sequential copy');
  await copyCamera.click();await wait();
  assert.equal(await pasteCamera.isEnabled(),true,'Sequential copy enables paste');
+ const originalFirst=await points();
+ await seek(60);
+ await pasteCamera.click();await wait();
+ assert.equal(await points(),originalFirst,'Pasted static camera replaces animated destination framing');
+ await seek(119);
+ assert.equal(await points(),originalFirst,'Pasted static camera remains static through destination OUT');
+ await seek(120);
+ assert.equal(await points(),originalFirst,'Downstream camera inherits pasted static OUT');
+ await seek(0);
+
  const checkbox=page.getByRole('checkbox',{name:'Mask outside camera'});
  await checkbox.check();await wait();
  assert.equal(await mask().count(),1,'Sequential dark mask is visible');
