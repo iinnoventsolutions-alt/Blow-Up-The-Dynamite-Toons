@@ -6,13 +6,14 @@ function NumberField({ label, value, min, max, step = 'any', onChange }: { label
   const [text, setText] = useState(display); useEffect(()=>setText(display),[display]);
   return <label className="field"><span>{label}</span><input aria-label={label} type="number" value={text} min={min} max={max} step={step} onChange={e=>setText(e.target.value)} onBlur={e=>{const entered=e.currentTarget.value;const n=Number(entered);if(entered !== display && entered.trim() && Number.isFinite(n) && n>=min && n<=max && (step !== '1' || Number.isInteger(n))) onChange(n);setText(display);}} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}}/></label>;
 }
-export default function CameraInspector({ project, scene, panel, frame, editFrame = frame, selectedEndpoint = null, onSelectEndpoint, onSeek, onEdit, onKeyFrame, onDelete, onSetup, onClear, onExport, onCopy, onPaste, onCopyOut, onPasteStart, onReset, canPaste, canPasteStart, onAddBoundary, onSequentialOut, onSequentialAnimate, onSequentialIntermediateAdd, onSequentialIntermediateDelete, onSequentialIntermediateEdit }: { project: Project; scene: Scene; panel: Panel; frame: number; editFrame?:number; selectedEndpoint?:'in'|'out'|'intermediate'|null; onSelectEndpoint?:(endpoint:'in'|'out',frame:number)=>void; onSeek: (n: number)=>void; onEdit: (values: Partial<CameraKey>)=>void; onKeyFrame: (id: string, frame: number)=>void; onDelete: ()=>void; onSetup: ()=>void; onClear: ()=>void; onExport: (mode: 'camera' | 'overlay')=>void; onCopy:()=>void; onPaste:()=>void; onCopyOut:()=>void; onPasteStart:()=>void; onReset:()=>void; canPaste:boolean; canPasteStart:boolean; onAddBoundary:(edge:'start'|'end')=>void; onSequentialOut?:(pose:CameraPose)=>void; onSequentialAnimate?:()=>void; onSequentialIntermediateAdd?:(frame:number)=>void; onSequentialIntermediateDelete?:(frame:number)=>void; onSequentialIntermediateEdit?:(frame:number,pose:CameraPose)=>void }) {
+export default function CameraInspector({ project, scene, panel, frame, editFrame = frame, selectedEndpoint = null, onSelectEndpoint, onSeek, onEdit, onKeyFrame, onDelete, onSetup, onClear, onExport, onCopy, onPaste, onCopyOut, onPasteStart, onReset, canPaste, canPasteStart, onAddBoundary, onSequentialOut, onSequentialIn, onSequentialAnimate, onSequentialIntermediateAdd, onSequentialIntermediateDelete, onSequentialIntermediateEdit }: { project: Project; scene: Scene; panel: Panel; frame: number; editFrame?:number; selectedEndpoint?:'in'|'out'|'intermediate'|null; onSelectEndpoint?:(endpoint:'in'|'out',frame:number)=>void; onSeek: (n: number)=>void; onEdit: (values: Partial<CameraKey>)=>void; onKeyFrame: (id: string, frame: number)=>void; onDelete: ()=>void; onSetup: ()=>void; onClear: ()=>void; onExport: (mode: 'camera' | 'overlay')=>void; onCopy:()=>void; onPaste:()=>void; onCopyOut:()=>void; onPasteStart:()=>void; onReset:()=>void; canPaste:boolean; canPasteStart:boolean; onAddBoundary:(edge:'start'|'end')=>void; onSequentialOut?:(pose:CameraPose)=>void;onSequentialIn?:(pose:CameraPose)=>void; onSequentialAnimate?:()=>void; onSequentialIntermediateAdd?:(frame:number)=>void; onSequentialIntermediateDelete?:(frame:number)=>void; onSequentialIntermediateEdit?:(frame:number,pose:CameraPose)=>void }) {
   // RFU4-RA.4C.2A: sequential scenes have a distinct editing contract.
   // Do not expose legacy scene-key mutation controls until sequential writes are wired.
   if(scene.sequentialCamera){
     const start=scene.panels.slice(0,scene.panels.indexOf(panel)).reduce((n,p)=>n+p.duration,0);
     const resolved=resolveCompatibleCamera(project,scene.id,panel.id,frame-start);
     const animated=resolved.mode==='animated';
+    const firstPanel=scene.panels[0]?.id===panel.id;
     const localFrame=Math.max(0,Math.min(panel.duration-1,Math.floor(frame-start)));
     const keys=scene.sequentialCamera.panels[panel.id]?.mode==='animated'?(scene.sequentialCamera.panels[panel.id] as {mode:'animated';keys:{frame:number}[]}).keys:[];
     const intermediateKeys=keys.filter(k=>k.frame>0&&k.frame<panel.duration-1).sort((a,b)=>a.frame-b.frame);
@@ -27,13 +28,13 @@ export default function CameraInspector({ project, scene, panel, frame, editFram
       </div>
       {!animated&&<button type="button" onClick={onSequentialAnimate} aria-label="Animate sequential camera IN/OUT">Animate IN/OUT</button>}
       <div role="group" aria-label="Sequential camera endpoints">
-        <div aria-label="Inherited camera IN" data-camera-locked="true"><strong>IN · Locked</strong> — inherited from the preceding panel</div>
+        <div aria-label={firstPanel?"Editable camera IN":"Inherited camera IN"} data-camera-locked={!firstPanel}><strong>{firstPanel?"IN · Editable":"IN · Locked"}</strong> — {firstPanel?"scene-local starting pose":"inherited from the preceding panel"}</div>
         <div aria-label="Sequential camera OUT"><strong>{animated?'OUT · Animated':'Camera · Static'}</strong> — {animated?'panel-owned endpoint':'no implicit keyframes'}</div>
       </div>
       <label className="field"><span>Scene camera time · {timecode(frame,project.fps)}</span><input aria-label="Scene camera time" type="range" min="0" max={sceneFrames(scene)-1} value={frame} onChange={e=>onSeek(Number(e.target.value))}/></label>
       {animated&&<div className="camera-sequential-keys" aria-label="Sequential camera keyframes">
         <strong>Panel keyframes</strong>
-        <div><button type="button" aria-label="Select locked IN" onClick={()=>onSeek(start)}><span style={{color:'#32c85b'}}>◆</span> IN · frame 0 (locked)</button></div>
+        <div><button type="button" aria-label={firstPanel?"Select editable IN":"Select locked IN"} aria-pressed={selectedEndpoint==='in'} onClick={()=>{onSeek(start);if(firstPanel)onSelectEndpoint?.('in',start);}}><span style={{color:'#32c85b'}}>◆</span> IN · frame 0 {firstPanel?'(editable)':'(locked)'}</button></div>
         {intermediateKeys.map(k=><div key={k.frame}><button type="button" aria-label={`Select intermediate keyframe ${k.frame}`} aria-pressed={localFrame===k.frame} onClick={()=>onSeek(start+k.frame)}><span style={{color:'#3889e8'}}>◆</span> Intermediate · frame {k.frame}</button> <button type="button" aria-label={`Delete intermediate keyframe ${k.frame}`} onClick={()=>onSequentialIntermediateDelete?.(k.frame)}>Delete</button></div>)}
         <div><button type="button" aria-label="Select camera OUT" onClick={()=>onSeek(start+panel.duration-1)}><span style={{color:'#ef4d50'}}>◆</span> OUT · frame {panel.duration-1}</button></div>
         <button type="button" disabled={localFrame<=0||localFrame>=panel.duration-1||!!selectedIntermediate} onClick={()=>onSequentialIntermediateAdd?.(localFrame)}>Add intermediate keyframe at current frame</button>
@@ -44,6 +45,12 @@ export default function CameraInspector({ project, scene, panel, frame, editFram
           <NumberField label="Intermediate rotation" value={intermediatePose.rotation} min={-36000} max={36000} onChange={rotation=>onSequentialIntermediateEdit?.(localFrame,{...intermediatePose,rotation})}/>
         </div>}
       </div>}
+      {animated&&firstPanel&&<div className="camera-numbers" aria-label="Sequential IN numeric controls">
+        <NumberField label="IN X" value={resolved.inPose.x} min={-8192} max={16384} onChange={x=>onSequentialIn?.({...resolved.inPose,x})}/>
+        <NumberField label="IN Y" value={resolved.inPose.y} min={-8192} max={16384} onChange={y=>onSequentialIn?.({...resolved.inPose,y})}/>
+        <NumberField label="IN zoom" value={resolved.inPose.zoom} min={.01} max={100} onChange={zoom=>onSequentialIn?.({...resolved.inPose,zoom})}/>
+        <NumberField label="IN rotation" value={resolved.inPose.rotation} min={-36000} max={36000} onChange={rotation=>onSequentialIn?.({...resolved.inPose,rotation})}/>
+      </div>}
       <div className="camera-numbers"><div>IN: {resolved.inPose.x.toFixed(2)}, {resolved.inPose.y.toFixed(2)} · {resolved.inPose.zoom.toFixed(3)}×</div><div>OUT: {resolved.outPose.x.toFixed(2)}, {resolved.outPose.y.toFixed(2)} · {resolved.outPose.zoom.toFixed(3)}×</div></div>
       {animated && <div className="camera-numbers" aria-label="Sequential OUT numeric controls">
         <NumberField label="OUT X" value={resolved.outPose.x} min={-8192} max={16384} onChange={x=>onSequentialOut?.({...resolved.outPose,x})}/>
@@ -51,7 +58,7 @@ export default function CameraInspector({ project, scene, panel, frame, editFram
         <NumberField label="OUT zoom" value={resolved.outPose.zoom} min={.01} max={100} onChange={zoom=>onSequentialOut?.({...resolved.outPose,zoom})}/>
         <NumberField label="OUT rotation" value={resolved.outPose.rotation} min={-36000} max={36000} onChange={rotation=>onSequentialOut?.({...resolved.outPose,rotation})}/>
       </div>}
-      <p className="camera-help">Inherited IN is locked. Select Animate IN/OUT to activate green IN and editable red OUT; downstream panels inherit the OUT pose.</p>
+      <p className="camera-help">{firstPanel?'First-panel IN is editable and scene-local. Subsequent panels inherit the preceding OUT.':'Inherited IN is locked.'} Select Animate IN/OUT to activate green IN and editable red OUT; downstream panels inherit the OUT pose.</p>
     </section>;
   }
   const key=scene.camera.find(k=>k.frame===frame), segment=[...scene.camera].sort((a,b)=>a.frame-b.frame).filter(k=>k.frame<=editFrame).at(-1), pose=cameraAt(scene,editFrame,project), total=sceneFrames(scene), keys=[...scene.camera].sort((a,b)=>a.frame-b.frame);
