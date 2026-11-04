@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {makePanel,makeProject,makeScene,cameraAt,changeDuration,movePanels,removeStoryboardPanel,duplicateStoryboardPanel} from '../src/model.ts';
-import {setSequentialCameraOut,setSequentialFirstPanelIn,assessLegacyCameraMigration,resolveCompatibleCamera,compareLegacyCameraFrames,migrateVisuallyEquivalentLegacyCamera,cameraOffset,defaultCamera,enableSequentialCameraStorage,resolveSequentialCamera,type SequentialCameraScene} from '../src/sequential-camera.ts';
+import {enableSequentialPanelAnimation,setSequentialIntermediateKey,setSequentialCameraOut,setSequentialFirstPanelIn,assessLegacyCameraMigration,resolveCompatibleCamera,compareLegacyCameraFrames,migrateVisuallyEquivalentLegacyCamera,cameraOffset,defaultCamera,enableSequentialCameraStorage,resolveSequentialCamera,type SequentialCameraScene} from '../src/sequential-camera.ts';
 test('sequential camera: default scene, inherited panel, independent new scene',()=>{
  const p=makeProject(),s=p.scenes[0];s.panels.push(makePanel('Second'));
  const c:SequentialCameraScene={panels:{}},neutral=defaultCamera(p);
