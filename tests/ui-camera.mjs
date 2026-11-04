@@ -51,8 +51,8 @@ try{
  await number('Camera zoom',2);await number('Camera X',1250);await number('Camera rotation',12);
  await page.getByLabel('Camera interpolation',{exact:true}).selectOption('ease');let output=await save();assert.equal(output.scenes[0].camera[1].zoom,2);assert.equal(output.scenes[0].camera[1].rotation,12);
  await page.locator('.camera-key-list button').first().click();await wait();
- assert.equal(await overlay.locator('circle[data-frame="0"]').count(),1,'First panel moving camera shows IN handle');
- assert.equal(await overlay.locator('circle[data-frame="59"]').count(),1,'First panel moving camera shows OUT handle');
+ assert.equal(await overlay.locator('circle[data-frame="0"][data-mode="pan"]').count(),1,'First panel moving camera shows IN handle');
+ assert.equal(await overlay.locator('circle[data-frame="59"][data-mode="pan"]').count(),1,'First panel moving camera shows OUT handle');
  assert.equal(await overlay.locator('text').filter({hasText:'IN'}).count(),2,'Moving camera displays IN label and selector');
  assert.equal(await overlay.locator('text').filter({hasText:'OUT'}).count(),2,'Moving camera displays OUT label and selector');
  await page.getByLabel('Scene camera time').fill('30');
@@ -60,7 +60,7 @@ try{
  assert.equal(await overlay.locator('.camera-intermediate').count(),1,'Intermediate camera outline appears within first panel');
  assert.equal(await overlay.locator('.camera-intermediate rect[data-mode="zoom"]').count(),4,'Intermediate camera offers four resize handles');
  assert.equal(await overlay.locator('.camera-intermediate circle[data-mode="pan"]').count(),1,'Intermediate camera offers a pan handle');
- const midCenter=overlay.locator('.camera-intermediate circle[data-frame="30"]');
+ const midCenter=overlay.locator('.camera-intermediate circle[data-frame="30"][data-mode="pan"]');
  const midBefore=(await save()).scenes[0].camera.find(k=>k.frame===30);assert(midBefore,'Intermediate key saved');
  const midBox=await midCenter.boundingBox();assert(midBox,'Intermediate pan handle visible');
  await page.mouse.move(midBox.x+midBox.width/2,midBox.y+midBox.height/2);await page.mouse.down();
@@ -82,14 +82,14 @@ try{
  await page.getByRole('button',{name:'Delete key',exact:true}).click();await wait();
  assert.equal(await overlay.locator('.camera-intermediate').count(),0,'Deleting intermediate key removes its overlay');
  await page.locator('.camera-key-list button').first().click();assert.equal(await pixels(drawing),raw,'Camera editing leaves drawing pixels unchanged');
- const center=page.locator('.stage-paper .camera-overlay circle[data-frame="0"]');const box=await center.boundingBox();assert(box);await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2+30,box.y+box.height/2+10,{steps:8});await page.mouse.up();await wait();output=await save();assert(output.scenes[0].camera[0].x>960,'Dragging the green camera center pans the IN key');
+ const center=page.locator('.stage-paper .camera-overlay circle[data-frame="0"][data-mode="pan"]');const box=await center.boundingBox();assert(box);await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2+30,box.y+box.height/2+10,{steps:8});await page.mouse.up();await wait();output=await save();assert(output.scenes[0].camera[0].x>960,'Dragging the green camera center pans the IN key');
  await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();assert.equal(await page.getByLabel('Camera X',{exact:true}).inputValue(),'960');await page.getByTitle('Redo (⌘/Ctrl Shift Z)',{exact:true}).click();await wait();
  // RDR-03: dragging a camera endpoint must not seek away from the selected panel.
  // The former cameraDrag handler sought to the endpoint frame and could select a
  // different panel, remounting the overlay and causing the observed snapback.
  const selectedBeforeDrag=await page.locator('.timeline-clip.selected').count();
  const frameBeforeDrag=await page.getByLabel('Scene camera time').inputValue();
- const rdrHandle=page.locator('.stage-paper .camera-overlay circle[data-frame="0"]');
+ const rdrHandle=page.locator('.stage-paper .camera-overlay circle[data-frame="0"][data-mode="pan"]');
  const rdrBox=await rdrHandle.boundingBox();assert(rdrBox);
  await page.mouse.move(rdrBox.x+rdrBox.width/2,rdrBox.y+rdrBox.height/2);
  await page.mouse.down();await page.mouse.move(rdrBox.x+rdrBox.width/2+12,rdrBox.y+rdrBox.height/2+7,{steps:5});await page.mouse.up();await wait();
@@ -154,7 +154,7 @@ try{
   const el=document.querySelector('.stage-paper .camera-overlay');
   for(const type of ['pointerdown','pointermove','pointerup','pointercancel','lostpointercapture']){
    el.addEventListener(type,e=>{
-    const dot=el.querySelector('circle[data-frame="0"]');
+    const dot=el.querySelector('circle[data-frame="0"][data-mode="pan"]');
     window.__rdrCameraEvents.push({type,pointerId:e.pointerId,clientX:e.clientX,clientY:e.clientY,cx:dot?Number(dot.getAttribute('cx')):null,cy:dot?Number(dot.getAttribute('cy')):null});
    },{capture:true});
   }
