@@ -139,13 +139,18 @@ export function resolveCompatibleCamera(project:Project,sceneId:string,panelId:s
  return {inPose:pose,pose,outPose:pose,mode:'legacy' as const,engine:'legacy' as const};
 }
 
-/** Scene-local editable IN exists only on the first panel. Animated keys remain relative to that IN. */
+/** First-panel IN editing preserves all existing absolute animated key poses. */
 export function setSequentialFirstPanelIn(project:Project,sceneId:string,panelId:string,pose:CameraPose):Project {
  const scene=project.scenes.find(s=>s.id===sceneId);
  if(!scene?.sequentialCamera||project.schemaVersion!==5)throw new Error('Sequential camera storage is not enabled.');
  if(scene.panels[0]?.id!==panelId)throw new Error('Only the first panel of a scene has an editable IN.');
  if(!valid(pose))throw new Error('Invalid sequential camera IN pose.');
- const next:Project={...project,scenes:project.scenes.map(s=>s.id!==sceneId?s:{...s,sequentialCamera:{...s.sequentialCamera!,baseline:clone(pose)}})};
+ // Keep every animated key at its previous absolute pose when the first IN changes.
+ // Only the interpolation from the edited IN to the first key is allowed to change.
+ const originalIn=resolveSequentialCamera(scene,project,scene.sequentialCamera,panelId,0).inPose;
+ const current=scene.sequentialCamera.panels[panelId];
+ const preserved=current?.mode==='animated'?{mode:'animated' as const,keys:current.keys.map(k=>({...k,...cameraOffset(pose,applyCameraOffset(originalIn,k))}))}:current;
+ const next:Project={...project,scenes:project.scenes.map(s=>s.id!==sceneId?s:{...s,sequentialCamera:{...s.sequentialCamera!,baseline:clone(pose),panels:preserved?{...s.sequentialCamera!.panels,[panelId]:preserved}:s.sequentialCamera!.panels}})};
  const updated=next.scenes.find(s=>s.id===sceneId)!;
  for(const panel of updated.panels)resolveSequentialCamera(updated,next,updated.sequentialCamera!,panel.id,panel.duration-1);
  return next;
@@ -194,7 +199,7 @@ export function setSequentialStaticCamera(project:Project,sceneId:string,panelId
 }
 
 /** Activate panel-owned IN/OUT animation from its current static/inherited pose.
- * IN remains inherited and locked; OUT starts visually identical until edited. */
+ * The first panel's editable IN and OUT both begin at its current static pose. */
 export function enableSequentialPanelAnimation(project:Project,sceneId:string,panelId:string):Project {
  const scene=project.scenes.find(s=>s.id===sceneId);
  if(!scene?.sequentialCamera||project.schemaVersion!==5)throw new Error('Sequential camera storage is not enabled.');
@@ -205,8 +210,10 @@ export function enableSequentialPanelAnimation(project:Project,sceneId:string,pa
  const resolved=resolveSequentialCamera(scene,project,scene.sequentialCamera,panelId,0);
  const pose=existing?.mode==='static'||existing?.mode==='break'?existing.pose:resolved.inPose;
  // Preserve current static appearance at activation without changing downstream panels.
- const offset=cameraOffset(resolved.inPose,pose);
- const next:Project={...project,scenes:project.scenes.map(s=>s.id!==sceneId?s:{...s,sequentialCamera:{...s.sequentialCamera!,panels:{...s.sequentialCamera!.panels,[panelId]:{mode:'animated' as const,keys:[{frame:panel.duration-1,...offset,interpolation:'linear' as const}]}}}})};
+ const firstPanel=scene.panels[0]?.id===panelId;
+ const initialIn=firstPanel?pose:resolved.inPose;
+ const offset=cameraOffset(initialIn,pose);
+ const next:Project={...project,scenes:project.scenes.map(s=>s.id!==sceneId?s:{...s,sequentialCamera:{...s.sequentialCamera!,...(firstPanel?{baseline:clone(pose)}:{}),panels:{...s.sequentialCamera!.panels,[panelId]:{mode:'animated' as const,keys:[{frame:panel.duration-1,...offset,interpolation:'linear' as const}]}}}})};
  const updated=next.scenes.find(s=>s.id===sceneId)!;
  for(const p of updated.panels)resolveSequentialCamera(updated,next,updated.sequentialCamera!,p.id,p.duration-1);
  return next;
