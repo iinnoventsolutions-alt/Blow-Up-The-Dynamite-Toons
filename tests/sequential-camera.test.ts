@@ -351,7 +351,7 @@ test('RC1.1-A: first panel IN is editable and scene-local; later IN remains lock
  const edited=setSequentialFirstPanelIn(p,first.id,first.panels[0].id,start);
  assert.deepEqual(resolveCompatibleCamera(edited,first.id,first.panels[0].id,0).inPose,start);
  const end=resolveCompatibleCamera(edited,first.id,first.panels[0].id,first.panels[0].duration-1).outPose;
- assert.equal(end.x,1220);assert.equal(end.rotation,55);
+ assert.equal(end.x,1080);assert.equal(end.rotation,20);
  assert.deepEqual(resolveCompatibleCamera(edited,first.id,first.panels[1].id,0).inPose,end);
  assert.deepEqual(resolveCompatibleCamera(edited,second.id,second.panels[0].id,0).inPose,defaultCamera(p));
  assert.deepEqual(resolveCompatibleCamera(p,first.id,first.panels[0].id,0).inPose,defaultCamera(p),'original project remains immutable');
@@ -370,4 +370,39 @@ test('RC1.1-A: editability follows scene order after panel reordering',()=>{
  assert.deepEqual(resolveCompatibleCamera(edited,scene.id,newFirst,0).inPose,pose);
  assert.deepEqual(resolveCompatibleCamera(edited,scene.id,previousFirst,0).inPose,pose);
  assert.throws(()=>setSequentialFirstPanelIn(edited,scene.id,previousFirst,pose),/Only the first panel/);
+});
+
+test('RC1.1-A4: activating first-panel animation retains the moved black camera as both endpoints',()=>{
+ const p=makeProject('Animate static camera');p.schemaVersion=5;
+ const scene=p.scenes[0],panel=scene.panels[0];
+ const black={x:1360,y:450,zoom:2.4,rotation:48};
+ scene.sequentialCamera={version:1,panels:{[panel.id]:{mode:'static',pose:black}}};
+ const activated=enableSequentialPanelAnimation(p,scene.id,panel.id);
+ const first=resolveCompatibleCamera(activated,scene.id,panel.id,0);
+ const last=resolveCompatibleCamera(activated,scene.id,panel.id,panel.duration-1);
+ assert.deepEqual(first.inPose,black);
+ assert.deepEqual(last.outPose,black);
+ assert.deepEqual(resolveCompatibleCamera(p,scene.id,panel.id,0).pose,black,'activation must be immutable');
+});
+
+test('RC1.1-A4: moving green IN preserves red OUT and intermediate absolute poses',()=>{
+ const p=makeProject('Independent endpoints');p.schemaVersion=5;
+ const scene=p.scenes[0],panel=scene.panels[0];
+ scene.panels.push(makePanel('Follower'));
+ const black={x:1200,y:540,zoom:1.5,rotation:30};
+ scene.sequentialCamera={version:1,panels:{[panel.id]:{mode:'static',pose:black}}};
+ const animated=enableSequentialPanelAnimation(p,scene.id,panel.id);
+ const out={x:1450,y:620,zoom:2.2,rotation:-35};
+ const withOut=setSequentialCameraOut(animated,scene.id,panel.id,out);
+ const intermediateFrame=40;
+ const withMid=setSequentialIntermediateKey(withOut,scene.id,panel.id,intermediateFrame,{x:1300,y:570,zoom:1.8,rotation:12});
+ const beforeMid=resolveCompatibleCamera(withMid,scene.id,panel.id,intermediateFrame).pose;
+ const newIn={x:900,y:720,zoom:0.8,rotation:110};
+ const edited=setSequentialFirstPanelIn(withMid,scene.id,panel.id,newIn);
+ assert.deepEqual(resolveCompatibleCamera(edited,scene.id,panel.id,0).inPose,newIn);
+ assert.deepEqual(resolveCompatibleCamera(edited,scene.id,panel.id,panel.duration-1).outPose,out);
+ assert.deepEqual(resolveCompatibleCamera(edited,scene.id,panel.id,intermediateFrame).pose,beforeMid);
+ assert.deepEqual(resolveCompatibleCamera(edited,scene.id,scene.panels[1].id,0).inPose,out);
+ assert.deepEqual(resolveCompatibleCamera(withMid,scene.id,panel.id,0).inPose,black);
+ assert.deepEqual(resolveCompatibleCamera(JSON.parse(JSON.stringify(edited)),scene.id,panel.id,panel.duration-1).outPose,out);
 });
