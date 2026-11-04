@@ -73,6 +73,22 @@ try{
  await checkbox.uncheck();
  assert.equal(await mask().count(),0,'Mask toggle removes dark mask');
  assert.deepEqual(errors,[],'No browser runtime errors');
+ // RC1.1-A: first panel IN is editable, later panels remain inherited and locked.
+ await seek(0);
+ await page.getByRole('button',{name:'Animate sequential camera IN/OUT'}).click();await wait();
+ assert.equal(await page.getByLabel('Editable camera IN').count(),1,'First panel IN is editable');
+ assert.equal(await page.getByRole('button',{name:'Select editable IN'}).count(),1,'First panel exposes editable IN selection');
+ await page.getByRole('button',{name:'Select editable IN'}).click();await wait();
+ assert.equal(await page.locator('.camera-sequential-out-overlay text').filter({hasText:/^IN$/}).count(),1,'First panel overlay edits IN');
+ const input=page.getByLabel('IN X',{exact:true});
+ await input.fill('1125');await input.press('Enter');await wait();
+ assert.equal(await page.getByLabel('IN X',{exact:true}).inputValue(),'1125','Numeric first-panel IN edit persists');
+ await seek(60);
+ assert.equal(await page.getByLabel('Inherited camera IN').count(),1,'Later panel IN remains inherited');
+ assert.equal(await page.locator('.camera-sequential-out-overlay text').filter({hasText:/IN · LOCKED/}).count(),1,'Later panel IN remains locked on stage');
+ await seek(0);
+ assert.equal(await page.getByLabel('IN X',{exact:true}).inputValue(),'1125','First-panel IN survives seeking');
+ await load(p);
  // Legacy rendering must remain on the existing overlay path.
  const legacy=makeProject('Legacy UI regression');
  legacy.scenes[0].camera.push({id:'key-a',frame:0,x:960,y:540,zoom:1,rotation:0,interpolation:'linear'});
