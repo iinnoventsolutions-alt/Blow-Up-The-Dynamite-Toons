@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {makePanel,makeProject,makeScene,cameraAt,changeDuration,movePanels,removeStoryboardPanel,duplicateStoryboardPanel} from '../src/model.ts';
-import {setSequentialCameraOut,assessLegacyCameraMigration,resolveCompatibleCamera,compareLegacyCameraFrames,migrateVisuallyEquivalentLegacyCamera,cameraOffset,defaultCamera,enableSequentialCameraStorage,resolveSequentialCamera,type SequentialCameraScene} from '../src/sequential-camera.ts';
+import {setSequentialCameraOut,setSequentialFirstPanelIn,assessLegacyCameraMigration,resolveCompatibleCamera,compareLegacyCameraFrames,migrateVisuallyEquivalentLegacyCamera,cameraOffset,defaultCamera,enableSequentialCameraStorage,resolveSequentialCamera,type SequentialCameraScene} from '../src/sequential-camera.ts';
 test('sequential camera: default scene, inherited panel, independent new scene',()=>{
  const p=makeProject(),s=p.scenes[0];s.panels.push(makePanel('Second'));
  const c:SequentialCameraScene={panels:{}},neutral=defaultCamera(p);
@@ -338,4 +338,24 @@ test('RFU4-RA.5B.1: dissolve and wipe transition boundary uses inherited incomin
   assert.deepEqual(resolveCameraForPNGExport(p,s.id,incoming.id,boundary),out);
   assert.equal(transitionAt(p,boundary),undefined);
  }
+});
+
+test('RC1.1-A: first panel IN is editable and scene-local; later IN remains locked',()=>{
+ const p=makeProject('First panel editable IN');p.schemaVersion=5;
+ const first=p.scenes[0];first.panels.push(makePanel('Later'));
+ first.sequentialCamera={version:1,panels:{
+  [first.panels[0].id]:{mode:'animated',keys:[{frame:first.panels[0].duration-1,x:120,y:0,zoom:1,rotation:20,interpolation:'linear'}]}
+ }};
+ const second=makeScene('Independent scene');second.sequentialCamera={version:1,panels:{}};p.scenes.push(second);
+ const start={x:1100,y:600,zoom:1.3,rotation:35};
+ const edited=setSequentialFirstPanelIn(p,first.id,first.panels[0].id,start);
+ assert.deepEqual(resolveCompatibleCamera(edited,first.id,first.panels[0].id,0).inPose,start);
+ const end=resolveCompatibleCamera(edited,first.id,first.panels[0].id,first.panels[0].duration-1).outPose;
+ assert.equal(end.x,1220);assert.equal(end.rotation,55);
+ assert.deepEqual(resolveCompatibleCamera(edited,first.id,first.panels[1].id,0).inPose,end);
+ assert.deepEqual(resolveCompatibleCamera(edited,second.id,second.panels[0].id,0).inPose,defaultCamera(p));
+ assert.deepEqual(resolveCompatibleCamera(p,first.id,first.panels[0].id,0).inPose,defaultCamera(p),'original project remains immutable');
+ assert.throws(()=>setSequentialFirstPanelIn(edited,first.id,first.panels[1].id,start),/Only the first panel/);
+ const reopened=JSON.parse(JSON.stringify(edited));
+ assert.deepEqual(resolveCompatibleCamera(reopened,first.id,first.panels[0].id,0).inPose,start);
 });
