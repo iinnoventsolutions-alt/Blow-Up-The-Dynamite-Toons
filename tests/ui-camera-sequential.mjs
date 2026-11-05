@@ -132,13 +132,13 @@ try{
  await page.getByRole('button',{name:'Animate sequential camera IN/OUT'}).click();await wait();
  await page.getByRole('button',{name:'Select editable IN'}).click();await wait();
  assert.equal(await page.getByRole('button',{name:'Select editable IN'}).getAttribute('aria-pressed'),'true','Scene 1 IN selected');
- await seek(60);
+ await page.locator(`.film-scene[data-scene-id="${other.id}"] .panel-image-button`).click();await wait();
  assert.equal(await page.getByRole('button',{name:'Select editable IN'}).count(),0,'Scene 2 has independent static baseline');
  await page.getByRole('button',{name:'Animate sequential camera IN/OUT'}).click();await wait();
  assert.equal(await page.getByRole('button',{name:'Select editable IN'}).getAttribute('aria-pressed'),'false','Scene 2 has no stale IN target');
  await page.getByRole('button',{name:'Select camera OUT'}).click();await wait();
  assert.equal(await page.getByRole('button',{name:'Select drawing camera OUT'}).getAttribute('aria-pressed'),'true','Scene 2 OUT selectable');
- await seek(0);
+ await page.locator(`.film-scene[data-scene-id="${multi.scenes[0].id}"] .panel-image-button`).click();await wait();
  assert.equal(await page.getByRole('button',{name:'Select editable IN'}).getAttribute('aria-pressed'),'false','Scene 1 does not inherit Scene 2 selection');
  await load(p);
  // Legacy rendering must remain on the existing overlay path.
