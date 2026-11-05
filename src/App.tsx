@@ -148,7 +148,7 @@ export default function App() {
     const profiling=diagnosticsEnabled(),started=profiling?performance.now():0;
     const prior=selectedId,from=latest.current?allPanels(latest.current).findIndex(e=>e.panel.id===prior):-1;
     const to=latest.current?allPanels(latest.current).findIndex(e=>e.panel.id===id):-1;
-    setAudioSelection(null); setTransitionId(''); setDrawingPreview(false); setPlaying(false); setSelectedId(id);
+    setAudioSelection(null); setTransitionId(''); setDrawingPreview(false); setPlaying(false); setCameraTarget(null); setSelectedId(id);
     if (latest.current) setPlayFrame(panelStart(latest.current, id));
     if (selectedLayer) setLayerSelection(prev => ({ ...prev, [id]: selectedLayer }));
     if(profiling&&prior!==id){
@@ -220,8 +220,8 @@ export default function App() {
   const applyMoves = (moves: PanelMove[]): boolean => { try { if (!latest.current) return false; installEdit(movePanels(latest.current, moves)); setSelectedPanels([]); return true; } catch (e) { report((e as Error).message); return false; } };
   const dropPanels = (ids: string[], sceneId: string, beforeId: string | null) => { applyMoves(ids.map(panelId => ({ panelId, sceneId, beforePanelId: beforeId }))); };
   const reorderScene = (id: string, beforeId: string | null) => { try { if (latest.current) installEdit(moveScene(latest.current, id, beforeId)); } catch (e) { report((e as Error).message); } };
-  const seek = (frame: number) => { if (!latest.current) return; const bounded = Math.max(0, Math.min(projectFrames(latest.current) - 1, Math.floor(frame))); setTimelineSeekRevision(n => n + 1); setPlaying(false); setPlayFrame(bounded); setSelectedId(panelAtFrame(latest.current, bounded).panel.id); };
-  const togglePlay = () => { if(!playing)void audioContext().resume().catch(e=>report(e.message)); if(workspace==='Drawing')setDrawingPreview(true); if (latest.current && playFrame >= projectFrames(latest.current) - 1) { setPlayFrame(0); setSelectedId(allPanels(latest.current)[0].panel.id); } setPlaying(p => !p); };
+  const seek = (frame: number) => { if (!latest.current) return; const bounded = Math.max(0, Math.min(projectFrames(latest.current) - 1, Math.floor(frame))); setCameraTarget(null); setTimelineSeekRevision(n => n + 1); setPlaying(false); setPlayFrame(bounded); setSelectedId(panelAtFrame(latest.current, bounded).panel.id); };
+  const togglePlay = () => { if(!playing)setCameraTarget(null); if(!playing)void audioContext().resume().catch(e=>report(e.message)); if(workspace==='Drawing')setDrawingPreview(true); if (latest.current && playFrame >= projectFrames(latest.current) - 1) { setPlayFrame(0); setSelectedId(allPanels(latest.current)[0].panel.id); } setPlaying(p => !p); };
   const resizeDuration = (id: string, frames: number): boolean => { try { const h = historyRef.current; if (!h) return false; const next = editProject(h.present, draft => { const found = findPanel(draft, id); if (!found) throw new Error('Panel no longer exists.'); changeDuration(found.scene, found.panel, frames); }); transitionNotice(h.present,next); projectText(next);const updated = commit(h, next, preferences.undoLevels); historyRef.current = updated; latest.current = next; setHistory(updated); setPlaying(false); return true; } catch (e) { report((e as Error).message); return false; } };
   useEffect(() => { if (!project) return; setPlayFrame(frame => Math.min(frame, projectFrames(project) - 1)); setSelectedPanels(ids => ids.filter(id => !!findPanel(project, id))); }, [project]);
   const discardRecovery = async () => { if (!await ask('Discard the recovery snapshot? Unsaved changes in it cannot be restored. Saved project files are unaffected.')) return; try { if (window.desktop) resultValue(await window.desktop.discardRecovery()); else await clearBrowserRecovery(); setRecovery(null); report('Recovery snapshot discarded.'); } catch (e) { report((e as Error).message); } };
