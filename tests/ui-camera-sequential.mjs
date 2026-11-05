@@ -84,7 +84,7 @@ try{
  assert.equal(await page.locator('.camera-sequential-out-overlay [aria-label="Persistent camera OUT outline"] text').textContent(),'OUT','Persistent red OUT remains labeled');
  await page.getByRole('button',{name:'Select drawing camera OUT'}).click();await wait();
  assert.equal(await page.locator('.camera-sequential-out-overlay [data-camera-endpoint="out"] polygon').count(),1,'Red OUT is editable when selected');
- assert.equal(await page.locator('.camera-sequential-out-overlay [data-camera-endpoint="in"] polygon').count(),1,'Green IN remains visible while red OUT is selected');
+ assert.equal(await page.locator('.camera-sequential-out-overlay polygon[data-camera-endpoint="in"]').count(),1,'Green IN remains visible while red OUT is selected');
  await page.getByRole('button',{name:'Select drawing camera IN'}).click();await wait();
  assert.equal(await page.locator('.camera-sequential-out-overlay [aria-label="Persistent camera OUT outline"] polygon').count(),1,'Red OUT returns when selecting green IN');
  const input=page.getByLabel('IN X',{exact:true});
