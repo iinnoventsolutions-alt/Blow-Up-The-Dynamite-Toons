@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
-import { makeProject, makePanel } from '../src/model.ts';
+import { makeProject, makePanel, makeScene } from '../src/model.ts';
 
 // RFU4-RA.4C.1C: read-only sequential stage/mask regression.
 // Deliberately separate from legacy camera interaction acceptance.
@@ -106,6 +106,40 @@ try{
  assert.equal(await page.locator('.camera-sequential-out-overlay text').filter({hasText:/IN · LOCKED/}).count(),1,'Later panel IN remains locked on stage');
  await seek(0);
  assert.equal(await page.getByLabel('IN X',{exact:true}).inputValue(),'1125','First-panel IN survives seeking');
+ // B2.2: explicit endpoint selection seeks, ordinary timeline scrubbing invalidates it.
+ await page.getByRole('button',{name:'Select camera OUT'}).click();await wait();
+ assert.equal(await page.getByRole('button',{name:'Select drawing camera OUT'}).getAttribute('aria-pressed'),'true','OUT selected before manual scrub');
+ await seek(1);
+ assert.equal(await page.getByRole('button',{name:'Select drawing camera OUT'}).getAttribute('aria-pressed'),'false','Timeline scrub clears stale OUT editing target');
+ assert.equal(await page.getByRole('button',{name:'Select camera OUT'}).getAttribute('aria-pressed'),'false','Inspector OUT selection clears on manual scrub');
+ await page.getByRole('button',{name:'Select drawing camera IN'}).click();await wait();
+ assert.equal(await page.getByRole('button',{name:'Select editable IN'}).getAttribute('aria-pressed'),'true','IN selected before panel navigation');
+ await seek(60);
+ assert.equal(await page.getByRole('button',{name:'Select drawing camera OUT'}).count(),1,'Destination panel camera controls exist');
+ assert.equal(await page.getByRole('button',{name:'Select drawing camera OUT'}).getAttribute('aria-pressed'),'false','Panel navigation clears previous editing target');
+ assert.equal(await page.getByRole('button',{name:'Select locked IN'}).count(),1,'Later panel IN remains locked');
+ assert.equal(await page.locator('.camera-sequential-out-overlay polygon[data-camera-endpoint="in"]').count(),1,'Inherited IN outline survives panel navigation');
+ await seek(0);
+ assert.equal(await page.getByRole('button',{name:'Select editable IN'}).getAttribute('aria-pressed'),'false','Returning to original panel does not resurrect old selection');
+ // Scene changes must not retain endpoint selection or borrow another scene's baseline.
+ const multi=makeProject('Sequential scene navigation');
+ const other=makeScene('Scene 2',multi.fps);other.panels[0].duration=60;
+ multi.scenes[0].panels[0].duration=60;
+ multi.scenes[0].sequentialCamera={version:1,baseline:{x:500,y:400,zoom:1,rotation:0},panels:{}};
+ other.sequentialCamera={version:1,baseline:{x:1400,y:700,zoom:1.6,rotation:0},panels:{}};
+ multi.scenes.push(other);multi.schemaVersion=5;
+ await load(multi);await wait();
+ await page.getByRole('button',{name:'Animate sequential camera IN/OUT'}).click();await wait();
+ await page.getByRole('button',{name:'Select editable IN'}).click();await wait();
+ assert.equal(await page.getByRole('button',{name:'Select editable IN'}).getAttribute('aria-pressed'),'true','Scene 1 IN selected');
+ await seek(60);
+ assert.equal(await page.getByRole('button',{name:'Select editable IN'}).count(),0,'Scene 2 has independent static baseline');
+ await page.getByRole('button',{name:'Animate sequential camera IN/OUT'}).click();await wait();
+ assert.equal(await page.getByRole('button',{name:'Select editable IN'}).getAttribute('aria-pressed'),'false','Scene 2 has no stale IN target');
+ await page.getByRole('button',{name:'Select camera OUT'}).click();await wait();
+ assert.equal(await page.getByRole('button',{name:'Select drawing camera OUT'}).getAttribute('aria-pressed'),'true','Scene 2 OUT selectable');
+ await seek(0);
+ assert.equal(await page.getByRole('button',{name:'Select editable IN'}).getAttribute('aria-pressed'),'false','Scene 1 does not inherit Scene 2 selection');
  await load(p);
  // Legacy rendering must remain on the existing overlay path.
  const legacy=makeProject('Legacy UI regression');
