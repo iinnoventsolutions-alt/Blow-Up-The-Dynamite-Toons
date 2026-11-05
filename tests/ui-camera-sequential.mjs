@@ -85,6 +85,17 @@ try{
  await page.getByRole('button',{name:'Select drawing camera OUT'}).click();await wait();
  assert.equal(await page.locator('.camera-sequential-out-overlay [data-camera-endpoint="out"] polygon').count(),1,'Red OUT is editable when selected');
  assert.equal(await page.locator('.camera-sequential-out-overlay polygon[data-camera-endpoint="in"]').count(),1,'Green IN remains visible while red OUT is selected');
+
+ assert.equal(await page.getByRole('button',{name:'Select camera OUT'}).getAttribute('aria-pressed'),'true','Drawing OUT selection updates inspector');
+ assert.equal(await page.getByRole('button',{name:'Select drawing camera OUT'}).getAttribute('aria-pressed'),'true','Drawing OUT remains selected');
+ await page.getByRole('button',{name:'Select editable IN'}).click();await wait();
+ assert.equal(await page.getByRole('button',{name:'Select drawing camera IN'}).getAttribute('aria-pressed'),'true','Inspector IN selection updates drawing controls');
+ assert.equal(await page.getByRole('button',{name:'Select editable IN'}).getAttribute('aria-pressed'),'true','Inspector IN selection highlights itself');
+ assert.equal(await page.locator('.camera-sequential-out-overlay [aria-label="Persistent camera OUT outline"] polygon').count(),1,'Red OUT persists during inspector IN selection');
+ await page.getByRole('button',{name:'Select camera OUT'}).click();await wait();
+ assert.equal(await page.getByRole('button',{name:'Select drawing camera OUT'}).getAttribute('aria-pressed'),'true','Inspector OUT selection updates drawing controls');
+ assert.equal(await page.getByRole('button',{name:'Select camera OUT'}).getAttribute('aria-pressed'),'true','Inspector OUT selection highlights itself');
+ assert.equal(await page.locator('.camera-sequential-out-overlay polygon[data-camera-endpoint="in"]').count(),1,'Green IN persists during inspector OUT selection');
  await page.getByRole('button',{name:'Select drawing camera IN'}).click();await wait();
  assert.equal(await page.locator('.camera-sequential-out-overlay [aria-label="Persistent camera OUT outline"] polygon').count(),1,'Red OUT returns when selecting green IN');
  const input=page.getByLabel('IN X',{exact:true});
