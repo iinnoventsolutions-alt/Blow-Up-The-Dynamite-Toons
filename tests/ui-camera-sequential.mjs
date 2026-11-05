@@ -80,6 +80,13 @@ try{
  assert.equal(await page.getByRole('button',{name:'Select editable IN'}).count(),1,'First panel exposes editable IN selection');
  await page.getByRole('button',{name:'Select editable IN'}).click();await wait();
  assert.equal(await page.locator('.camera-sequential-out-overlay text').filter({hasText:/^IN$/}).count(),1,'First panel overlay edits IN');
+ assert.equal(await page.locator('.camera-sequential-out-overlay [aria-label="Persistent camera OUT outline"] polygon').count(),1,'Red OUT outline persists while green IN is selected');
+ assert.equal(await page.locator('.camera-sequential-out-overlay [aria-label="Persistent camera OUT outline"] text').textContent(),'OUT','Persistent red OUT remains labeled');
+ await page.getByRole('button',{name:'Select drawing camera OUT'}).click();await wait();
+ assert.equal(await page.locator('.camera-sequential-out-overlay [data-camera-endpoint="out"] polygon').count(),1,'Red OUT is editable when selected');
+ assert.equal(await page.locator('.camera-sequential-out-overlay [data-camera-endpoint="in"] polygon').count(),1,'Green IN remains visible while red OUT is selected');
+ await page.getByRole('button',{name:'Select drawing camera IN'}).click();await wait();
+ assert.equal(await page.locator('.camera-sequential-out-overlay [aria-label="Persistent camera OUT outline"] polygon').count(),1,'Red OUT returns when selecting green IN');
  const input=page.getByLabel('IN X',{exact:true});
  await input.fill('1125');await input.press('Enter');await wait();
  assert.equal(await page.getByLabel('IN X',{exact:true}).inputValue(),'1125','Numeric first-panel IN edit persists');
