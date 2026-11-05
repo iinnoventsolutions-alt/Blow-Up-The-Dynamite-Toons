@@ -106,6 +106,30 @@ try{
  assert.equal(await page.locator('.camera-sequential-out-overlay text').filter({hasText:/IN · LOCKED/}).count(),1,'Later panel IN remains locked on stage');
  await seek(0);
  assert.equal(await page.getByLabel('IN X',{exact:true}).inputValue(),'1125','First-panel IN survives seeking');
+ // B2.3: intermediate selection, numeric isolation, and invalidation.
+ await seek(20);
+ await page.getByRole('button',{name:'Add intermediate keyframe at current frame'}).click();await wait();
+ assert.equal(await page.getByRole('button',{name:'Select drawing intermediate keyframe 20'}).count(),1,'Drawing intermediate selector appears');
+ await page.getByRole('button',{name:'Select intermediate keyframe 20'}).click();await wait();
+ assert.equal(await page.getByRole('button',{name:'Select drawing intermediate keyframe 20'}).getAttribute('aria-pressed'),'true','Inspector selection synchronizes drawing');
+ assert.equal(await page.locator('.camera-sequential-out-overlay [data-camera-endpoint="intermediate"] polygon').count(),1,'Blue intermediate editing outline visible');
+ assert.equal(await page.locator('.camera-sequential-out-overlay [aria-label="Persistent camera OUT outline"] polygon').count(),1,'Red OUT persists');
+ assert.equal(await page.locator('.camera-sequential-out-overlay polygon[data-camera-endpoint="in"]').count(),1,'Green IN persists');
+ const outX=await page.getByLabel('OUT X',{exact:true}).inputValue();
+ await page.getByLabel('Intermediate X',{exact:true}).fill('1200');
+ await page.getByLabel('Intermediate X',{exact:true}).press('Enter');await wait();
+ assert.equal(await page.getByLabel('Intermediate X',{exact:true}).inputValue(),'1200','Intermediate numeric edit persists');
+ assert.equal(await page.getByLabel('OUT X',{exact:true}).inputValue(),outX,'Intermediate edit preserves OUT');
+ assert.equal(await page.getByLabel('IN X',{exact:true}).inputValue(),'1125','Intermediate edit preserves IN');
+ await page.getByRole('button',{name:'Select drawing camera OUT'}).click();await wait();
+ assert.equal(await page.getByLabel('Intermediate X',{exact:true}).count(),0,'Intermediate numeric controls hide when OUT selected');
+ await page.getByRole('button',{name:'Select drawing intermediate keyframe 20'}).click();await wait();
+ assert.equal(await page.getByRole('button',{name:'Select intermediate keyframe 20'}).getAttribute('aria-pressed'),'true','Drawing selection synchronizes inspector');
+ await seek(21);
+ assert.equal(await page.getByRole('button',{name:'Select intermediate keyframe 20'}).getAttribute('aria-pressed'),'false','Scrubbing clears intermediate selection');
+ await page.getByRole('button',{name:'Delete intermediate keyframe 20'}).click();await wait();
+ assert.equal(await page.getByRole('button',{name:'Select drawing intermediate keyframe 20'}).count(),0,'Deleted intermediate selector disappears');
+ await seek(0);
  // B2.2: explicit endpoint selection seeks, ordinary timeline scrubbing invalidates it.
  await page.getByRole('button',{name:'Select camera OUT'}).click();await wait();
  assert.equal(await page.getByRole('button',{name:'Select drawing camera OUT'}).getAttribute('aria-pressed'),'true','OUT selected before manual scrub');
