@@ -110,6 +110,17 @@ try{
  await seek(20);
  await page.getByRole('button',{name:'Add intermediate keyframe at current frame'}).click();await wait();
  assert.equal(await page.getByRole('button',{name:'Select drawing intermediate keyframe 20'}).count(),1,'Drawing intermediate selector appears');
+ // B3.0: persistent outlines are visible before selection and selectable directly.
+ assert.equal(await page.locator('.camera-sequential-out-overlay [data-camera-intermediate-frame="20"] polygon[stroke-dasharray]').count(),1,'Unselected intermediate outline is dashed and visible');
+ assert.equal(await page.locator('.camera-sequential-out-overlay [data-camera-intermediate-frame="20"] text').textContent(),'K · 20','Persistent intermediate outline carries frame label');
+ await page.locator('.camera-sequential-out-overlay [data-camera-intermediate-frame="20"] polygon').dispatchEvent('pointerdown',{button:0,pointerId:31});
+ await wait();
+ assert.equal(await page.getByRole('button',{name:'Select intermediate keyframe 20'}).getAttribute('aria-pressed'),'true','Clicking blue outline selects inspector keyframe');
+ assert.equal(await page.locator('.camera-sequential-out-overlay [data-camera-intermediate-frame="20"][data-camera-intermediate-selected="true"]').count(),1,'Selected intermediate outline remains represented');
+ await page.getByRole('button',{name:'Select camera OUT'}).click();await wait();
+ assert.equal(await page.locator('.camera-sequential-out-overlay [data-camera-intermediate-frame="20"] polygon[stroke-dasharray]').count(),1,'Intermediate outline persists when OUT selected');
+ await page.getByRole('button',{name:'Select editable IN'}).click();await wait();
+ assert.equal(await page.locator('.camera-sequential-out-overlay [data-camera-intermediate-frame="20"] polygon[stroke-dasharray]').count(),1,'Intermediate outline persists when IN selected');
  await page.getByRole('button',{name:'Select intermediate keyframe 20'}).click();await wait();
  assert.equal(await page.getByRole('button',{name:'Select drawing intermediate keyframe 20'}).getAttribute('aria-pressed'),'true','Inspector selection synchronizes drawing');
  assert.equal(await page.locator('.camera-sequential-out-overlay [data-camera-endpoint="intermediate"] polygon').count(),1,'Blue intermediate editing outline visible');
