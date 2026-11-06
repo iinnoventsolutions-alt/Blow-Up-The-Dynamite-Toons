@@ -406,3 +406,35 @@ test('RC1.1-A4: moving green IN preserves red OUT and intermediate absolute pose
  assert.deepEqual(resolveCompatibleCamera(withMid,scene.id,panel.id,0).inPose,black);
  assert.deepEqual(resolveCompatibleCamera(JSON.parse(JSON.stringify(edited)),scene.id,panel.id,panel.duration-1).outPose,out);
 });
+
+test('B3-A integrated: intermediate poses, downstream continuity, reorder, duration, scene isolation and serialization',()=>{
+ const p=makeProject('B3-A integrated camera continuity');p.schemaVersion=5;
+ const scene=p.scenes[0];scene.panels.push(makePanel('Animated'),makePanel('Follower'));scene.panels.forEach(panel=>panel.duration=60);
+ const [first,animated,follower]=scene.panels,other=makeScene('Independent scene');
+ p.scenes.push(other);
+ const base={x:1020,y:510,zoom:1.3,rotation:8};
+ scene.sequentialCamera={version:1,baseline:base,panels:{}};
+ const target={x:1390,y:660,zoom:2,rotation:38};
+ const midpoint={x:1210,y:570,zoom:1.7,rotation:20};
+ const afterOut=setSequentialCameraOut(enableSequentialPanelAnimation(p,scene.id,animated.id),scene.id,animated.id,target);
+ const withMid=setSequentialIntermediateKey(afterOut,scene.id,animated.id,30,midpoint);
+ const at=(project:typeof p,id:string,frame:number)=>resolveCompatibleCamera(project,scene.id,id,frame);
+ assert.deepEqual(at(withMid,animated.id,30).pose,midpoint);
+ assert.deepEqual(at(withMid,animated.id,59).outPose,target);
+ assert.deepEqual(at(withMid,follower.id,0).inPose,target);
+ assert.deepEqual(resolveCompatibleCamera(withMid,other.id,other.panels[0].id,0).inPose,defaultCamera(withMid));
+ const reordered=movePanels(withMid,[{panelId:animated.id,sceneId:scene.id,beforePanelId:first.id}]);
+ assert.deepEqual(at(reordered,first.id,0).inPose,target,'Moved animation updates following panel inheritance');
+ assert.deepEqual(at(reordered,animated.id,30).pose,midpoint,'Relative keys retain absolute pose when baseline unchanged');
+ const durationProject=structuredClone(reordered),durationScene=durationProject.scenes[0],durationPanel=durationScene.panels[0];
+ changeDuration(durationScene,durationPanel,120);
+ assert.deepEqual(at(durationProject,animated.id,119).outPose,target,'Retiming preserves OUT');
+ assert.deepEqual(at(durationProject,first.id,0).inPose,target,'Downstream IN follows retimed OUT');
+ const keys=durationScene.sequentialCamera!.panels[animated.id];
+ assert.equal(keys.mode,'animated');
+ if(keys.mode==='animated')assert.deepEqual(keys.keys.map(k=>k.frame),[61,119]);
+ const reopened=JSON.parse(JSON.stringify(durationProject)) as typeof p;
+ assert.deepEqual(at(reopened,first.id,0).inPose,target,'Serialized project retains continuity');
+ assert.deepEqual(resolveCompatibleCamera(reopened,other.id,other.panels[0].id,0).inPose,defaultCamera(reopened),'Scene boundary remains independent');
+ assert.deepEqual(at(withMid,follower.id,0).inPose,target,'Earlier snapshot remains unchanged');
+});
