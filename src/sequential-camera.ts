@@ -12,7 +12,7 @@ export const applyCameraOffset=(origin:CameraPose,offset:CameraPose):CameraPose=
 export type PanelCameraState =
   | {mode:'inherit'}
   | {mode:'static';pose:CameraPose}
-  | {mode:'animated';keys:RelativeCameraKey[]}
+  | {mode:'animated';keys:RelativeCameraKey[];inPose?:CameraPose}
   | {mode:'break';pose:CameraPose};
 export type SequentialCameraScene = {
   baseline?:CameraPose;
@@ -29,12 +29,13 @@ export function resolveSequentialCamera(scene:Scene,project:Pick<Project,'width'
   let inherited=baseline;
   for(const panel of scene.panels){
     const state=config.panels[panel.id]??{mode:'inherit' as const};
-    const start=clone(inherited);
+    const start=state.mode==='animated'&&state.inPose?clone(state.inPose):clone(inherited);
     let at:(frame:number)=>CameraPose=()=>clone(start);
     if(state.mode==='static'||state.mode==='break'){
       if(!valid(state.pose))throw new Error('Invalid sequential static camera pose.');
       at=()=>clone(state.pose);
     }else if(state.mode==='animated'){
+      if(!valid(start))throw new Error('Invalid sequential animated IN pose.');
       const keys=[...state.keys].sort((a,b)=>a.frame-b.frame);
       if(keys.some((k,i)=>!Number.isInteger(k.frame)||k.frame<1||k.frame>=panel.duration||![k.x,k.y,k.zoom,k.rotation].every(Number.isFinite)||k.zoom<=0||(i>0&&keys[i-1].frame===k.frame)||!['linear','hold','ease'].includes(k.interpolation)))throw new Error('Invalid sequential camera keyframes.');
       // Frame zero is locked to inherited IN; key poses are relative offsets.
@@ -149,7 +150,7 @@ export function setSequentialFirstPanelIn(project:Project,sceneId:string,panelId
  // Only the interpolation from the edited IN to the first key is allowed to change.
  const originalIn=resolveSequentialCamera(scene,project,scene.sequentialCamera,panelId,0).inPose;
  const current=scene.sequentialCamera.panels[panelId];
- const preserved=current?.mode==='animated'?{mode:'animated' as const,keys:current.keys.map(k=>({...k,...cameraOffset(pose,applyCameraOffset(originalIn,k))}))}:current;
+ const preserved=current?.mode==='animated'?{mode:'animated' as const,...(current.inPose?{inPose:clone(current.inPose)}:{}),keys:current.keys.map(k=>({...k,...cameraOffset(pose,applyCameraOffset(originalIn,k))}))}:current;
  const next:Project={...project,scenes:project.scenes.map(s=>s.id!==sceneId?s:{...s,sequentialCamera:{...s.sequentialCamera!,baseline:clone(pose),panels:preserved?{...s.sequentialCamera!.panels,[panelId]:preserved}:s.sequentialCamera!.panels}})};
  const updated=next.scenes.find(s=>s.id===sceneId)!;
  for(const panel of updated.panels)resolveSequentialCamera(updated,next,updated.sequentialCamera!,panel.id,panel.duration-1);
@@ -175,7 +176,7 @@ export function setSequentialCameraOut(project:Project,sceneId:string,panelId:st
   keys.sort((a,b)=>a.frame-b.frame);
   const next:Project={...project,scenes:project.scenes.map(s=>s.id!==sceneId?s:{
     ...s,sequentialCamera:{...s.sequentialCamera!,panels:{...s.sequentialCamera!.panels,
-      [panelId]:{mode:'animated' as const,keys}
+      [panelId]:{mode:'animated' as const,...(state.inPose?{inPose:clone(state.inPose)}:{}),keys}
     }}
   })};
   // Re-evaluate downstream inheritance before returning; invalid geometry rejects atomically.
