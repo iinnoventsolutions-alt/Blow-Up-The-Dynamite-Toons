@@ -9,6 +9,7 @@ on:
       - Security-Audit-W
       - Working
       - Release-Defect-Resolution
+      - RFU4-RC1.1-Int-Test-Temp
 permissions:
   contents: read
 jobs:
