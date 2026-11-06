@@ -9,8 +9,8 @@ type Drag={pointerId:number;mode:'pan'|'zoom'|'rotate';origin:CameraPose;x:numbe
 const equal=(a:CameraPose,b:CameraPose)=> (['x','y','zoom','rotation'] as const).every(k=>Math.abs(a[k]-b[k])<1e-7);
 
 /** Draw both sequential endpoints persistently; only the selected pose is draggable. */
-export default function SequentialCameraOutOverlay({project,inPose,outPose,editable,onChange,drawingMargin=.25,staticMode=false,intermediateMode=false,editingIn=false,inLocked=true,endpointOutPose}:{
- project:Project;inPose:CameraPose;outPose:CameraPose;editable:boolean;onChange:(pose:CameraPose)=>void;drawingMargin?:number;staticMode?:boolean;intermediateMode?:boolean;editingIn?:boolean;inLocked?:boolean;endpointOutPose?:CameraPose;
+export default function SequentialCameraOutOverlay({project,inPose,outPose,editable,onChange,drawingMargin=.25,staticMode=false,intermediateMode=false,editingIn=false,inLocked=true,endpointOutPose,intermediateOutlines=[],onSelectIntermediate}:{
+ project:Project;inPose:CameraPose;outPose:CameraPose;editable:boolean;onChange:(pose:CameraPose)=>void;drawingMargin?:number;staticMode?:boolean;intermediateMode?:boolean;editingIn?:boolean;inLocked?:boolean;endpointOutPose?:CameraPose;intermediateOutlines?:{frame:number;pose:CameraPose;selected:boolean}[];onSelectIntermediate?:(frame:number)=>void;
 }){
  const [live,setLive]=useState<CameraPose|null>(null);
  const liveRef=useRef<CameraPose|null>(null);
@@ -32,11 +32,16 @@ export default function SequentialCameraOutOverlay({project,inPose,outPose,edita
    <polygon points={cameraCorners(endpointOutPose??outPose,project).map(p=>p.join(',')).join(' ')} fill="none" stroke="#ef4d50" strokeWidth={handle/5}/>
    <text x={cameraCorners(endpointOutPose??outPose,project)[0][0]+handle} y={cameraCorners(endpointOutPose??outPose,project)[0][1]+handle*1.7} fill="#ef4d50" fontSize={handle*1.25}>OUT</text>
   </g>}
+  {intermediateOutlines.map(key=>{const outline=cameraCorners(key.pose,project);return <g key={key.frame} data-camera-intermediate-frame={key.frame} data-camera-intermediate-selected={key.selected} aria-label={`Intermediate camera frame ${key.frame}`}>
+   {!key.selected&&<polygon points={outline.map(p=>p.join(',')).join(' ')} fill="none" stroke="#3889e8" strokeWidth={handle/6} strokeDasharray={`${handle*.65} ${handle*.45}`} style={{cursor:'pointer',pointerEvents:'stroke'}} onPointerDown={e=>{e.preventDefault();e.stopPropagation();onSelectIntermediate?.(key.frame);}}/>}
+   {!key.selected&&<text x={outline[0][0]+handle} y={outline[0][1]-handle*.45} fill="#3889e8" fontSize={handle*1.2} fontWeight="bold" pointerEvents="none">{`K · ${key.frame}`}</text>}
+   {key.selected&&<text x={outline[0][0]+handle} y={outline[0][1]-handle*.45} fill="#3889e8" fontSize={handle*1.2} fontWeight="bold" pointerEvents="none">{`K · ${key.frame}`}</text>}
+  </g>;})}
   <g data-camera-endpoint={editingIn?"in":intermediateMode?"intermediate":"out"}>
    <polygon data-mode="pan" points={corners.map(p=>p.join(',')).join(' ')} fill="none" stroke={editingIn?'#32c85b':staticMode?'#222222':intermediateMode?'#3889e8':'#ef4d50'} strokeWidth={handle/5} className="camera-frame" style={{pointerEvents:'stroke'}}/>
-   <text x={corners[0][0]+handle} y={corners[0][1]+handle*1.7} fill={editingIn?'#32c85b':staticMode?'#222222':'#ef4d50'} fontSize={handle*1.25} pointerEvents="none">{editingIn?'IN':staticMode?'STATIC':intermediateMode?'INTERMEDIATE':'OUT'}</text>
+   <text x={corners[0][0]+handle} y={corners[0][1]+handle*1.7} fill={editingIn?'#32c85b':staticMode?'#222222':intermediateMode?'#3889e8':'#ef4d50'} fontSize={handle*1.25} pointerEvents="none">{editingIn?'IN':staticMode?'STATIC':intermediateMode?'INTERMEDIATE':'OUT'}</text>
    {corners.map(([x,y],i)=><rect key={i} data-mode="zoom" x={x-handle/2} y={y-handle/2} width={handle} height={handle} fill={editingIn?'#32c85b':staticMode?'#222222':intermediateMode?'#3889e8':'#ef4d50'} className="camera-handle"/>)}
-   <circle data-mode="pan" cx={pose.x} cy={pose.y} r={handle/2} fill={editingIn?'#32c85b':'#ef4d50'} className="camera-handle"/>
+   <circle data-mode="pan" cx={pose.x} cy={pose.y} r={handle/2} fill={editingIn?'#32c85b':intermediateMode?'#3889e8':'#ef4d50'} className="camera-handle"/>
    {editable&&<g className="camera-rotation-control"><line x1={rotationHandle.anchorX} y1={rotationHandle.anchorY} x2={rotationHandle.x} y2={rotationHandle.y} stroke="#15c7e8" strokeWidth={handle/7} pointerEvents="none"/><circle data-mode="rotate" aria-label="Rotate sequential camera" cx={rotationHandle.x} cy={rotationHandle.y} r={handle*.75} fill="#15c7e8" stroke="#ffffff" strokeWidth={handle/8} className="camera-rotation-handle"/></g>}
   </g>
  </svg>;
