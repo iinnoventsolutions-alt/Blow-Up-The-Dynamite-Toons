@@ -16,9 +16,10 @@ page.setDefaultTimeout(15000);
 try{
  const p=makeProject('F0 onion geometry reproduction'),s=p.scenes[0],first=s.panels[0];
  first.layers[0].strokes.push({id:uid(),tool:'shape',shape:'rectangle',fill:'#000000',color:'#000000',size:2,points:[[400,300,1],[500,400,1]]});
- const copy=structuredClone(first);copy.id=uid();copy.name='Identical duplicate';s.panels.push(copy);
+ const copy=makePanel('Identical duplicate');copy.layers[0].strokes=structuredClone(first.layers[0].strokes).map(stroke=>({...stroke,id:uid()}));s.panels.push(copy);
  await page.goto(url);
  await page.locator('input[type=file]').first().setInputFiles({name:'onion-alignment-f0.issb',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(p))});
+ await page.locator('.filmstrip .panel-image-button').nth(1).waitFor({state:'visible'});
  await page.locator('.filmstrip .panel-image-button').nth(1).click();
  await page.getByRole('checkbox',{name:'Onion skin',exact:true}).check();
  await page.getByLabel('backward onion panels',{exact:true}).selectOption('1');
