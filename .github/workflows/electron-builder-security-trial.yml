@@ -132,6 +132,18 @@ jobs:
         id: browser_regression
         continue-on-error: true
         run: npm run test:ui
+      - name: RC1.1-F0 onion-skin geometry reproduction (non-gating)
+        id: onion_f0_diagnostic
+        continue-on-error: true
+        run: node --experimental-strip-types tests/ui-onion-alignment-f0.mjs
+      - name: Upload RC1.1-F0 onion geometry evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: onion-f0-evidence-${{ github.run_id }}
+          path: test-results/onion-alignment-f0-*.png
+          if-no-files-found: ignore
+          retention-days: 14
       - name: RFU-A0 diagnostic browser reproduction (non-gating)
         id: rfu_a0_diagnostic
         continue-on-error: true
