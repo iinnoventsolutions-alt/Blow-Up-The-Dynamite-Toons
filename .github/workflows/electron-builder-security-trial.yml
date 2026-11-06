@@ -109,6 +109,10 @@ jobs:
           npm test
           node --test tests/electron-lifecycle.test.cjs tests/electron-persistence.test.cjs
           npm run build
+      - name: E2.3-F0.1 camera clipboard framing reproduction (non-gating)
+        id: e23_f0_clipboard
+        continue-on-error: true
+        run: node --experimental-strip-types --test tests/e2-camera-clipboard-framing-repro.test.ts
       - name: Prepare browser regression dependencies
         run: |
           npx playwright install chromium
