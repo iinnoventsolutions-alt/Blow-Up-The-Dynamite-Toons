@@ -132,9 +132,8 @@ jobs:
         id: browser_regression
         continue-on-error: true
         run: npm run test:ui
-      - name: RC1.1-F0 onion-skin geometry reproduction (non-gating)
-        id: onion_f0_diagnostic
-        continue-on-error: true
+      - name: RC1.1-F1 onion-skin geometry regression (required)
+        id: onion_f1_regression
         run: node --experimental-strip-types tests/ui-onion-alignment-f0.mjs
       - name: Upload RC1.1-F0 onion geometry evidence
         if: always()
