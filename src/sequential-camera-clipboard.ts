@@ -11,7 +11,7 @@ export type SequentialCameraClipboard = {
 };
 const pose=(p:CameraPose):CameraPose=>({x:p.x,y:p.y,zoom:p.zoom,rotation:p.rotation});
 const cloneState=(state:PanelCameraState):PanelCameraState=>
- state.mode==='animated'?{mode:'animated',keys:state.keys.map(k=>({...k}))}:
+ state.mode==='animated'?{mode:'animated',...(state.inPose?{inPose:pose(state.inPose)}:{}),keys:state.keys.map(k=>({...k}))}:
  state.mode==='static'||state.mode==='break'?{mode:state.mode,pose:pose(state.pose)}:{mode:'inherit'};
 
 export function copySequentialPanelCamera(project:Project,sceneId:string,panelId:string):SequentialCameraClipboard {
@@ -33,8 +33,8 @@ function retime(keys:RelativeCameraKey[],sourceDuration:number,destDuration:numb
 }
 
 /** Replace only destination camera state. Returns a new project for one history commit.
- * Relative animated offsets deliberately preserve motion against the destination
- * inherited IN, rather than forcing the source absolute IN onto the destination.
+ * Pasted animation pins its source IN and preserves relative keys against that IN.
+ * Ordinary (non-pasted) animated panels retain sequential inherited-IN behavior.
  * Inherited static framing is materialized to reproduce its source appearance. */
 export function pasteSequentialPanelCamera(project:Project,sceneId:string,panelId:string,clip:SequentialCameraClipboard):Project {
  if(clip?.kind!=='sequential-camera'||clip.version!==1)throw new Error('Unsupported camera clipboard.');
@@ -43,7 +43,7 @@ export function pasteSequentialPanelCamera(project:Project,sceneId:string,panelI
  const panel=scene.panels.find(p=>p.id===panelId);
  if(!panel)throw new Error('Destination panel not found.');
  const state:PanelCameraState=clip.state.mode==='animated'?
-   {mode:'animated',keys:retime(clip.state.keys,clip.duration,panel.duration)}:
+   {mode:'animated',inPose:pose(clip.sourceIn),keys:retime(clip.state.keys,clip.duration,panel.duration)}:
    clip.state.mode==='inherit'?{mode:'static',pose:pose(clip.sourceIn)}:cloneState(clip.state);
  const next:Project={...project,scenes:project.scenes.map(s=>s.id!==sceneId?s:{
   ...s,sequentialCamera:{...s.sequentialCamera!,panels:{...s.sequentialCamera!.panels,[panelId]:state}}
