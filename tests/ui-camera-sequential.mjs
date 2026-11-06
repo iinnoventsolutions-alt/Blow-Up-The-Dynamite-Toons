@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
-import { makeProject, makePanel } from '../src/model.ts';
+import { makeProject, makePanel, makeScene } from '../src/model.ts';
 
 // RFU4-RA.4C.1C: read-only sequential stage/mask regression.
 // Deliberately separate from legacy camera interaction acceptance.
@@ -33,6 +33,28 @@ try{
  const first=await points();assert(first,'First panel camera outline exists');
  // Camera mask control lives in the Camera inspector, not the default Panel inspector.
  await page.getByTitle('camera (C)',{exact:true}).click();await wait();
+ const copyCamera=page.getByRole('button',{name:'Copy camera from selected panel'});
+ const pasteCamera=page.getByRole('button',{name:'Paste camera on selected panel'});
+ assert.equal(await copyCamera.count(),1,'Sequential copy action is visible');
+ assert.equal(await pasteCamera.isDisabled(),true,'Paste disabled before sequential copy');
+ await copyCamera.click();await wait();
+ assert.equal(await pasteCamera.isEnabled(),true,'Sequential copy enables paste');
+ const originalFirst=await points();
+ await seek(60);
+ await pasteCamera.click();await wait();
+ assert.equal(await points(),originalFirst,'Pasted static camera replaces animated destination framing');
+ await seek(119);
+ assert.equal(await points(),originalFirst,'Pasted static camera remains static through destination OUT');
+ await seek(120);
+ assert.equal(await points(),originalFirst,'Downstream camera inherits pasted static OUT');
+ await seek(0);
+ await load(p); // Restore original animated fixture for existing mask and inheritance assertions.
+
+
+ const rotationHandle=page.locator('.camera-sequential-out-overlay [data-mode="rotate"]');
+ // RC1: rotation affordance is available on the editable sequential overlay.
+ assert.equal(await rotationHandle.count(),1,'Sequential camera exposes one cyan rotation handle');
+ assert.equal(await rotationHandle.getAttribute('fill'),'#15c7e8','Rotation handle uses cyan accent');
  const checkbox=page.getByRole('checkbox',{name:'Mask outside camera'});
  await checkbox.check();await wait();
  assert.equal(await mask().count(),1,'Sequential dark mask is visible');
@@ -51,6 +73,109 @@ try{
  await checkbox.uncheck();
  assert.equal(await mask().count(),0,'Mask toggle removes dark mask');
  assert.deepEqual(errors,[],'No browser runtime errors');
+ // RC1.1-A: first panel IN is editable, later panels remain inherited and locked.
+ await seek(0);
+ await page.getByRole('button',{name:'Animate sequential camera IN/OUT'}).click();await wait();
+ assert.equal(await page.getByLabel('Editable camera IN').count(),1,'First panel IN is editable');
+ assert.equal(await page.getByRole('button',{name:'Select editable IN'}).count(),1,'First panel exposes editable IN selection');
+ await page.getByRole('button',{name:'Select editable IN'}).click();await wait();
+ assert.equal(await page.locator('.camera-sequential-out-overlay text').filter({hasText:/^IN$/}).count(),1,'First panel overlay edits IN');
+ assert.equal(await page.locator('.camera-sequential-out-overlay [aria-label="Persistent camera OUT outline"] polygon').count(),1,'Red OUT outline persists while green IN is selected');
+ assert.equal(await page.locator('.camera-sequential-out-overlay [aria-label="Persistent camera OUT outline"] text').textContent(),'OUT','Persistent red OUT remains labeled');
+ await page.getByRole('button',{name:'Select drawing camera OUT'}).click();await wait();
+ assert.equal(await page.locator('.camera-sequential-out-overlay [data-camera-endpoint="out"] polygon').count(),1,'Red OUT is editable when selected');
+ assert.equal(await page.locator('.camera-sequential-out-overlay polygon[data-camera-endpoint="in"]').count(),1,'Green IN remains visible while red OUT is selected');
+
+ assert.equal(await page.getByRole('button',{name:'Select camera OUT'}).getAttribute('aria-pressed'),'true','Drawing OUT selection updates inspector');
+ assert.equal(await page.getByRole('button',{name:'Select drawing camera OUT'}).getAttribute('aria-pressed'),'true','Drawing OUT remains selected');
+ await page.getByRole('button',{name:'Select editable IN'}).click();await wait();
+ assert.equal(await page.getByRole('button',{name:'Select drawing camera IN'}).getAttribute('aria-pressed'),'true','Inspector IN selection updates drawing controls');
+ assert.equal(await page.getByRole('button',{name:'Select editable IN'}).getAttribute('aria-pressed'),'true','Inspector IN selection highlights itself');
+ assert.equal(await page.locator('.camera-sequential-out-overlay [aria-label="Persistent camera OUT outline"] polygon').count(),1,'Red OUT persists during inspector IN selection');
+ await page.getByRole('button',{name:'Select camera OUT'}).click();await wait();
+ assert.equal(await page.getByRole('button',{name:'Select drawing camera OUT'}).getAttribute('aria-pressed'),'true','Inspector OUT selection updates drawing controls');
+ assert.equal(await page.getByRole('button',{name:'Select camera OUT'}).getAttribute('aria-pressed'),'true','Inspector OUT selection highlights itself');
+ assert.equal(await page.locator('.camera-sequential-out-overlay polygon[data-camera-endpoint="in"]').count(),1,'Green IN persists during inspector OUT selection');
+ await page.getByRole('button',{name:'Select drawing camera IN'}).click();await wait();
+ assert.equal(await page.locator('.camera-sequential-out-overlay [aria-label="Persistent camera OUT outline"] polygon').count(),1,'Red OUT returns when selecting green IN');
+ const input=page.getByLabel('IN X',{exact:true});
+ await input.fill('1125');await input.press('Enter');await wait();
+ assert.equal(await page.getByLabel('IN X',{exact:true}).inputValue(),'1125','Numeric first-panel IN edit persists');
+ await seek(60);
+ assert.equal(await page.getByLabel('Inherited camera IN').count(),1,'Later panel IN remains inherited');
+ assert.equal(await page.locator('.camera-sequential-out-overlay text').filter({hasText:/IN · LOCKED/}).count(),1,'Later panel IN remains locked on stage');
+ await seek(0);
+ assert.equal(await page.getByLabel('IN X',{exact:true}).inputValue(),'1125','First-panel IN survives seeking');
+ // B2.3: intermediate selection, numeric isolation, and invalidation.
+ await seek(20);
+ await page.getByRole('button',{name:'Add intermediate keyframe at current frame'}).click();await wait();
+ assert.equal(await page.getByRole('button',{name:'Select drawing intermediate keyframe 20'}).count(),1,'Drawing intermediate selector appears');
+ // B3.0: persistent outlines are visible before selection and selectable directly.
+ assert.equal(await page.locator('.camera-sequential-out-overlay [data-camera-intermediate-frame="20"] polygon[stroke-dasharray]').count(),1,'Unselected intermediate outline is dashed and visible');
+ assert.equal(await page.locator('.camera-sequential-out-overlay [data-camera-intermediate-frame="20"] text').textContent(),'K · 20','Persistent intermediate outline carries frame label');
+ await page.locator('.camera-sequential-out-overlay [data-camera-intermediate-frame="20"] polygon').dispatchEvent('pointerdown',{button:0,pointerId:31});
+ await wait();
+ assert.equal(await page.getByRole('button',{name:'Select intermediate keyframe 20'}).getAttribute('aria-pressed'),'true','Clicking blue outline selects inspector keyframe');
+ assert.equal(await page.locator('.camera-sequential-out-overlay [data-camera-intermediate-frame="20"][data-camera-intermediate-selected="true"]').count(),1,'Selected intermediate outline remains represented');
+ await page.getByRole('button',{name:'Select camera OUT'}).click();await wait();
+ assert.equal(await page.locator('.camera-sequential-out-overlay [data-camera-intermediate-frame="20"] polygon[stroke-dasharray]').count(),1,'Intermediate outline persists when OUT selected');
+ await page.getByRole('button',{name:'Select editable IN'}).click();await wait();
+ assert.equal(await page.locator('.camera-sequential-out-overlay [data-camera-intermediate-frame="20"] polygon[stroke-dasharray]').count(),1,'Intermediate outline persists when IN selected');
+ await page.getByRole('button',{name:'Select intermediate keyframe 20'}).click();await wait();
+ assert.equal(await page.getByRole('button',{name:'Select drawing intermediate keyframe 20'}).getAttribute('aria-pressed'),'true','Inspector selection synchronizes drawing');
+ assert.equal(await page.locator('.camera-sequential-out-overlay [data-camera-endpoint="intermediate"] polygon').count(),1,'Blue intermediate editing outline visible');
+ assert.equal(await page.locator('.camera-sequential-out-overlay [aria-label="Persistent camera OUT outline"] polygon').count(),1,'Red OUT persists');
+ assert.equal(await page.locator('.camera-sequential-out-overlay polygon[data-camera-endpoint="in"]').count(),1,'Green IN persists');
+ const outX=await page.getByLabel('OUT X',{exact:true}).inputValue();
+ await page.getByLabel('Intermediate X',{exact:true}).fill('1200');
+ await page.getByLabel('Intermediate X',{exact:true}).press('Enter');await wait();
+ assert.equal(await page.getByLabel('Intermediate X',{exact:true}).inputValue(),'1200','Intermediate numeric edit persists');
+ assert.equal(await page.getByLabel('OUT X',{exact:true}).inputValue(),outX,'Intermediate edit preserves OUT');
+ assert.equal(await page.getByLabel('IN X',{exact:true}).inputValue(),'1125','Intermediate edit preserves IN');
+ await page.getByRole('button',{name:'Select drawing camera OUT'}).click();await wait();
+ assert.equal(await page.getByLabel('Intermediate X',{exact:true}).count(),0,'Intermediate numeric controls hide when OUT selected');
+ await page.getByRole('button',{name:'Select drawing intermediate keyframe 20'}).click();await wait();
+ assert.equal(await page.getByRole('button',{name:'Select intermediate keyframe 20'}).getAttribute('aria-pressed'),'true','Drawing selection synchronizes inspector');
+ await seek(21);
+ assert.equal(await page.getByRole('button',{name:'Select intermediate keyframe 20'}).getAttribute('aria-pressed'),'false','Scrubbing clears intermediate selection');
+ await page.getByRole('button',{name:'Delete intermediate keyframe 20'}).click();await wait();
+ assert.equal(await page.getByRole('button',{name:'Select drawing intermediate keyframe 20'}).count(),0,'Deleted intermediate selector disappears');
+ await seek(0);
+ // B2.2: explicit endpoint selection seeks, ordinary timeline scrubbing invalidates it.
+ await page.getByRole('button',{name:'Select camera OUT'}).click();await wait();
+ assert.equal(await page.getByRole('button',{name:'Select drawing camera OUT'}).getAttribute('aria-pressed'),'true','OUT selected before manual scrub');
+ await seek(1);
+ assert.equal(await page.getByRole('button',{name:'Select drawing camera OUT'}).getAttribute('aria-pressed'),'false','Timeline scrub clears stale OUT editing target');
+ assert.equal(await page.getByRole('button',{name:'Select camera OUT'}).getAttribute('aria-pressed'),'false','Inspector OUT selection clears on manual scrub');
+ await page.getByRole('button',{name:'Select drawing camera IN'}).click();await wait();
+ assert.equal(await page.getByRole('button',{name:'Select editable IN'}).getAttribute('aria-pressed'),'true','IN selected before panel navigation');
+ await seek(60);
+ assert.equal(await page.getByRole('button',{name:'Select drawing camera OUT'}).count(),1,'Destination panel camera controls exist');
+ assert.equal(await page.getByRole('button',{name:'Select drawing camera OUT'}).getAttribute('aria-pressed'),'false','Panel navigation clears previous editing target');
+ assert.equal(await page.getByRole('button',{name:'Select locked IN'}).count(),1,'Later panel IN remains locked');
+ assert.equal(await page.locator('.camera-sequential-out-overlay polygon[data-camera-endpoint="in"]').count(),1,'Inherited IN outline survives panel navigation');
+ await seek(0);
+ assert.equal(await page.getByRole('button',{name:'Select editable IN'}).getAttribute('aria-pressed'),'false','Returning to original panel does not resurrect old selection');
+ // Scene changes must not retain endpoint selection or borrow another scene's baseline.
+ const multi=makeProject('Sequential scene navigation');
+ const other=makeScene('Scene 2',multi.fps);other.panels[0].duration=60;
+ multi.scenes[0].panels[0].duration=60;
+ multi.scenes[0].sequentialCamera={version:1,baseline:{x:500,y:400,zoom:1,rotation:0},panels:{}};
+ other.sequentialCamera={version:1,baseline:{x:1400,y:700,zoom:1.6,rotation:0},panels:{}};
+ multi.scenes.push(other);multi.schemaVersion=5;
+ await load(multi);await wait();
+ await page.getByRole('button',{name:'Animate sequential camera IN/OUT'}).click();await wait();
+ await page.getByRole('button',{name:'Select editable IN'}).click();await wait();
+ assert.equal(await page.getByRole('button',{name:'Select editable IN'}).getAttribute('aria-pressed'),'true','Scene 1 IN selected');
+ await page.locator(`.film-scene[data-scene-id="${other.id}"] .panel-image-button`).click();await wait();
+ assert.equal(await page.getByRole('button',{name:'Select editable IN'}).count(),0,'Scene 2 has independent static baseline');
+ await page.getByRole('button',{name:'Animate sequential camera IN/OUT'}).click();await wait();
+ assert.equal(await page.getByRole('button',{name:'Select editable IN'}).getAttribute('aria-pressed'),'false','Scene 2 has no stale IN target');
+ await page.getByRole('button',{name:'Select camera OUT'}).click();await wait();
+ assert.equal(await page.getByRole('button',{name:'Select drawing camera OUT'}).getAttribute('aria-pressed'),'true','Scene 2 OUT selectable');
+ await page.locator(`.film-scene[data-scene-id="${multi.scenes[0].id}"] .panel-image-button`).click();await wait();
+ assert.equal(await page.getByRole('button',{name:'Select editable IN'}).getAttribute('aria-pressed'),'false','Scene 1 does not inherit Scene 2 selection');
+ await load(p);
  // Legacy rendering must remain on the existing overlay path.
  const legacy=makeProject('Legacy UI regression');
  legacy.scenes[0].camera.push({id:'key-a',frame:0,x:960,y:540,zoom:1,rotation:0,interpolation:'linear'});
