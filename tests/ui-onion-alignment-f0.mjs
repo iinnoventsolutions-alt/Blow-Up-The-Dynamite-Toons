@@ -31,12 +31,14 @@ try{
  });
  await page.waitForTimeout(350);
  const firstGeometry=await geometry();
+ assert.deepEqual(firstGeometry.ghostPixels,firstGeometry.drawingPixels,'Ghost and drawing canvases must share backing resolution');
  console.log('F0 original zoom geometry:',JSON.stringify(firstGeometry));
  const tolerance=.006;
  for(const key of ['x','y','w','h'])assert.ok(Math.abs(firstGeometry.ghost[key]-firstGeometry.drawing[key])<tolerance,`Onion ${key} differs from duplicated artwork: ${JSON.stringify(firstGeometry)}`);
  await page.getByRole('button',{name:'+',exact:true}).last().click();
  await page.waitForTimeout(250);
  const zoomed=await geometry();
+ assert.deepEqual(zoomed.ghostPixels,zoomed.drawingPixels,'Zoom must retain equal canvas backing dimensions');
  for(const key of ['x','y','w','h'])assert.ok(Math.abs(zoomed.ghost[key]-zoomed.drawing[key])<tolerance,`Zoomed onion ${key} differs: ${JSON.stringify(zoomed)}`);
  console.log('PASS RC1.1-F0 onion duplicate geometry at multiple zoom levels');
 }catch(e){await mkdir('test-results',{recursive:true});await page.screenshot({path:'test-results/onion-alignment-f0-failure.png'});throw e;}finally{await browser.close();server.kill();}
