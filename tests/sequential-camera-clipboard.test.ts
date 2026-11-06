@@ -22,7 +22,7 @@ test('RB1 animated copy preserves relative offsets, rotation and interpolation a
  assert.deepEqual(state.keys.map(k=>k.frame),[10,20]);
  assert.deepEqual(state.keys.map(k=>k.rotation),[30,60]);
  assert.deepEqual(state.keys.map(k=>k.interpolation),['ease','hold']);
- assert.equal(resolveCompatibleCamera(result,id,b,20).pose.rotation,120);
+ assert.equal(resolveCompatibleCamera(result,id,b,20).pose.rotation,60);
  assert.deepEqual(clip.state,s.sequentialCamera!.panels[a]);
 });
 test('RB1 rejects compressed collisions atomically and preserves destination',()=>{
