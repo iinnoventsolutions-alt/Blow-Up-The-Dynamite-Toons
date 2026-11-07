@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {makeProject,makePanel} from '../src/model.ts';
-import {enableSequentialCameraStorage,resolveCompatibleCamera} from '../../src/sequential-camera.ts';
-import {copySequentialPanelCamera,pasteSequentialPanelCamera} from '../../src/sequential-camera-clipboard.ts';
+import {enableSequentialCameraStorage,resolveCompatibleCamera} from '../src/sequential-camera.ts';
+import {copySequentialPanelCamera,pasteSequentialPanelCamera} from '../src/sequential-camera-clipboard.ts';
 
 // E2.3-F1.2B: required camera clipboard framing regression.
 test('E2.3-F1.2B: preserve animated clipboard absolute IN, intermediate and OUT framing',()=>{
