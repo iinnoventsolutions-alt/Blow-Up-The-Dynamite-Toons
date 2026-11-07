@@ -48,6 +48,27 @@ try{
    let binary='';for(const byte of bytes)binary+=String.fromCharCode(byte);
    return 'data:audio/wav;base64,'+btoa(binary);
   }
+  // B4.1: instrument browser APIs only inside this diagnostic window.
+  const lifecycle=[];
+  const OriginalRecorder=window.MediaRecorder;
+  const originalRaf=window.requestAnimationFrame.bind(window);
+  let rafCalls=0,rafCallbacks=0,frameRequests=0;
+  window.requestAnimationFrame=(callback)=>{rafCalls++;return originalRaf(time=>{rafCallbacks++;callback(time);});};
+  const originalRequestFrame=CanvasCaptureMediaStreamTrack.prototype.requestFrame;
+  CanvasCaptureMediaStreamTrack.prototype.requestFrame=function(...args){frameRequests++;return originalRequestFrame.apply(this,args);};
+  class TracedRecorder extends OriginalRecorder {
+   constructor(...args){
+    super(...args);
+    lifecycle.push({event:'constructed',state:this.state,mime:this.mimeType,at:performance.now()});
+    for(const name of ['start','dataavailable','error','stop']){
+     this.addEventListener(name,e=>lifecycle.push({event:name,state:this.state,bytes:e.data?.size??null,at:performance.now()}));
+    }
+   }
+   start(...args){lifecycle.push({event:'start-called',state:this.state,at:performance.now()});return super.start(...args);}
+   stop(...args){lifecycle.push({event:'stop-called',state:this.state,at:performance.now()});return super.stop(...args);}
+   requestData(...args){lifecycle.push({event:'request-data-called',state:this.state,at:performance.now()});return super.requestData(...args);}
+  }
+  window.MediaRecorder=TracedRecorder;
   const results=[];
   for(const withAudio of [false,true]){
    const p=makeProject('E2.4-B3 export',320,180,12);
@@ -60,7 +81,7 @@ try{
     const id='audio-1';p.audioAssets=[{id,name:'diagnostic.wav',source:audioSource(),duration:1,sampleRate:8000,channels:1,peaks:[]}];
     p.audioTracks=[{id:'track',name:'Audio',gain:1,mute:false,solo:false,clips:[{id:'clip',assetId:id,name:'Tone',start:0,offset:0,duration:1,gain:1}]}];
    }
-   const progress=[],controller=new AbortController();
+   const progress=[],controller=new AbortController();const eventStart=lifecycle.length,rafStart=rafCalls,callbackStart=rafCallbacks,frameStart=frameRequests;
    console.log('E2.4-B3 renderer export start',withAudio);
    const timeout=setTimeout(()=>controller.abort(),12000);
    try{
@@ -69,10 +90,12 @@ try{
       new Promise((_,reject)=>setTimeout(()=>reject(new Error('E2.4-B3 export exceeded 15s watchdog')),15000))
     ]);
     const bytes=Array.from(new Uint8Array(await blob.arrayBuffer()));
-    results.push({withAudio,bytes,byteLength:bytes.length,mime:blob.type,progressEnd:progress.at(-1)});
-   }catch(e){results.push({withAudio,error:String(e),progressEnd:progress.at(-1)});}
+    results.push({withAudio,bytes,byteLength:bytes.length,mime:blob.type,progressEnd:progress.at(-1),diagnostics:{events:lifecycle.slice(eventStart),rafCalls:rafCalls-rafStart,rafCallbacks:rafCallbacks-callbackStart,frameRequests:frameRequests-frameStart}});
+   }catch(e){results.push({withAudio,error:String(e),progressEnd:progress.at(-1),diagnostics:{events:lifecycle.slice(eventStart),rafCalls:rafCalls-rafStart,rafCallbacks:rafCallbacks-callbackStart,frameRequests:frameRequests-frameStart}});}
    finally{clearTimeout(timeout);}
   }
+  window.MediaRecorder=OriginalRecorder;
+  CanvasCaptureMediaStreamTrack.prototype.requestFrame=originalRequestFrame;
   return results;
  }),sleep(40000).then(()=>{throw new Error('E2.4-B3 renderer evaluation exceeded 40s watchdog');})]);
  trace('export-evaluate-done');
