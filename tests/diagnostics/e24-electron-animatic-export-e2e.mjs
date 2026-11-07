@@ -21,9 +21,17 @@ try{
  trace('vite-ready');
  app=await within(electron.launch({args:['.'],timeout:15000,env:{...process.env,ELECTRON_DISABLE_SECURITY_WARNINGS:'true'}}),20000,'launch');
  trace('electron-launched');
- const page=await within(app.firstWindow({timeout:10000}),12000,'first-window');
+ const mainPage=await within(app.firstWindow({timeout:10000}),12000,'first-window');
  trace('first-window-ready');
- await page.goto('http://127.0.0.1:4319',{waitUntil:'domcontentloaded',timeout:10000});
+ // Production main.cjs blocks all renderer-initiated navigation via will-navigate.
+ // Create a separate isolated Electron diagnostic window instead of navigating the app window.
+ const windowPromise=app.waitForEvent('window',{timeout:15000});
+ await app.evaluate(async({BrowserWindow})=>{
+  const diagnostic=new BrowserWindow({show:false,webPreferences:{contextIsolation:true,nodeIntegration:false,sandbox:true}});
+  await diagnostic.loadURL('http://127.0.0.1:4319/');
+ });
+ const page=await windowPromise;
+ await page.waitForLoadState('domcontentloaded',{timeout:10000});
  trace('vite-page-loaded');
  trace('export-evaluate-start');
  const cases=await Promise.race([page.evaluate(async()=>{
