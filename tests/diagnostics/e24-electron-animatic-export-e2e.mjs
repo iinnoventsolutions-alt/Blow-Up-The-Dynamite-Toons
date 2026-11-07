@@ -4,6 +4,7 @@ import {spawnSync} from 'node:child_process';
 import {writeFileSync,mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {setTimeout as sleep} from 'node:timers/promises';
 import { _electron as electron } from 'playwright';
 
 // E2.4-B3: real exportAnimatic path in Electron, not a synthetic MediaRecorder.
@@ -17,7 +18,7 @@ try{
  app=await electron.launch({args:['.'],timeout:45000,env:{...process.env,ELECTRON_DISABLE_SECURITY_WARNINGS:'true'}});
  const page=await app.firstWindow({timeout:30000});
  await page.goto('http://127.0.0.1:4319');
- const cases=await page.evaluate(async()=>{
+ const cases=await Promise.race([page.evaluate(async()=>{
   const {makeProject,makePanel}=await import('/src/model.ts');
   const {exportAnimatic}=await import('/src/animatic-export.ts');
   function audioSource(){
@@ -43,15 +44,20 @@ try{
     const id='audio-1';p.audioAssets=[{id,name:'diagnostic.wav',source:audioSource(),duration:1,sampleRate:8000,channels:1,peaks:[]}];
     p.audioTracks=[{id:'track',name:'Audio',gain:1,mute:false,solo:false,clips:[{id:'clip',assetId:id,name:'Tone',start:0,offset:0,duration:1,gain:1}]}];
    }
-   const progress=[];
+   const progress=[],controller=new AbortController();
+   const timeout=setTimeout(()=>controller.abort(),12000);
    try{
-    const blob=await exportAnimatic(p,new AbortController().signal,n=>progress.push(n));
+    const blob=await Promise.race([
+      exportAnimatic(p,controller.signal,n=>progress.push(n)),
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error('E2.4-B3 export exceeded 15s watchdog')),15000))
+    ]);
     const bytes=Array.from(new Uint8Array(await blob.arrayBuffer()));
     results.push({withAudio,bytes,byteLength:bytes.length,mime:blob.type,progressEnd:progress.at(-1)});
-   }catch(e){results.push({withAudio,error:String(e)});}
+   }catch(e){results.push({withAudio,error:String(e),progressEnd:progress.at(-1)});}
+   finally{clearTimeout(timeout);}
   }
   return results;
- });
+ }),sleep(40000).then(()=>{throw new Error('E2.4-B3 renderer evaluation exceeded 40s watchdog');})]);
  for(const c of cases){
   const {bytes,...summary}=c;console.log('E2.4-B3 production export:',JSON.stringify(summary));
   if(bytes?.length){const file=join(dir,c.withAudio?'audio.webm':'silent.webm');writeFileSync(file,Buffer.from(bytes));
