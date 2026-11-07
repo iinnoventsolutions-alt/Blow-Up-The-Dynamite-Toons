@@ -47,14 +47,27 @@ export function drawPanel(canvas: HTMLCanvasElement, panel: Panel, project: Proj
   const ctx = canvas.getContext('2d')!; ctx.clearRect(0, 0, width, height);
   if (!options.transparent) { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, width, height); }
   ctx.save();
-  if (options.camera) { const c = options.camera; ctx.translate(width/2,height/2); ctx.rotate(-c.rotation*Math.PI/180); ctx.scale(c.zoom,c.zoom); ctx.translate(-c.x*width/project.width,-c.y*height/project.height); }
+  // Camera-space rendering must occur before clipping to the compositing canvas.
+  // A project-sized scratch bitmap would otherwise discard artwork outside the
+  // original project bounds even when the shifted camera can see that artwork.
   let scratch = scratchCanvases.get(canvas);
   if (!scratch) { scratch = document.createElement('canvas'); scratchCanvases.set(canvas, scratch); }
   if (scratch.width !== width || scratch.height !== height) { scratch.width = width; scratch.height = height; }
   const layerCtx = scratch.getContext('2d')!;
   for (const layer of panel.layers) {
     if (!layer.visible) continue;
-    layerCtx.setTransform(1, 0, 0, 1, 0, 0); layerCtx.clearRect(0, 0, width, height); layerCtx.scale(width / (project.width * (1 + 2 * margin)), height / (project.height * (1 + 2 * margin))); if (margin) layerCtx.translate(project.width * margin, project.height * margin);
+    layerCtx.setTransform(1, 0, 0, 1, 0, 0); layerCtx.clearRect(0, 0, width, height);
+    if (options.camera) {
+      const c = options.camera;
+      layerCtx.translate(width/2, height/2);
+      layerCtx.rotate(-c.rotation*Math.PI/180);
+      layerCtx.scale(c.zoom, c.zoom);
+      layerCtx.translate(-c.x*width/project.width, -c.y*height/project.height);
+      layerCtx.scale(width/project.width, height/project.height);
+    } else {
+      layerCtx.scale(width / (project.width * (1 + 2 * margin)), height / (project.height * (1 + 2 * margin)));
+      if (margin) layerCtx.translate(project.width * margin, project.height * margin);
+    }
     paintLayer(layerCtx,layer,project,options.live?.layerId===layer.id?options.live.stroke:undefined);
     ctx.globalAlpha = layer.opacity; ctx.drawImage(scratch, 0, 0);
   }
