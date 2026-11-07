@@ -11,13 +11,21 @@ import { _electron as electron } from 'playwright';
 // Diagnostic is non-gating until timing and media assertions are proven stable.
 const server=spawn(process.platform==='win32'?'node_modules/.bin/vite.cmd':'node_modules/.bin/vite',['--host','127.0.0.1','--port','4319','--strictPort'],{stdio:'ignore'});
 let app;
+const trace=(stage)=>console.log('E2.4-B3 stage:',stage,new Date().toISOString());
+const within=async(promise,ms,label)=>Promise.race([promise,sleep(ms).then(()=>{throw new Error('E2.4-B3 '+label+' timed out after '+ms+'ms');})]);
 const dir=mkdtempSync(join(tmpdir(),'e24-b3-'));
 try{
+ trace('start');
  let ready=false;for(let i=0;i<120;i++){try{if((await fetch('http://127.0.0.1:4319')).ok){ready=true;break;}}catch{}await new Promise(r=>setTimeout(r,100));}
  assert(ready,'Vite server started');
- app=await electron.launch({args:['.'],timeout:45000,env:{...process.env,ELECTRON_DISABLE_SECURITY_WARNINGS:'true'}});
- const page=await app.firstWindow({timeout:30000});
- await page.goto('http://127.0.0.1:4319');
+ trace('vite-ready');
+ app=await within(electron.launch({args:['.'],timeout:15000,env:{...process.env,ELECTRON_DISABLE_SECURITY_WARNINGS:'true'}}),20000,'launch');
+ trace('electron-launched');
+ const page=await within(app.firstWindow({timeout:10000}),12000,'first-window');
+ trace('first-window-ready');
+ await page.goto('http://127.0.0.1:4319',{waitUntil:'domcontentloaded',timeout:10000});
+ trace('vite-page-loaded');
+ trace('export-evaluate-start');
  const cases=await Promise.race([page.evaluate(async()=>{
   const {makeProject,makePanel}=await import('/src/model.ts');
   const {exportAnimatic}=await import('/src/animatic-export.ts');
@@ -45,6 +53,7 @@ try{
     p.audioTracks=[{id:'track',name:'Audio',gain:1,mute:false,solo:false,clips:[{id:'clip',assetId:id,name:'Tone',start:0,offset:0,duration:1,gain:1}]}];
    }
    const progress=[],controller=new AbortController();
+   console.log('E2.4-B3 renderer export start',withAudio);
    const timeout=setTimeout(()=>controller.abort(),12000);
    try{
     const blob=await Promise.race([
@@ -58,6 +67,7 @@ try{
   }
   return results;
  }),sleep(40000).then(()=>{throw new Error('E2.4-B3 renderer evaluation exceeded 40s watchdog');})]);
+ trace('export-evaluate-done');
  for(const c of cases){
   const {bytes,...summary}=c;console.log('E2.4-B3 production export:',JSON.stringify(summary));
   if(bytes?.length){const file=join(dir,c.withAudio?'audio.webm':'silent.webm');writeFileSync(file,Buffer.from(bytes));
@@ -72,4 +82,13 @@ try{
   assert(!c.error,c.error);assert(c.byteLength>100,'Actual export must produce video bytes');
  }
  console.log('PASS E2.4-B3 actual Electron animatic exports with dissolve and audio');
-}finally{await app?.close();server.kill();rmSync(dir,{recursive:true,force:true});}
+}finally{
+ trace('cleanup-start');
+ if(app){
+  try{await within(app.close(),8000,'app-close');}
+  catch(e){console.warn('E2.4-B3 Electron close warning:',String(e));}
+ }
+ server.kill();
+ rmSync(dir,{recursive:true,force:true});
+ trace('cleanup-done');
+}
