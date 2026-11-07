@@ -184,6 +184,20 @@ jobs:
           path: e24-a1-drawing-diagnostic.log
           if-no-files-found: warn
           retention-days: 14
+      - name: E2.4-B1 Electron video recording reproduction (non-gating)
+        id: e24_b1_electron
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          node tests/diagnostics/e24-electron-frame-capture-repro.mjs 2>&1 | tee e24-b1-electron-diagnostic.log
+      - name: Upload E2.4-B1 Electron recording diagnostic log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: e24-b1-electron-diagnostic-${{ github.run_id }}
+          path: e24-b1-electron-diagnostic.log
+          if-no-files-found: warn
+          retention-days: 14
       - name: Round 1 drawing reliability regression
         id: drawing_reliability
         continue-on-error: true
