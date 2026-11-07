@@ -170,9 +170,8 @@ jobs:
             test-results/rfu-a0-*.png
           if-no-files-found: warn
           retention-days: 14
-      - name: E2.4-A1 drawing playback clipping reproduction (non-gating)
+      - name: E2.4-A3 camera-visible drawing regression (required)
         id: e24_a1_drawing
-        continue-on-error: true
         run: |
           set -o pipefail
           node --experimental-strip-types tests/diagnostics/e24-drawing-playback-clip-repro.mjs 2>&1 | tee e24-a1-drawing-diagnostic.log
@@ -196,6 +195,20 @@ jobs:
         with:
           name: e24-b1-electron-diagnostic-${{ github.run_id }}
           path: e24-b1-electron-diagnostic.log
+          if-no-files-found: warn
+          retention-days: 14
+      - name: E2.4-B3 production Electron animatic export diagnosis (non-gating)
+        id: e24_b3_export
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          node tests/diagnostics/e24-electron-animatic-export-e2e.mjs 2>&1 | tee e24-b3-export-diagnostic.log
+      - name: Upload E2.4-B3 production export diagnostic log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: e24-b3-export-diagnostic-${{ github.run_id }}
+          path: e24-b3-export-diagnostic.log
           if-no-files-found: warn
           retention-days: 14
       - name: Round 1 drawing reliability regression
