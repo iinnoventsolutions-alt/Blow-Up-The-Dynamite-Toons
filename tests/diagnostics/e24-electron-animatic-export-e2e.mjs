@@ -68,6 +68,35 @@ try{
    stop(...args){lifecycle.push({event:'stop-called',state:this.state,at:performance.now()});return super.stop(...args);}
    requestData(...args){lifecycle.push({event:'request-data-called',state:this.state,at:performance.now()});return super.requestData(...args);}
   }
+  // B4.3: non-production recorder matrix, matching B2's known-working shape.
+  const probe=async(label,{audio=false,mime='video/webm;codecs=vp9,opus',bits=5000000}={})=>{
+   const canvas=document.createElement('canvas');canvas.width=320;canvas.height=180;
+   const draw=canvas.getContext('2d'),source=canvas.captureStream(0);
+   const track=source.getVideoTracks()[0];
+   const ac=audio?new AudioContext():null;
+   if(ac)await ac.resume();
+   const destination=ac?.createMediaStreamDestination();
+   const stream=new MediaStream([...source.getVideoTracks(),...(destination?.stream.getAudioTracks()||[])]);
+   const events=[],chunks=[];
+   let rec;
+   try{
+    rec=new OriginalRecorder(stream,{mimeType:mime,videoBitsPerSecond:bits,...(audio?{audioBitsPerSecond:192000}:{})});
+    const done=new Promise((resolve,reject)=>{rec.ondataavailable=e=>{events.push('data:'+e.data.size);if(e.data.size)chunks.push(e.data.size);};rec.onstart=()=>events.push('start');rec.onerror=e=>reject(new Error(String(e.error)));rec.onstop=resolve;});
+    rec.start(100);
+    for(let i=0;i<30;i++){draw.fillStyle=i%2?'#ff0000':'#0000ff';draw.fillRect(0,0,320,180);track.requestFrame();await new Promise(r=>setTimeout(r,50));}
+    rec.stop();await done;
+    return {label,bytes:chunks.reduce((a,n)=>a+n,0),events};
+   }catch(e){return {label,error:String(e),events};}
+   finally{if(rec?.state==='recording')rec.stop();stream.getTracks().forEach(t=>t.stop());source.getTracks().forEach(t=>t.stop());if(ac)await ac.close();}
+  };
+  const matrix=[];
+  for(const [label,options] of [
+   ['baseline',{audio:false,bits:1000000}],
+   ['high-bitrate',{audio:false,bits:5000000}],
+   ['silent-audio-track',{audio:true,bits:5000000}],
+   ['vp8-audio',{audio:true,bits:5000000,mime:'video/webm;codecs=vp8,opus'}]
+  ])matrix.push(await probe(label,options));
+  console.log('E2.4-B4.3 recorder matrix',JSON.stringify(matrix));
   window.MediaRecorder=TracedRecorder;
   const results=[];
   for(const withAudio of [false,true]){
