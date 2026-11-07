@@ -72,13 +72,15 @@ try{
    requestData(...args){lifecycle.push({event:'request-data-called',state:this.state,at:performance.now()});return super.requestData(...args);}
   }
   // B4.3: non-production recorder matrix, matching B2's known-working shape.
-  const probe=async(label,{audio=false,mime='video/webm;codecs=vp9,opus',bits=5000000}={})=>{
+  const probe=async(label,{audio=false,active=false,mime='video/webm;codecs=vp9,opus',bits=5000000}={})=>{
    const canvas=document.createElement('canvas');canvas.width=320;canvas.height=180;
    const draw=canvas.getContext('2d'),source=canvas.captureStream(0);
    const track=source.getVideoTracks()[0];
    const ac=audio?new AudioContext():null;
    if(ac)await ac.resume();
    const destination=ac?.createMediaStreamDestination();
+   const oscillator=active?ac.createOscillator():null;
+   if(oscillator){oscillator.frequency.value=440;oscillator.connect(destination);oscillator.start();}
    const stream=new MediaStream([...source.getVideoTracks(),...(destination?.stream.getAudioTracks()||[])]);
    const events=[],chunks=[];
    let rec;
@@ -90,13 +92,14 @@ try{
     rec.stop();await done;
     return {label,bytes:chunks.reduce((a,n)=>a+n,0),events};
    }catch(e){return {label,error:String(e),events};}
-   finally{if(rec?.state==='recording')rec.stop();stream.getTracks().forEach(t=>t.stop());source.getTracks().forEach(t=>t.stop());if(ac)await ac.close();}
+   finally{if(rec?.state==='recording')rec.stop();stream.getTracks().forEach(t=>t.stop());source.getTracks().forEach(t=>t.stop());if(oscillator){oscillator.stop();oscillator.disconnect();}if(ac)await ac.close();}
   };
   const matrix=[];
   for(const [label,options] of [
    ['baseline',{audio:false,bits:1000000}],
    ['high-bitrate',{audio:false,bits:5000000}],
    ['silent-audio-track',{audio:true,bits:5000000}],
+   ['active-audio-track',{audio:true,active:true,bits:5000000}],
    ['vp8-audio',{audio:true,bits:5000000,mime:'video/webm;codecs=vp8,opus'}]
   ])matrix.push(await probe(label,options));
   console.log('E2.4-B4.3 recorder matrix',JSON.stringify(matrix));
@@ -142,7 +145,7 @@ try{
    assert(parsed.streams?.some(s=>s.codec_type==='video'),'Export must contain video');
    if(c.withAudio)assert(parsed.streams?.some(s=>s.codec_type==='audio'),'Audio-enabled export must contain audio');
   }
-  assert(!c.error,c.error);assert(c.byteLength>100,'Actual export must produce video bytes');
+  assert(!c.error,`withAudio=${c.withAudio}: ${c.error}`);assert(c.byteLength>100,'Actual export must produce video bytes');
  }
  console.log('PASS E2.4-B3 actual Electron animatic exports with dissolve and audio');
 }finally{
