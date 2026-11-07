@@ -36,12 +36,24 @@ try {
   const control=document.createElement('canvas');
   paintPlayback(control,project,0,1920,[]);
   const controlPixel=sample(control,1210,500);
-  return {playback,direct:directPixel,inBoundsControl:controlPixel,coordinates:{worldX:2000,screenX:1510,cameraX:1450},canvas:{width:output.width,height:output.height}};
+  const variants=[];
+  for(const pose of [{x:1450,y:540,zoom:1.5,rotation:0},{x:1450,y:540,zoom:1,rotation:25},{x:1450,y:540,zoom:1.5,rotation:25}]){
+   panel.layers[0].strokes[0]=stroke;
+   const frame=document.createElement('canvas'),comparison=document.createElement('canvas');
+   scene.camera=[{...scene.camera[0],...pose}];
+   paintPlayback(frame,project,0,1920,[]);
+   drawPanel(comparison,panel,project,{width:1920,camera:pose});
+   const rad=pose.rotation*Math.PI/180,dx=(2025-pose.x)*pose.zoom,dy=(500-pose.y)*pose.zoom;
+   const sx=Math.round(960+dx*Math.cos(rad)+dy*Math.sin(rad)),sy=Math.round(540-dx*Math.sin(rad)+dy*Math.cos(rad));
+   variants.push({pose,screen:[sx,sy],playback:sample(frame,sx,sy),direct:sample(comparison,sx,sy)});
+  }
+  return {variants,playback,direct:directPixel,inBoundsControl:controlPixel,coordinates:{worldX:2000,screenX:1510,cameraX:1450},canvas:{width:output.width,height:output.height}};
  });
  console.log('E2.4-A1.2 drawing playback camera pixels:',JSON.stringify(result));
  const red=p=>p[0]>200&&p[1]<50&&p[2]<50;
  assert(red(result.inBoundsControl),'Valid fixture control: in-bounds shape must paint red in playback');
  assert.deepEqual(result.playback,result.direct,'Playback and direct camera render must agree at the same camera pose');
  assert(red(result.playback),'Camera-visible artwork outside source drawing bounds must survive playback rendering');
- console.log('PASS E2.4-A1.2 camera-visible off-canvas artwork');
+ for(const v of result.variants){assert.deepEqual(v.playback,v.direct,'Camera zoom/rotation must agree between direct and playback render');assert(red(v.playback),'Camera-visible off-canvas artwork must survive zoom and rotation: '+JSON.stringify(v.pose));}
+ console.log('PASS E2.4-A3 camera clipping across zoom and rotation');
 }finally{await browser?.close();server.kill();}
