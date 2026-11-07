@@ -31,6 +31,9 @@ try{
   await diagnostic.loadURL('http://127.0.0.1:4319/');
  });
  const page=await windowPromise;
+ // Forward diagnostic renderer messages into CI logs before the experiment starts.
+ page.on('console',message=>{if(message.text().startsWith('E2.4-B4.3 recorder matrix'))console.log(message.text());});
+ page.on('pageerror',error=>console.warn('E2.4-B4.3 renderer error:',String(error)));
  await page.waitForLoadState('domcontentloaded',{timeout:10000});
  trace('vite-page-loaded');
  trace('export-evaluate-start');
