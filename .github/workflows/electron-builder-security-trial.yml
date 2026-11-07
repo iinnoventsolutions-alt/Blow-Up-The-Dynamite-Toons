@@ -170,6 +170,20 @@ jobs:
             test-results/rfu-a0-*.png
           if-no-files-found: warn
           retention-days: 14
+      - name: E2.4-A1 drawing playback clipping reproduction (non-gating)
+        id: e24_a1_drawing
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          node --experimental-strip-types tests/diagnostics/e24-drawing-playback-clip-repro.mjs 2>&1 | tee e24-a1-drawing-diagnostic.log
+      - name: Upload E2.4-A1 drawing diagnostic log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: e24-a1-drawing-diagnostic-${{ github.run_id }}
+          path: e24-a1-drawing-diagnostic.log
+          if-no-files-found: warn
+          retention-days: 14
       - name: Round 1 drawing reliability regression
         id: drawing_reliability
         continue-on-error: true
