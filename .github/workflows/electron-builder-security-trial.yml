@@ -199,6 +199,7 @@ jobs:
           retention-days: 14
       - name: E2.4-B3 production Electron animatic export diagnosis (non-gating)
         id: e24_b3_export
+        timeout-minutes: 3
         continue-on-error: true
         run: |
           set -o pipefail
