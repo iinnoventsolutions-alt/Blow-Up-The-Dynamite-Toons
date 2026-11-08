@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {makePanel,makeProject,makeScene,cameraAt,changeDuration,movePanels,removeStoryboardPanel,duplicateStoryboardPanel} from '../src/model.ts';
-import {setSequentialCameraOut,assessLegacyCameraMigration,resolveCompatibleCamera,compareLegacyCameraFrames,migrateVisuallyEquivalentLegacyCamera,cameraOffset,defaultCamera,enableSequentialCameraStorage,resolveSequentialCamera,type SequentialCameraScene} from '../src/sequential-camera.ts';
+import {enableSequentialPanelAnimation,setSequentialIntermediateKey,setSequentialCameraOut,setSequentialFirstPanelIn,assessLegacyCameraMigration,resolveCompatibleCamera,compareLegacyCameraFrames,migrateVisuallyEquivalentLegacyCamera,cameraOffset,defaultCamera,enableSequentialCameraStorage,resolveSequentialCamera,type SequentialCameraScene} from '../src/sequential-camera.ts';
 test('sequential camera: default scene, inherited panel, independent new scene',()=>{
  const p=makeProject(),s=p.scenes[0];s.panels.push(makePanel('Second'));
  const c:SequentialCameraScene={panels:{}},neutral=defaultCamera(p);
@@ -338,4 +338,104 @@ test('RFU4-RA.5B.1: dissolve and wipe transition boundary uses inherited incomin
   assert.deepEqual(resolveCameraForPNGExport(p,s.id,incoming.id,boundary),out);
   assert.equal(transitionAt(p,boundary),undefined);
  }
+});
+
+test('RC1.1-A: first panel IN is editable and scene-local; later IN remains locked',()=>{
+ const p=makeProject('First panel editable IN');p.schemaVersion=5;
+ const first=p.scenes[0];first.panels.push(makePanel('Later'));
+ first.sequentialCamera={version:1,panels:{
+  [first.panels[0].id]:{mode:'animated',keys:[{frame:first.panels[0].duration-1,x:120,y:0,zoom:1,rotation:20,interpolation:'linear'}]}
+ }};
+ const second=makeScene('Independent scene');second.sequentialCamera={version:1,panels:{}};p.scenes.push(second);
+ const start={x:1100,y:600,zoom:1.3,rotation:35};
+ const edited=setSequentialFirstPanelIn(p,first.id,first.panels[0].id,start);
+ assert.deepEqual(resolveCompatibleCamera(edited,first.id,first.panels[0].id,0).inPose,start);
+ const end=resolveCompatibleCamera(edited,first.id,first.panels[0].id,first.panels[0].duration-1).outPose;
+ assert.equal(end.x,1080);assert.equal(end.rotation,20);
+ assert.deepEqual(resolveCompatibleCamera(edited,first.id,first.panels[1].id,0).inPose,end);
+ assert.deepEqual(resolveCompatibleCamera(edited,second.id,second.panels[0].id,0).inPose,defaultCamera(p));
+ assert.deepEqual(resolveCompatibleCamera(p,first.id,first.panels[0].id,0).inPose,defaultCamera(p),'original project remains immutable');
+ assert.throws(()=>setSequentialFirstPanelIn(edited,first.id,first.panels[1].id,start),/Only the first panel/);
+ const reopened=JSON.parse(JSON.stringify(edited));
+ assert.deepEqual(resolveCompatibleCamera(reopened,first.id,first.panels[0].id,0).inPose,start);
+});
+
+test('RC1.1-A: editability follows scene order after panel reordering',()=>{
+ const p=makeProject('Scene order');p.schemaVersion=5;
+ const scene=p.scenes[0];scene.panels.push(makePanel('Second'));scene.sequentialCamera={version:1,panels:{}};
+ const previousFirst=scene.panels[0].id,newFirst=scene.panels[1].id;
+ const moved=structuredClone(p);moved.scenes[0].panels.reverse();
+ const pose={x:1030,y:570,zoom:1.1,rotation:15};
+ const edited=setSequentialFirstPanelIn(moved,scene.id,newFirst,pose);
+ assert.deepEqual(resolveCompatibleCamera(edited,scene.id,newFirst,0).inPose,pose);
+ assert.deepEqual(resolveCompatibleCamera(edited,scene.id,previousFirst,0).inPose,pose);
+ assert.throws(()=>setSequentialFirstPanelIn(edited,scene.id,previousFirst,pose),/Only the first panel/);
+});
+
+test('RC1.1-A4: activating first-panel animation retains the moved black camera as both endpoints',()=>{
+ const p=makeProject('Animate static camera');p.schemaVersion=5;
+ const scene=p.scenes[0],panel=scene.panels[0];
+ const black={x:1360,y:450,zoom:2.4,rotation:48};
+ scene.sequentialCamera={version:1,panels:{[panel.id]:{mode:'static',pose:black}}};
+ const activated=enableSequentialPanelAnimation(p,scene.id,panel.id);
+ const first=resolveCompatibleCamera(activated,scene.id,panel.id,0);
+ const last=resolveCompatibleCamera(activated,scene.id,panel.id,panel.duration-1);
+ assert.deepEqual(first.inPose,black);
+ assert.deepEqual(last.outPose,black);
+ assert.deepEqual(resolveCompatibleCamera(p,scene.id,panel.id,0).pose,black,'activation must be immutable');
+});
+
+test('RC1.1-A4: moving green IN preserves red OUT and intermediate absolute poses',()=>{
+ const p=makeProject('Independent endpoints');p.schemaVersion=5;
+ const scene=p.scenes[0],panel=scene.panels[0];
+ scene.panels.push(makePanel('Follower'));
+ const black={x:1200,y:540,zoom:1.5,rotation:30};
+ scene.sequentialCamera={version:1,panels:{[panel.id]:{mode:'static',pose:black}}};
+ const animated=enableSequentialPanelAnimation(p,scene.id,panel.id);
+ const out={x:1450,y:620,zoom:2.2,rotation:-35};
+ const withOut=setSequentialCameraOut(animated,scene.id,panel.id,out);
+ const intermediateFrame=40;
+ const withMid=setSequentialIntermediateKey(withOut,scene.id,panel.id,intermediateFrame,{x:1300,y:570,zoom:1.8,rotation:12});
+ const beforeMid=resolveCompatibleCamera(withMid,scene.id,panel.id,intermediateFrame).pose;
+ const newIn={x:900,y:720,zoom:0.8,rotation:110};
+ const edited=setSequentialFirstPanelIn(withMid,scene.id,panel.id,newIn);
+ assert.deepEqual(resolveCompatibleCamera(edited,scene.id,panel.id,0).inPose,newIn);
+ assert.deepEqual(resolveCompatibleCamera(edited,scene.id,panel.id,panel.duration-1).outPose,out);
+ assert.deepEqual(resolveCompatibleCamera(edited,scene.id,panel.id,intermediateFrame).pose,beforeMid);
+ assert.deepEqual(resolveCompatibleCamera(edited,scene.id,scene.panels[1].id,0).inPose,out);
+ assert.deepEqual(resolveCompatibleCamera(withMid,scene.id,panel.id,0).inPose,black);
+ assert.deepEqual(resolveCompatibleCamera(JSON.parse(JSON.stringify(edited)),scene.id,panel.id,panel.duration-1).outPose,out);
+});
+
+test('B3-A integrated: intermediate poses, downstream continuity, reorder, duration, scene isolation and serialization',()=>{
+ const assertPose=(actual:{x:number;y:number;zoom:number;rotation:number},expected:{x:number;y:number;zoom:number;rotation:number},message?:string)=>{for(const field of ['x','y','zoom','rotation'] as const)assert.ok(Math.abs(actual[field]-expected[field])<1e-8,`${message??'Camera pose'}: ${field} expected ${expected[field]}, got ${actual[field]}`);};
+ const p=makeProject('B3-A integrated camera continuity');p.schemaVersion=5;
+ const scene=p.scenes[0];scene.panels.push(makePanel('Animated'),makePanel('Follower'));scene.panels.forEach(panel=>panel.duration=60);
+ const [first,animated,follower]=scene.panels,other=makeScene('Independent scene');
+ p.scenes.push(other);
+ const base={x:1020,y:510,zoom:1.3,rotation:8};
+ scene.sequentialCamera={version:1,baseline:base,panels:{}};
+ const target={x:1390,y:660,zoom:2,rotation:38};
+ const midpoint={x:1210,y:570,zoom:1.7,rotation:20};
+ const afterOut=setSequentialCameraOut(enableSequentialPanelAnimation(p,scene.id,animated.id),scene.id,animated.id,target);
+ const withMid=setSequentialIntermediateKey(afterOut,scene.id,animated.id,30,midpoint);
+ const at=(project:typeof p,id:string,frame:number)=>resolveCompatibleCamera(project,scene.id,id,frame);
+ assertPose(at(withMid,animated.id,30).pose,midpoint);
+ assertPose(at(withMid,animated.id,59).outPose,target);
+ assertPose(at(withMid,follower.id,0).inPose,target);
+ assertPose(resolveCompatibleCamera(withMid,other.id,other.panels[0].id,0).inPose,defaultCamera(withMid));
+ const reordered=movePanels(withMid,[{panelId:animated.id,sceneId:scene.id,beforePanelId:first.id}]);
+ assertPose(at(reordered,first.id,0).inPose,target,'Moved animation updates following panel inheritance');
+ assertPose(at(reordered,animated.id,30).pose,midpoint,'Relative keys retain absolute pose when baseline unchanged');
+ const durationProject=structuredClone(reordered),durationScene=durationProject.scenes[0],durationPanel=durationScene.panels[0];
+ changeDuration(durationScene,durationPanel,120);
+ assertPose(at(durationProject,animated.id,119).outPose,target,'Retiming preserves OUT');
+ assertPose(at(durationProject,first.id,0).inPose,target,'Downstream IN follows retimed OUT');
+ const keys=durationScene.sequentialCamera!.panels[animated.id];
+ assert.equal(keys.mode,'animated');
+ if(keys.mode==='animated')assert.deepEqual(keys.keys.map(k=>k.frame),[61,119]);
+ const reopened=JSON.parse(JSON.stringify(durationProject)) as typeof p;
+ assertPose(at(reopened,first.id,0).inPose,target,'Serialized project retains continuity');
+ assertPose(resolveCompatibleCamera(reopened,other.id,other.panels[0].id,0).inPose,defaultCamera(reopened),'Scene boundary remains independent');
+ assertPose(at(withMid,follower.id,0).inPose,target,'Earlier snapshot remains unchanged');
 });
