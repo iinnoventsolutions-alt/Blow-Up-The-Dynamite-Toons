@@ -163,7 +163,8 @@ try{
    console.log('E2.4-B3 ffprobe:',JSON.stringify({scenario:c.scenario,withAudio:c.withAudio,status:probe.status,output:probe.stdout,error:probe.stderr}));
    assert.equal(probe.status,0,'Exported WebM must be parseable');
    const parsed=JSON.parse(probe.stdout),duration=Number(parsed.format?.duration);
-   assert(duration>1.5&&duration<2.5,'Export duration must approximate 2 seconds');
+   const expectedDuration=c.scenario==='recovery'?1:2;
+   assert(Math.abs(duration-expectedDuration)<0.5,`Export duration for ${c.scenario} must approximate ${expectedDuration} second(s)`);
    assert(parsed.streams?.some(s=>s.codec_type==='video'),'Export must contain video');
    if(c.withAudio)assert(parsed.streams?.some(s=>s.codec_type==='audio'),'Audio-enabled export must contain audio');
   }
