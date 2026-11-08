@@ -1,10 +1,11 @@
-name: E2 AUD F3 event-order investigation
+name: E2 AUD F4 capture-loss regression
 on:
   push:
     branches: [E2-AUD-01-Resolution]
     paths:
       - .github/workflows/e2-aud-01-f3.yml
       - tests/diagnostics/e2-aud-01-f3-event-trace.mjs
+      - src/AudioLanes.tsx
   workflow_dispatch:
 permissions:
   contents: read
@@ -21,15 +22,11 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run build
-      - name: Non-gating event-order diagnostic
+      - name: Gating native release and capture-loss regression
         shell: bash
         run: |
-          set +e
-          node --experimental-strip-types tests/diagnostics/e2-aud-01-f3-event-trace.mjs > f3-event-trace.log 2>&1
-          result=$?
-          cat f3-event-trace.log
-          echo "Diagnostic exit code: $result" >> "$GITHUB_STEP_SUMMARY"
-          exit 0
+          set -o pipefail
+          node --experimental-strip-types tests/diagnostics/e2-aud-01-f3-event-trace.mjs 2>&1 | tee f3-event-trace.log
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
