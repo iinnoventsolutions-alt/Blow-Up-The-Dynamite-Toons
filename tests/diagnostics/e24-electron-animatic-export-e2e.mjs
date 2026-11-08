@@ -105,17 +105,20 @@ try{
   console.log('E2.4-B4.3 recorder matrix',JSON.stringify(matrix));
   window.MediaRecorder=TracedRecorder;
   const results=[];
-  for(const withAudio of [false,true]){
+  // B4.5: repeat real exports and exercise silent routing edge cases.
+  for(const scenario of ['silent','audio','muted','empty-track','silent-repeat','audio-repeat','silent-third','audio-third']){
+   const withAudio=scenario.startsWith('audio');
    const p=makeProject('E2.4-B3 export',320,180,12);
    const scene=p.scenes[0],first=scene.panels[0];first.duration=12;
    const second=makePanel('Dissolve destination',12);second.duration=12;scene.panels.push(second);
    first.layers[0].strokes.push({id:'red',tool:'shape',shape:'rectangle',color:'#ff0000',fill:'#ff0000',size:0,points:[[0,0,1],[320,180,1]]});
    second.layers[0].strokes.push({id:'blue',tool:'shape',shape:'rectangle',color:'#0000ff',fill:'#0000ff',size:0,points:[[0,0,1],[320,180,1]]});
    p.transitions=[{id:'dissolve',fromId:first.id,toId:second.id,type:'dissolve',duration:6,direction:'right'}];
-   if(withAudio){
+   if(withAudio||scenario==='muted'){
     const id='audio-1';p.audioAssets=[{id,name:'diagnostic.wav',source:audioSource(),duration:1,sampleRate:8000,channels:1,peaks:[]}];
-    p.audioTracks=[{id:'track',name:'Audio',gain:1,mute:false,solo:false,clips:[{id:'clip',assetId:id,name:'Tone',start:0,offset:0,duration:1,gain:1}]}];
+    p.audioTracks=[{id:'track',name:'Audio',gain:1,mute:scenario==='muted',solo:false,clips:[{id:'clip',assetId:id,name:'Tone',start:0,offset:0,duration:1,gain:1}]}];
    }
+   if(scenario==='empty-track')p.audioTracks=[{id:'empty',name:'Empty',gain:1,mute:false,solo:false,clips:[]}];
    const progress=[],controller=new AbortController();const eventStart=lifecycle.length,rafStart=rafCalls,callbackStart=rafCallbacks,frameStart=frameRequests;
    console.log('E2.4-B3 renderer export start',withAudio);
    const timeout=setTimeout(()=>controller.abort(),12000);
@@ -125,29 +128,29 @@ try{
       new Promise((_,reject)=>setTimeout(()=>reject(new Error('E2.4-B3 export exceeded 15s watchdog')),15000))
     ]);
     const bytes=Array.from(new Uint8Array(await blob.arrayBuffer()));
-    results.push({withAudio,bytes,byteLength:bytes.length,mime:blob.type,progressEnd:progress.at(-1),diagnostics:{events:lifecycle.slice(eventStart),rafCalls:rafCalls-rafStart,rafCallbacks:rafCallbacks-callbackStart,frameRequests:frameRequests-frameStart}});
-   }catch(e){results.push({withAudio,error:String(e),progressEnd:progress.at(-1),diagnostics:{events:lifecycle.slice(eventStart),rafCalls:rafCalls-rafStart,rafCallbacks:rafCallbacks-callbackStart,frameRequests:frameRequests-frameStart}});}
+    results.push({scenario,withAudio,bytes,byteLength:bytes.length,mime:blob.type,progressEnd:progress.at(-1),diagnostics:{events:lifecycle.slice(eventStart),rafCalls:rafCalls-rafStart,rafCallbacks:rafCallbacks-callbackStart,frameRequests:frameRequests-frameStart}});
+   }catch(e){results.push({scenario,withAudio,error:String(e),progressEnd:progress.at(-1),diagnostics:{events:lifecycle.slice(eventStart),rafCalls:rafCalls-rafStart,rafCallbacks:rafCallbacks-callbackStart,frameRequests:frameRequests-frameStart}});}
    finally{clearTimeout(timeout);}
   }
   window.MediaRecorder=OriginalRecorder;
   CanvasCaptureMediaStreamTrack.prototype.requestFrame=originalRequestFrame;
   return results;
- }),sleep(40000).then(()=>{throw new Error('E2.4-B3 renderer evaluation exceeded 40s watchdog');})]);
+ }),sleep(90000).then(()=>{throw new Error('E2.4-B4.5 renderer evaluation exceeded 90s watchdog');})]);
  trace('export-evaluate-done');
  for(const c of cases){
   const {bytes,...summary}=c;console.log('E2.4-B3 production export:',JSON.stringify(summary));
-  if(bytes?.length){const file=join(dir,c.withAudio?'audio.webm':'silent.webm');writeFileSync(file,Buffer.from(bytes));
+  if(bytes?.length){const file=join(dir,c.scenario+'.webm');writeFileSync(file,Buffer.from(bytes));
    const probe=spawnSync('ffprobe',['-v','error','-show_entries','format=duration:stream=codec_type','-of','json',file],{encoding:'utf8'});
-   console.log('E2.4-B3 ffprobe:',JSON.stringify({withAudio:c.withAudio,status:probe.status,output:probe.stdout,error:probe.stderr}));
+   console.log('E2.4-B3 ffprobe:',JSON.stringify({scenario:c.scenario,withAudio:c.withAudio,status:probe.status,output:probe.stdout,error:probe.stderr}));
    assert.equal(probe.status,0,'Exported WebM must be parseable');
    const parsed=JSON.parse(probe.stdout),duration=Number(parsed.format?.duration);
    assert(duration>1.5&&duration<2.5,'Export duration must approximate 2 seconds');
    assert(parsed.streams?.some(s=>s.codec_type==='video'),'Export must contain video');
    if(c.withAudio)assert(parsed.streams?.some(s=>s.codec_type==='audio'),'Audio-enabled export must contain audio');
   }
-  assert(!c.error,`withAudio=${c.withAudio}: ${c.error}`);assert(c.byteLength>100,'Actual export must produce video bytes');
+  assert(!c.error,`scenario=${c.scenario}: ${c.error}`);assert(c.byteLength>100,'Actual export must produce video bytes');
  }
- console.log('PASS E2.4-B3 actual Electron animatic exports with dissolve and audio');
+ console.log('PASS E2.4-B4.5 repeated Electron animatic exports including silent, audio, muted and empty tracks');
 }finally{
  trace('cleanup-start');
  if(app){
