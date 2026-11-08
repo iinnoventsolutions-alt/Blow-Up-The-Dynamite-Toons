@@ -5,6 +5,7 @@ on:
       - E2-AUD-01-Resolution
     paths:
       - .github/workflows/e2-aud-01-f0.yml
+      - tests/diagnostics/e2-aud-01-rapid-release.mjs
   workflow_dispatch:
 permissions:
   contents: read
