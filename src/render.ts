@@ -50,13 +50,30 @@ export function drawPanel(canvas: HTMLCanvasElement, panel: Panel, project: Proj
   if (options.camera) { const c = options.camera; ctx.translate(width/2,height/2); ctx.rotate(-c.rotation*Math.PI/180); ctx.scale(c.zoom,c.zoom); ctx.translate(-c.x*width/project.width,-c.y*height/project.height); }
   let scratch = scratchCanvases.get(canvas);
   if (!scratch) { scratch = document.createElement('canvas'); scratchCanvases.set(canvas, scratch); }
-  if (scratch.width !== width || scratch.height !== height) { scratch.width = width; scratch.height = height; }
+  // C2.4: A camera can reveal artwork beyond the original project rectangle.
+  // Render each isolated layer across the camera's source-space viewport before
+  // applying the camera transform; otherwise the scratch canvas clips that art.
+  const sourceScaleX=width/(project.width*(1+2*margin));
+  const sourceScaleY=height/(project.height*(1+2*margin));
+  const corners=options.camera?cameraCorners(options.camera,project):null;
+  const sourceMinX=corners?Math.floor(Math.min(0,...corners.map(p=>p[0]))):0;
+  const sourceMinY=corners?Math.floor(Math.min(0,...corners.map(p=>p[1]))):0;
+  const sourceMaxX=corners?Math.ceil(Math.max(project.width,...corners.map(p=>p[0]))):project.width;
+  const sourceMaxY=corners?Math.ceil(Math.max(project.height,...corners.map(p=>p[1]))):project.height;
+  const scratchWidth=corners?Math.max(1,Math.ceil((sourceMaxX-sourceMinX)*sourceScaleX)):width;
+  const scratchHeight=corners?Math.max(1,Math.ceil((sourceMaxY-sourceMinY)*sourceScaleY)):height;
+  if (scratch.width !== scratchWidth || scratch.height !== scratchHeight) { scratch.width = scratchWidth; scratch.height = scratchHeight; }
   const layerCtx = scratch.getContext('2d')!;
   for (const layer of panel.layers) {
     if (!layer.visible) continue;
-    layerCtx.setTransform(1, 0, 0, 1, 0, 0); layerCtx.clearRect(0, 0, width, height); layerCtx.scale(width / (project.width * (1 + 2 * margin)), height / (project.height * (1 + 2 * margin))); if (margin) layerCtx.translate(project.width * margin, project.height * margin);
+    layerCtx.setTransform(1, 0, 0, 1, 0, 0); layerCtx.clearRect(0, 0, scratchWidth, scratchHeight);
+    layerCtx.scale(sourceScaleX,sourceScaleY);
+    if(corners)layerCtx.translate(-sourceMinX,-sourceMinY);
+    else if(margin)layerCtx.translate(project.width*margin,project.height*margin);
     paintLayer(layerCtx,layer,project,options.live?.layerId===layer.id?options.live.stroke:undefined);
-    ctx.globalAlpha = layer.opacity; ctx.drawImage(scratch, 0, 0);
+    ctx.globalAlpha = layer.opacity;
+    if(corners)ctx.drawImage(scratch,sourceMinX*sourceScaleX,sourceMinY*sourceScaleY);
+    else ctx.drawImage(scratch,0,0);
   }
   ctx.globalAlpha = 1; ctx.restore();
   if (options.overlay && options.overlay.camera.length) {
