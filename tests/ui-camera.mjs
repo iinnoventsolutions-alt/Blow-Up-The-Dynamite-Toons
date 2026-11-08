@@ -26,7 +26,7 @@ try{
  // import did not reach the editor instead of timing out on an absent control.
  await page.getByRole('button',{name:'Drawing',exact:true}).click();
  await page.getByLabel('Drawing canvas',{exact:true}).waitFor();
- await page.getByRole('group',{name:'Drawing playback controls'}).getByRole('button',{name:'Play',exact:true}).click();
+ await page.locator('.stage-playback[aria-label="Drawing playback controls"]').getByRole('button',{name:'Play',exact:true}).click();
  await page.locator('canvas[aria-label="Storyboard playback preview"]').waitFor();
  await page.waitForTimeout(450);
  const offscreenPixel=await page.locator('canvas[aria-label="Storyboard playback preview"]').evaluate(c=>{const ctx=c.getContext('2d'),p=ctx.getImageData(Math.floor(c.width/2),Math.floor(c.height/2),1,1).data;return [...p]});
