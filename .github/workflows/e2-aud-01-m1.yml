@@ -1,0 +1,53 @@
+name: E2 AUD M1 ARM64 acceptance installer
+on:
+  push:
+    branches: [E2-AUD-01-Resolution]
+    paths:
+      - .github/workflows/e2-aud-01-m1.yml
+      - src/AudioLanes.tsx
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mac-arm64-installer:
+    runs-on: macos-15
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build application
+        run: npm run build
+      - name: Package ARM64 installer
+        run: npx electron-builder --mac dmg --arm64 --publish never
+      - name: Verify ARM64 installer and checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg="release/IInnovent Professional Storyboard-1.0.0-arm64.dmg"
+          test -s "$dmg"
+          hdiutil verify "$dmg"
+          mountpoint="$(mktemp -d)"
+          hdiutil attach -readonly -nobrowse -mountpoint "$mountpoint" "$dmg"
+          app="$mountpoint/IInnovent Professional Storyboard.app"
+          test -d "$app"
+          file "$app/Contents/MacOS/IInnovent Professional Storyboard"
+          file "$app/Contents/MacOS/IInnovent Professional Storyboard" | grep -q arm64
+          hdiutil detach "$mountpoint" -quiet
+          rmdir "$mountpoint"
+          (cd release && shasum -a 256 -- *.dmg > SHA256SUMS.txt)
+          printf 'Source commit: %s\nSigning: ad-hoc; not notarized\nPurpose: isolated M1 manual acceptance; not a production release\n' "$GITHUB_SHA" > release/BUILD-TRUST-STATUS.txt
+      - name: Upload ARM64 manual acceptance installer
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: E2-AUD-01-M1-ARM64-run${{ github.run_id }}
+          path: |
+            release/*-arm64.dmg
+            release/SHA256SUMS.txt
+            release/BUILD-TRUST-STATUS.txt
+          if-no-files-found: error
+          retention-days: 14
