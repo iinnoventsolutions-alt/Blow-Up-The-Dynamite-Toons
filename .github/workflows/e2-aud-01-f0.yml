@@ -1,4 +1,4 @@
-name: E2 AUD F0 isolated audio release diagnostic
+name: E2 AUD F1 audio rapid release regression
 on:
   push:
     branches:
@@ -6,6 +6,7 @@ on:
     paths:
       - .github/workflows/e2-aud-01-f0.yml
       - tests/diagnostics/e2-aud-01-rapid-release.mjs
+      - src/AudioLanes.tsx
   workflow_dispatch:
 permissions:
   contents: read
@@ -22,15 +23,10 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run build
-      - name: Non-gating diagnostic (failure is evidence)
+      - name: Gating rapid-release regression
         shell: bash
         run: |
-          set +e
-          node --experimental-strip-types tests/diagnostics/e2-aud-01-rapid-release.mjs > e2-aud-f0.log 2>&1
-          result=$?
-          cat e2-aud-f0.log
-          echo "Diagnostic exit code: $result" >> "$GITHUB_STEP_SUMMARY"
-          exit 0
+          node --experimental-strip-types tests/diagnostics/e2-aud-01-rapid-release.mjs 2>&1 | tee e2-aud-f0.log
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
