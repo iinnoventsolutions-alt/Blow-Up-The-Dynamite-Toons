@@ -1,0 +1,38 @@
+name: E2 AUD F2 isolated regression and security
+on:
+  push:
+    branches: [E2-AUD-01-Resolution]
+    paths:
+      - .github/workflows/e2-aud-01-f2.yml
+      - src/AudioLanes.tsx
+      - tests/diagnostics/e2-aud-01-rapid-release.mjs
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Typecheck and production build
+        run: npm run build
+      - name: Unit and security contract tests
+        run: npm test
+      - name: Audio rapid-release regression
+        run: node --experimental-strip-types tests/diagnostics/e2-aud-01-rapid-release.mjs
+      - name: Audio interaction regression
+        run: node --experimental-strip-types tests/ui-audio.mjs
+      - name: Camera and playback regression
+        run: |
+          node --experimental-strip-types tests/ui-camera.mjs
+          node --experimental-strip-types tests/ui-camera-sequential.mjs
+          node --experimental-strip-types tests/ui-text-playback.mjs
+      - name: Dependency security audit (production dependencies)
+        run: npm audit --omit=dev --audit-level=high
