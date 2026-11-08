@@ -37,7 +37,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg python3
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg python3 poppler-utils
       - name: Install PDF regression dependency
         run: python3 -m pip install --user pypdf fonttools
       - run: npm test
