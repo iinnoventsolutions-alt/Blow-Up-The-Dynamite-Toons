@@ -132,13 +132,32 @@ try{
    }catch(e){results.push({scenario,withAudio,error:String(e),progressEnd:progress.at(-1),diagnostics:{events:lifecycle.slice(eventStart),rafCalls:rafCalls-rafStart,rafCallbacks:rafCallbacks-callbackStart,frameRequests:frameRequests-frameStart}});}
    finally{clearTimeout(timeout);}
   }
+  // B4.6: cancel an active real export, then verify a fresh export still works.
+  const cancelProject=makeProject('E2.4-B4.6 cancellation',320,180,12);
+  cancelProject.scenes[0].panels[0].duration=120;
+  const cancelController=new AbortController();
+  const cancelProgress=[];
+  const cancelStarted=performance.now();
+  const cancelledExport=exportAnimatic(cancelProject,cancelController.signal,n=>{
+   cancelProgress.push(n);
+   if(n>0.05&&!cancelController.signal.aborted)cancelController.abort();
+  });
+  let cancelError=null;
+  try{await Promise.race([cancelledExport,new Promise((_,reject)=>setTimeout(()=>reject(new Error('Cancellation exceeded 8s')),8000))]);}
+  catch(e){cancelError=String(e);}
+  results.push({scenario:'cancel',cancelled:cancelController.signal.aborted,error:cancelError,elapsedMs:Math.round(performance.now()-cancelStarted),progressEnd:cancelProgress.at(-1)});
+  const recoveryProject=makeProject('E2.4-B4.6 recovery',320,180,12);
+  recoveryProject.scenes[0].panels[0].duration=12;
+  const recoveryBlob=await Promise.race([exportAnimatic(recoveryProject,new AbortController().signal,()=>{}),new Promise((_,reject)=>setTimeout(()=>reject(new Error('Recovery exceeded 8s')),8000))]);
+  results.push({scenario:'recovery',withAudio:false,bytes:Array.from(new Uint8Array(await recoveryBlob.arrayBuffer())),byteLength:recoveryBlob.size,mime:recoveryBlob.type});
   window.MediaRecorder=OriginalRecorder;
   CanvasCaptureMediaStreamTrack.prototype.requestFrame=originalRequestFrame;
   return results;
- }),sleep(90000).then(()=>{throw new Error('E2.4-B4.5 renderer evaluation exceeded 90s watchdog');})]);
+ }),sleep(110000).then(()=>{throw new Error('E2.4-B4.6 renderer evaluation exceeded 110s watchdog');})]);
  trace('export-evaluate-done');
  for(const c of cases){
-  const {bytes,...summary}=c;console.log('E2.4-B3 production export:',JSON.stringify(summary));
+  const {bytes,...summary}=c;
+  if(c.scenario==='cancel'){console.log('E2.4-B4.6 cancellation:',JSON.stringify(summary));assert(c.cancelled,'Cancellation signal must be triggered');assert.match(c.error||'',/cancelled/i,'Cancellation must reject explicitly');assert(c.elapsedMs<8000,'Cancellation must complete within watchdog');continue;}console.log('E2.4-B3 production export:',JSON.stringify(summary));
   if(bytes?.length){const file=join(dir,c.scenario+'.webm');writeFileSync(file,Buffer.from(bytes));
    const probe=spawnSync('ffprobe',['-v','error','-show_entries','format=duration:stream=codec_type','-of','json',file],{encoding:'utf8'});
    console.log('E2.4-B3 ffprobe:',JSON.stringify({scenario:c.scenario,withAudio:c.withAudio,status:probe.status,output:probe.stdout,error:probe.stderr}));
@@ -150,7 +169,7 @@ try{
   }
   assert(!c.error,`scenario=${c.scenario}: ${c.error}`);assert(c.byteLength>100,'Actual export must produce video bytes');
  }
- console.log('PASS E2.4-B4.5 repeated Electron animatic exports including silent, audio, muted and empty tracks');
+ console.log('PASS E2.4-B4.6 repeated exports, cancellation and recovery');
 }finally{
  trace('cleanup-start');
  if(app){
