@@ -21,14 +21,14 @@ try {
  p.audioAssets.push({id:assetId,name:'test.wav',source:'data:audio/wav;base64,',duration:8,sampleRate:16000,channels:1,peaks:Array(160).fill(.2)});
  p.audioTracks.push({id:trackId,name:'Voice',gain:1,mute:false,solo:false,clips:[{id:clipId,assetId,name:'test.wav',start:12,offset:0,duration:48,gain:1}]});
  await page.locator('input[type=file]').first().setInputFiles({name:'aud.issb',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(p))});
- await page.waitForTimeout(300);
+ await page.waitForTimeout(220);
  await page.getByRole('button',{name:'Timeline',exact:true}).click();
- const clip=page.locator('[data-audio-clip]').first(),root=page.locator('.audio-lanes');
+ const clip=page.locator('.audio-clip').first(),root=page.locator('.audio-lanes');
  await clip.waitFor();
  const save=async()=>{const pending=page.waitForEvent('download');await page.getByRole('button',{name:'Save project',exact:true}).click();return JSON.parse(await readFile(await (await pending).path(),'utf8'));};
  const b=await clip.boundingBox();assert(b,'Clip bounding box exists');
  const x=b.x+b.width/2,y=b.y+20;
- const scale=await page.evaluate(()=>{const c=document.querySelector('[data-audio-clip]');return c.getBoundingClientRect().width/48;});
+ const scale=await page.evaluate(()=>{const c=document.querySelector('.audio-clip');return c.getBoundingClientRect().width/48;});
  // Pointer events are dispatched on the same stable lane container where
  // pointer capture sends events. A release at +24px with no intervening move
  // should still commit the released coordinate rather than the stale draft.
