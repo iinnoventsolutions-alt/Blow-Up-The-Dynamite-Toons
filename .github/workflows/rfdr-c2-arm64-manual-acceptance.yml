@@ -1,5 +1,8 @@
 name: RFDR C2.2 ARM64 Manual Acceptance Installer
 on:
+  push:
+    branches:
+      - RFDR-Integration-Testing
   workflow_dispatch:
 
 permissions:
