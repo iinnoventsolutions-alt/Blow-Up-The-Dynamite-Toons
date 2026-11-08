@@ -12,6 +12,21 @@ const save=async()=>{const pending=page.waitForEvent('download');await page.getB
 const number=async(label,value)=>{const input=page.getByLabel(label,{exact:true});await input.fill(String(value));await input.press('Enter');await wait();};
 const pixels=async locator=>locator.evaluate(c=>{const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let sum=0;for(let i=0;i<d.length;i+=4)sum=(sum+d[i]*3+d[i+1]*5+d[i+2]*7+i)%1000000007;return sum;});
 try{
+ // C2.4: Drawing playback must retain artwork outside the original canvas
+ // when the active camera viewport brings that artwork into frame.
+ const outside=makeProject('C2.4 off-canvas camera visibility'),outsidePanel=outside.scenes[0].panels[0];
+ outsidePanel.duration=180;
+ outsidePanel.layers[0].strokes=[{id:uid(),tool:'shape',shape:'rectangle',color:'#e80000',fill:'#e80000',size:1,points:[[2020,460,1],[2180,620,1]]}];
+ outside.scenes[0].sequentialCamera={version:1,baseline:{x:2100,y:540,zoom:2,rotation:0},panels:{}};
+ await page.goto(url);
+ await page.locator('input[type=file]').first().setInputFiles({name:'c2-4-offcanvas.issb',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(outside))});
+ await wait();
+ await page.getByRole('button',{name:'Play',exact:true}).click();
+ await page.locator('canvas[aria-label="Storyboard playback preview"]').waitFor();
+ await page.waitForTimeout(450);
+ const offscreenPixel=await page.locator('canvas[aria-label="Storyboard playback preview"]').evaluate(c=>{const ctx=c.getContext('2d'),p=ctx.getImageData(Math.floor(c.width/2),Math.floor(c.height/2),1,1).data;return [...p]});
+ assert(offscreenPixel[0]>170&&offscreenPixel[1]<90&&offscreenPixel[2]<90,`C2.4 camera-visible off-canvas red artwork must survive playback rendering; actual center pixel: ${offscreenPixel}`);
+ await page.getByRole('button',{name:'Pause',exact:true}).click();
  const p=makeProject('Camera milestone');const s=p.scenes[0];s.panels.push(makePanel('Panel 2'));s.panels.forEach(panel=>{panel.duration=60;panel.layers[0].strokes=[{id:uid(),tool:'brush',color:'#ff5020',size:32,points:[[250,230,1],[500,800,1],[970,300,1],[1600,850,1]]}];});
  await page.goto(url);await page.locator('input[type=file]').first().setInputFiles({name:'camera.issb',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(p))});await wait();
  const drawing=page.getByLabel('Drawing canvas',{exact:true}),raw=await pixels(drawing);
