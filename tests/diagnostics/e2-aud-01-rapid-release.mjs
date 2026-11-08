@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {chromium} from 'playwright';
 import {spawn} from 'node:child_process';
 import {readFile} from 'node:fs/promises';
-import {makeProject,uid} from '../src/model.ts';
+import {makeProject,uid} from '../../src/model.ts';
 
 // E2-AUD-01-F0: isolated, non-gating reproduction. Deliberately send release
 // at a newer coordinate than the last pointermove, as can occur on rapid release.
