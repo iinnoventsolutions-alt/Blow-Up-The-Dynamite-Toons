@@ -15,6 +15,7 @@ try{
  // C2.4: Drawing playback must retain artwork outside the original canvas
  // when the active camera viewport brings that artwork into frame.
  const outside=makeProject('C2.4 off-canvas camera visibility'),outsidePanel=outside.scenes[0].panels[0];
+ outside.schemaVersion=5; // Sequential camera storage requires schema v5 on import.
  outsidePanel.duration=180;
  outsidePanel.layers[0].strokes=[{id:uid(),tool:'shape',shape:'rectangle',color:'#e80000',fill:'#e80000',size:1,points:[[2020,460,1],[2180,620,1]]}];
  outside.scenes[0].sequentialCamera={version:1,baseline:{x:2100,y:540,zoom:2,rotation:0},panels:{}};
