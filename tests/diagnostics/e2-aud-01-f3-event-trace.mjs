@@ -47,9 +47,11 @@ try{
   console.log(JSON.stringify({case:kind,before,after,delta:after-before,events:log}));
   return {before,after};
  };
- await drag('native-rapid-release');
- await drag('native-rapid-release');
+ const first=await drag('native-rapid-release');
+ assert.equal(first.after-first.before,12,'Native rapid drag must persist');
+ const second=await drag('native-rapid-release');
+ assert.equal(second.after-second.before,12,'Repeated native rapid drag must persist');
  const loss=await drag('capture-loss');
- console.log(JSON.stringify({case:'capture-loss diagnosis',result:loss,expected:'gesture should not silently disappear when pointer capture is lost'}));
- console.log('F3 diagnostic complete: review event ordering and persisted positions');
+ assert.equal(loss.after-loss.before,12,'Unexpected capture loss must commit last valid drag position');
+ console.log('PASS F4: native rapid release, repeated release and capture-loss recovery');
 }finally{await browser?.close();server.kill();}
