@@ -3,6 +3,11 @@ on:
   push:
     branches:
       - RFDR-Integration-Testing
+      - RFDR-C3.5-Onion-Skin-Resolution
+      - Working
+  pull_request:
+    branches:
+      - Working
   workflow_dispatch:
 
 permissions:
