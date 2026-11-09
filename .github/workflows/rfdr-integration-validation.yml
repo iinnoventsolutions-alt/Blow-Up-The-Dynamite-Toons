@@ -1,0 +1,63 @@
+name: RFDR C1.4 Controlled Integration Validation
+on:
+  push:
+    branches:
+      - RFDR-Integration-Testing
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audio-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - name: E2-AUD-01 final-coordinate rapid-release regression
+        run: node --experimental-strip-types tests/diagnostics/e2-aud-01-rapid-release.mjs
+      - name: E2-AUD-01 native rapid-release and pointer-capture regression
+        run: node --experimental-strip-types tests/diagnostics/e2-aud-01-f3-event-trace.mjs
+
+  full-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg python3 poppler-utils
+      - name: Install PDF regression dependency
+        run: python3 -m pip install --user pypdf fonttools
+      - run: npm test
+      - run: npm run test:ui
+
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
+      - name: Full dependency audit (report only)
+        run: npm audit --audit-level=moderate --json > audit-report.json || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rfdr-full-dependency-audit
+          path: audit-report.json

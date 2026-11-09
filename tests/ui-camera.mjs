@@ -12,6 +12,45 @@ const save=async()=>{const pending=page.waitForEvent('download');await page.getB
 const number=async(label,value)=>{const input=page.getByLabel(label,{exact:true});await input.fill(String(value));await input.press('Enter');await wait();};
 const pixels=async locator=>locator.evaluate(c=>{const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let sum=0;for(let i=0;i<d.length;i+=4)sum=(sum+d[i]*3+d[i+1]*5+d[i+2]*7+i)%1000000007;return sum;});
 try{
+ // C2.5-F0: picker should sample the visible pixel despite the 25% drawing margin.
+ const pickerProject=makeProject('C2.5 picker offset diagnostic');
+ pickerProject.scenes[0].panels[0].layers[0].strokes=[{id:uid(),tool:'shape',shape:'rectangle',color:'#17b94b',fill:'#17b94b',size:1,points:[[400,330,1],[560,490,1]]}];
+ await page.goto(url);
+ await page.locator('input[type=file]').first().setInputFiles({name:'c2-5-picker.issb',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(pickerProject))});
+ await wait();
+ await page.getByRole('button',{name:'Drawing',exact:true}).click();
+ await page.getByLabel('Drawing canvas',{exact:true}).waitFor();
+ await page.getByTitle('Color Picker (I)',{exact:true}).click();
+ const pickerSurface=page.getByLabel('Drawing tools surface',{exact:true});
+ const pickerBox=await pickerSurface.boundingBox();
+ assert(pickerBox,'C2.5 Drawing interaction surface is visible');
+ const pickerX=pickerBox.x+pickerBox.width*(480+480)/2880;
+ const pickerY=pickerBox.y+pickerBox.height*(400+270)/1620;
+ const visibleColor=await page.getByLabel('Drawing canvas',{exact:true}).evaluate((c,{x,y})=>{const rect=c.getBoundingClientRect(),px=Math.floor((x-rect.x)/rect.width*c.width),py=Math.floor((y-rect.y)/rect.height*c.height),d=c.getContext('2d').getImageData(px,py,1,1).data;return '#'+[...d.slice(0,3)].map(v=>v.toString(16).padStart(2,'0')).join('');},{x:pickerX,y:pickerY});
+ assert.equal(visibleColor,'#17b94b','C2.5 fixture: the pointer is over solid green artwork');
+ await page.mouse.click(pickerX,pickerY);
+ const pickedColor=await page.getByLabel('Tool color',{exact:true}).inputValue();
+ assert.equal(pickedColor,visibleColor,'C2.5 picker must match the visible artwork pixel at the cursor');
+ // C2.4: Drawing playback must retain artwork outside the original canvas
+ // when the active camera viewport brings that artwork into frame.
+ const outside=makeProject('C2.4 off-canvas camera visibility'),outsidePanel=outside.scenes[0].panels[0];
+ outside.schemaVersion=5; // Sequential camera storage requires schema v5 on import.
+ outsidePanel.duration=180;
+ outsidePanel.layers[0].strokes=[{id:uid(),tool:'shape',shape:'rectangle',color:'#e80000',fill:'#e80000',size:1,points:[[2020,460,1],[2180,620,1]]}];
+ outside.scenes[0].sequentialCamera={version:1,baseline:{x:2100,y:540,zoom:2,rotation:0},panels:{}};
+ await page.goto(url);
+ await page.locator('input[type=file]').first().setInputFiles({name:'c2-4-offcanvas.issb',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(outside))});
+ await wait();
+ // Explicitly select Drawing; fail with a useful diagnostic if the project
+ // import did not reach the editor instead of timing out on an absent control.
+ await page.getByRole('button',{name:'Drawing',exact:true}).click();
+ await page.getByLabel('Drawing canvas',{exact:true}).waitFor();
+ await page.locator('.stage-playback[aria-label="Drawing playback controls"]').getByRole('button',{name:'Play',exact:true}).click();
+ await page.locator('canvas[aria-label="Storyboard playback preview"]').waitFor();
+ await page.waitForTimeout(450);
+ const offscreenPixel=await page.locator('canvas[aria-label="Storyboard playback preview"]').evaluate(c=>{const ctx=c.getContext('2d'),p=ctx.getImageData(Math.floor(c.width/2),Math.floor(c.height/2),1,1).data;return [...p]});
+ assert(offscreenPixel[0]>170&&offscreenPixel[1]<90&&offscreenPixel[2]<90,`C2.4 camera-visible off-canvas red artwork must survive playback rendering; actual center pixel: ${offscreenPixel}`);
+ await page.getByRole('button',{name:'Pause',exact:true}).click();
  const p=makeProject('Camera milestone');const s=p.scenes[0];s.panels.push(makePanel('Panel 2'));s.panels.forEach(panel=>{panel.duration=60;panel.layers[0].strokes=[{id:uid(),tool:'brush',color:'#ff5020',size:32,points:[[250,230,1],[500,800,1],[970,300,1],[1600,850,1]]}];});
  await page.goto(url);await page.locator('input[type=file]').first().setInputFiles({name:'camera.issb',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(p))});await wait();
  const drawing=page.getByLabel('Drawing canvas',{exact:true}),raw=await pixels(drawing);
@@ -22,9 +61,12 @@ try{
  // The scene-time slider seeks to frame 119, selecting Panel 2 (frames 60–119).
  assert.equal(await page.getByLabel('Scene camera time').inputValue(),'119','Camera test is on the second panel at the stationary checkpoint');
  assert.equal(await overlay.locator('.camera-intermediate').count(),0,'No intermediate outlines before an intermediate key exists');
- assert.equal(await overlay.locator('circle[data-frame="119"]').count(),1,'Stationary camera retains editable OUT-frame handle');
- assert.equal(await overlay.locator('circle[data-frame="60"]').count(),1,'Stationary camera retains the active second panel IN handle at frame 60');
- assert.equal(await overlay.locator('circle[data-frame="0"]').count(),0,'Second panel overlay must not expose the first panel IN handle');
+ assert.equal(await overlay.locator('circle[data-frame="119"][data-mode="pan"]').count(),1,'Stationary camera retains editable OUT-frame handle');
+ assert.equal(await overlay.locator('circle[data-frame="60"][data-mode="pan"]').count(),1,'Stationary camera retains the active second panel IN handle at frame 60');
+ assert.equal(await overlay.locator('circle[data-frame="0"][data-mode="pan"]').count(),0,'Second panel overlay must not expose the first panel IN handle');
+ assert.equal(await overlay.locator('circle[data-frame="119"][data-mode="rotate"]').count(),1,'Stationary OUT exposes cyan rotation handle');
+ assert.equal(await overlay.locator('circle[data-frame="60"][data-mode="rotate"]').count(),1,'Stationary IN exposes cyan rotation handle');
+
  assert.equal(await overlay.locator('text').filter({hasText:/^IN$/}).count(),1,'Stationary camera displays exactly one IN endpoint label');
  assert.equal(await overlay.locator('text').filter({hasText:/^● IN$/}).count(),1,'Stationary camera displays exactly one IN selector');
  assert.equal(await overlay.locator('text').filter({hasText:/^OUT$/}).count(),1,'Stationary camera displays exactly one OUT endpoint label');
@@ -48,8 +90,8 @@ try{
  await number('Camera zoom',2);await number('Camera X',1250);await number('Camera rotation',12);
  await page.getByLabel('Camera interpolation',{exact:true}).selectOption('ease');let output=await save();assert.equal(output.scenes[0].camera[1].zoom,2);assert.equal(output.scenes[0].camera[1].rotation,12);
  await page.locator('.camera-key-list button').first().click();await wait();
- assert.equal(await overlay.locator('circle[data-frame="0"]').count(),1,'First panel moving camera shows IN handle');
- assert.equal(await overlay.locator('circle[data-frame="59"]').count(),1,'First panel moving camera shows OUT handle');
+ assert.equal(await overlay.locator('circle[data-frame="0"][data-mode="pan"]').count(),1,'First panel moving camera shows IN handle');
+ assert.equal(await overlay.locator('circle[data-frame="59"][data-mode="pan"]').count(),1,'First panel moving camera shows OUT handle');
  assert.equal(await overlay.locator('text').filter({hasText:'IN'}).count(),2,'Moving camera displays IN label and selector');
  assert.equal(await overlay.locator('text').filter({hasText:'OUT'}).count(),2,'Moving camera displays OUT label and selector');
  await page.getByLabel('Scene camera time').fill('30');
@@ -57,7 +99,7 @@ try{
  assert.equal(await overlay.locator('.camera-intermediate').count(),1,'Intermediate camera outline appears within first panel');
  assert.equal(await overlay.locator('.camera-intermediate rect[data-mode="zoom"]').count(),4,'Intermediate camera offers four resize handles');
  assert.equal(await overlay.locator('.camera-intermediate circle[data-mode="pan"]').count(),1,'Intermediate camera offers a pan handle');
- const midCenter=overlay.locator('.camera-intermediate circle[data-frame="30"]');
+ const midCenter=overlay.locator('.camera-intermediate circle[data-frame="30"][data-mode="pan"]');
  const midBefore=(await save()).scenes[0].camera.find(k=>k.frame===30);assert(midBefore,'Intermediate key saved');
  const midBox=await midCenter.boundingBox();assert(midBox,'Intermediate pan handle visible');
  await page.mouse.move(midBox.x+midBox.width/2,midBox.y+midBox.height/2);await page.mouse.down();
@@ -79,14 +121,14 @@ try{
  await page.getByRole('button',{name:'Delete key',exact:true}).click();await wait();
  assert.equal(await overlay.locator('.camera-intermediate').count(),0,'Deleting intermediate key removes its overlay');
  await page.locator('.camera-key-list button').first().click();assert.equal(await pixels(drawing),raw,'Camera editing leaves drawing pixels unchanged');
- const center=page.locator('.stage-paper .camera-overlay circle[data-frame="0"]');const box=await center.boundingBox();assert(box);await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2+30,box.y+box.height/2+10,{steps:8});await page.mouse.up();await wait();output=await save();assert(output.scenes[0].camera[0].x>960,'Dragging the green camera center pans the IN key');
+ const center=page.locator('.stage-paper .camera-overlay circle[data-frame="0"][data-mode="pan"]');const box=await center.boundingBox();assert(box);await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2+30,box.y+box.height/2+10,{steps:8});await page.mouse.up();await wait();output=await save();assert(output.scenes[0].camera[0].x>960,'Dragging the green camera center pans the IN key');
  await page.getByTitle('Undo (⌘/Ctrl Z)',{exact:true}).click();await wait();assert.equal(await page.getByLabel('Camera X',{exact:true}).inputValue(),'960');await page.getByTitle('Redo (⌘/Ctrl Shift Z)',{exact:true}).click();await wait();
  // RDR-03: dragging a camera endpoint must not seek away from the selected panel.
  // The former cameraDrag handler sought to the endpoint frame and could select a
  // different panel, remounting the overlay and causing the observed snapback.
  const selectedBeforeDrag=await page.locator('.timeline-clip.selected').count();
  const frameBeforeDrag=await page.getByLabel('Scene camera time').inputValue();
- const rdrHandle=page.locator('.stage-paper .camera-overlay circle[data-frame="0"]');
+ const rdrHandle=page.locator('.stage-paper .camera-overlay circle[data-frame="0"][data-mode="pan"]');
  const rdrBox=await rdrHandle.boundingBox();assert(rdrBox);
  await page.mouse.move(rdrBox.x+rdrBox.width/2,rdrBox.y+rdrBox.height/2);
  await page.mouse.down();await page.mouse.move(rdrBox.x+rdrBox.width/2+12,rdrBox.y+rdrBox.height/2+7,{steps:5});await page.mouse.up();await wait();
@@ -151,7 +193,7 @@ try{
   const el=document.querySelector('.stage-paper .camera-overlay');
   for(const type of ['pointerdown','pointermove','pointerup','pointercancel','lostpointercapture']){
    el.addEventListener(type,e=>{
-    const dot=el.querySelector('circle[data-frame="0"]');
+    const dot=el.querySelector('circle[data-frame="0"][data-mode="pan"]');
     window.__rdrCameraEvents.push({type,pointerId:e.pointerId,clientX:e.clientX,clientY:e.clientY,cx:dot?Number(dot.getAttribute('cx')):null,cy:dot?Number(dot.getAttribute('cy')):null});
    },{capture:true});
   }
