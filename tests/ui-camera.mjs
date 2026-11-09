@@ -12,6 +12,25 @@ const save=async()=>{const pending=page.waitForEvent('download');await page.getB
 const number=async(label,value)=>{const input=page.getByLabel(label,{exact:true});await input.fill(String(value));await input.press('Enter');await wait();};
 const pixels=async locator=>locator.evaluate(c=>{const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let sum=0;for(let i=0;i<d.length;i+=4)sum=(sum+d[i]*3+d[i+1]*5+d[i+2]*7+i)%1000000007;return sum;});
 try{
+ // C2.5-F0: picker should sample the visible pixel despite the 25% drawing margin.
+ const pickerProject=makeProject('C2.5 picker offset diagnostic');
+ pickerProject.scenes[0].panels[0].layers[0].strokes=[{id:uid(),tool:'shape',shape:'rectangle',color:'#17b94b',fill:'#17b94b',size:1,points:[[400,330,1],[560,490,1]]}];
+ await page.goto(url);
+ await page.locator('input[type=file]').first().setInputFiles({name:'c2-5-picker.issb',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(pickerProject))});
+ await wait();
+ await page.getByRole('button',{name:'Drawing',exact:true}).click();
+ await page.getByLabel('Drawing canvas',{exact:true}).waitFor();
+ await page.getByTitle('Color Picker (I)',{exact:true}).click();
+ const pickerSurface=page.getByLabel('Drawing tools surface',{exact:true});
+ const pickerBox=await pickerSurface.boundingBox();
+ assert(pickerBox,'C2.5 Drawing interaction surface is visible');
+ const pickerX=pickerBox.x+pickerBox.width*(480+480)/2880;
+ const pickerY=pickerBox.y+pickerBox.height*(400+270)/1620;
+ const visibleColor=await page.getByLabel('Drawing canvas',{exact:true}).evaluate((c,{x,y})=>{const rect=c.getBoundingClientRect(),px=Math.floor((x-rect.x)/rect.width*c.width),py=Math.floor((y-rect.y)/rect.height*c.height),d=c.getContext('2d').getImageData(px,py,1,1).data;return '#'+[...d.slice(0,3)].map(v=>v.toString(16).padStart(2,'0')).join('');},{x:pickerX,y:pickerY});
+ assert.equal(visibleColor,'#17b94b','C2.5 fixture: the pointer is over solid green artwork');
+ await page.mouse.click(pickerX,pickerY);
+ const pickedColor=await page.getByLabel('Tool color',{exact:true}).inputValue();
+ assert.equal(pickedColor,visibleColor,'C2.5 picker must match the visible artwork pixel at the cursor');
  // C2.4: Drawing playback must retain artwork outside the original canvas
  // when the active camera viewport brings that artwork into frame.
  const outside=makeProject('C2.4 off-canvas camera visibility'),outsidePanel=outside.scenes[0].panels[0];
