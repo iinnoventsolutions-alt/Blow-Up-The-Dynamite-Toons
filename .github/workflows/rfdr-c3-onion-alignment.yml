@@ -22,4 +22,6 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run build
       - name: Onion canvas alignment and tint regression
-        run: node --experimental-strip-types tests/ui-onion.mjs
+        run: |
+          node --experimental-strip-types tests/ui-onion.mjs
+          node --experimental-strip-types tests/ui-onion-alignment.mjs
