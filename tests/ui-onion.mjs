@@ -13,7 +13,15 @@ try{
  const p=makeProject('Onion test');p.scenes[0].panels=Array.from({length:7},(_,i)=>{const panel=makePanel(`Panel ${i+1}`);panel.layers[0].strokes.push({id:uid(),tool:'shape',shape:'rectangle',fill:'#000000',color:'#000000',size:2,points:[[100+i*220,200,1],[200+i*220,300,1]]});return panel;});p.scenes.push(makeScene('Other'));
  await load(p);const toggle=page.getByRole('checkbox',{name:'Onion skin',exact:true});assert.equal(await toggle.isChecked(),false);
  await page.locator('.filmstrip .panel-image-button').nth(3).click();await toggle.check();await page.getByLabel('backward onion panels',{exact:true}).selectOption('3');await page.getByLabel('forward onion panels',{exact:true}).selectOption('3');await wait();
- const pixel=async i=>page.locator('.onion-skin-surface').evaluate((c,i)=>[...c.getContext('2d').getImageData(150+i*220,250,1,1).data],i);
+ // C3.5 F0 gate: matching canvas pixels and project-space alignment are non-negotiable.
+ // This failed in the Working merge because the accepted 25% onion margin was not integrated.
+ const matching=await page.locator('.stage-paper').evaluate(paper=>{
+  const ghost=paper.querySelector('.onion-skin-surface');
+  const drawing=paper.querySelector('.drawing-surface');
+  return {ghost:[ghost.width,ghost.height],drawing:[drawing.width,drawing.height]};
+ });
+ assert.deepEqual(matching.ghost,matching.drawing,'C3.5 onion and artwork canvas pixel geometry must match');
+ const pixel=async i=>page.locator('.onion-skin-surface').evaluate((c,i)=>{const scale=c.width/(1920*1.5),x=Math.round((150+i*220+1920*.25)*scale),y=Math.round((250+1080*.25)*scale);return [...c.getContext('2d').getImageData(x,y,1,1).data];},i);
  const red=await pixel(2),green=await pixel(4);assert(red[0]>red[1]&&red[3]>0);assert(green[1]>green[0]&&green[3]>0);assert((await pixel(0))[3]<red[3]);assert.equal((await pixel(3))[3],0);
  const original=JSON.stringify(p);assert.equal(JSON.stringify(await save()),original,'Ghosts never enter project data');
  await page.getByLabel('backward onion panels',{exact:true}).selectOption('0');await wait();assert.equal((await pixel(2))[3],0);assert((await pixel(4))[3]>0);
