@@ -13,7 +13,7 @@ marker='[RFDR-D45-DOWNLOAD] saved=audio-animatic.webm'
 if log.count(marker)!=1: sys.exit(f'Expected one matching WebM download marker; found {log.count(marker)}')
 before=log[:log.index(marker)]
 matched=[]
-for m in re.finditer(r'\\[RFDR-D45\\] (\\{[^\\n]*\\})',before):
+for m in re.finditer(r'\[RFDR-D45\] (\{[^\n]*\})',before):
     try: matched.append(json.loads(m.group(1)))
     except json.JSONDecodeError: pass
 starts=[e for e in matched if e.get('kind')=='start']
