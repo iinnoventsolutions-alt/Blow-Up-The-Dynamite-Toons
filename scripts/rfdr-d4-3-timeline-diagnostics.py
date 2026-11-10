@@ -39,3 +39,11 @@ if not blend or not any(.75<=t<=1.0 for t in blend):
     print('TIMELINE WARNING: expected dissolve window has no blended frames')
 if any(t>1.2 for t in blend):
     print('TIMELINE WARNING: dissolve is still visible after 1.2 seconds')
+# D4.4 acceptance contract: an encoded dissolve must occupy its intended
+# timeline window. The previous existence-only test accepted a 500ms delay.
+# Keep this opt-in so D4.3's diagnostic can still collect non-gating evidence.
+if '--strict' in sys.argv:
+    if not blend or not any(.75<=t<=1.0 for t in blend) or any(t>1.2 for t in blend):
+        print('D4.4 TIMING CONTRACT FAIL: encoded dissolve timing drift',file=sys.stderr)
+        sys.exit(1)
+    print('D4.4 TIMING CONTRACT PASS')
