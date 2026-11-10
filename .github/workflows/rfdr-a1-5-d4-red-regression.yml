@@ -1,4 +1,4 @@
-name: RFDR A1.5 D4 Red Frame Scheduler Regression
+name: RFDR A1.5 D4 Frame Scheduler Validation
 on:
   push:
     branches: [RFDR-A1.5-D4-Frame-Consistency-Resolution]
@@ -6,33 +6,30 @@ on:
 permissions:
   contents: read
 jobs:
-  scheduler-regression:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+  scheduler-validation:
+    runs-on: macos-15
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
-      - name: Run new frame-consistency regression (expected red before correction)
-        shell: bash
-        run: |
-          set +e
-          node --test tests/animatic-frame-consistency.test.mjs > scheduler-regression.log 2>&1
-          status=$?
-          set -e
-          cat scheduler-regression.log
-          echo "regression_exit=$status" >> "$GITHUB_STEP_SUMMARY"
-          if [ "$status" -eq 0 ]; then
-            echo "Regression unexpectedly green; inspect coverage before implementation" >&2
-            exit 1
-          fi
-          grep -q 'D3 confirmed that jumping directly' scheduler-regression.log || { echo "Failure was not the expected red assertion" >&2; exit 1; }
-          echo "Expected red frame-skipping regression reproduced" >> "$GITHUB_STEP_SUMMARY"
-      - name: Upload red-test evidence
+          cache: npm
+      - run: npm ci
+      - run: |
+          npx playwright install chromium
+          brew list ffmpeg >/dev/null 2>&1 || brew install ffmpeg
+      - name: Production TypeScript and Vite build
+        run: npm run build
+      - name: Green scheduler and Electron recording contracts
+        run: node --test tests/animatic-frame-consistency.test.mjs tests/animatic-electron-handshake.test.mjs
+      - name: Browser audio and WebM dissolve regression
+        run: node --experimental-strip-types tests/ui-audio.mjs
+      - name: Upload browser diagnostic artifacts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: RFDR-A1-5-D4-red-regression-${{ github.run_id }}
-          path: scheduler-regression.log
+          name: RFDR-A1-5-D4-validation-${{ github.run_id }}
+          path: test-results/
+          retention-days: 14
           if-no-files-found: warn
