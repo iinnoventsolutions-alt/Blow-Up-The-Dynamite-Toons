@@ -1,0 +1,99 @@
+name: RFDR A1.5 D3 Frame Scheduler Instrumentation
+on:
+  push:
+    branches: [RFDR-A1.5-D3-Frame-Consistency]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  instrumented-export:
+    runs-on: macos-15
+    timeout-minutes: 85
+    strategy:
+      fail-fast: false
+      matrix:
+        source:
+          - { label: Working, sha: a109faef6c7b39f402e63825a3f1f845297536a9 }
+          - { label: RFDR-Animatic, sha: 4b5ca1f466b0b54bbc1c2398ff57f60f0cec35e5 }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Preserve diagnostic patch outside source tree
+        run: cp scripts/rfdr-d3-instrument.py "$RUNNER_TEMP/d3-instrument.py"
+      - name: Checkout exact comparison source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ matrix.source.sha }}
+          clean: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Install capture dependencies
+        run: |
+          npx playwright install chromium
+          brew list ffmpeg >/dev/null 2>&1 || brew install ffmpeg
+      - name: Apply diagnostic-only instrumentation
+        run: python3 "$RUNNER_TEMP/d3-instrument.py"
+      - run: npm run build
+      - name: Compare render requests and encoded frames at idle and under load
+        shell: bash
+        run: |
+          mkdir -p diagnostic-output
+          echo 'source=${{ matrix.source.label }} sha=${{ matrix.source.sha }}' > diagnostic-output/provenance.txt
+          for mode in idle stressed; do
+            for attempt in 1 2 3; do
+              rm -rf test-results
+              pids=""
+              if [ "$mode" = stressed ]; then
+                for i in 1 2 3 4; do (while :; do :; done) & pids="$pids $!"; done
+              fi
+              set +e
+              node --experimental-strip-types tests/ui-audio.mjs > "diagnostic-output/$mode-$attempt.log" 2>&1
+              status=$?
+              set -e
+              for pid in $pids; do kill "$pid" 2>/dev/null || true; done
+              for pid in $pids; do wait "$pid" 2>/dev/null || true; done
+              echo "$status" > "diagnostic-output/$mode-$attempt.exit"
+              if [ -f test-results/audio-animatic.webm ]; then
+                ffprobe -v error -select_streams v:0 -show_entries frame=best_effort_timestamp_time,pict_type -of csv=p=0 test-results/audio-animatic.webm > "diagnostic-output/$mode-$attempt-encoded.csv" || true
+              fi
+            done
+          done
+      - name: Summarize frame scheduling vs encoded output
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,re,csv
+          root=Path('diagnostic-output')
+          for p in sorted(root.glob('*.exit')):
+            stem=p.stem
+            log=(root/(stem+'.log')).read_text(errors='replace')
+            events=[]
+            for line in log.splitlines():
+              if '[RFDR-D3] ' in line:
+                try: events.append(json.loads(line.split('[RFDR-D3] ',1)[1]))
+                except ValueError: pass
+            frames=root/(stem+'-encoded.csv')
+            encoded=[]
+            if frames.exists():
+              for row in csv.reader(frames.open()):
+                try: encoded.append(float(row[0]))
+                except (ValueError,IndexError): pass
+            render_frames=[e['frame'] for e in events if e.get('kind')=='render']
+            skips=sum(e.get('skipped',0) for e in events)
+            gaps=[round(b-a,3) for a,b in zip(encoded,encoded[1:])]
+            summary=dict(attempt=stem,exit=p.read_text().strip(),render_calls=len(render_frames),unique_requested_frames=len(set(render_frames)),skipped_storyboard_frames=skips,encoded_frames=len(encoded),max_encoded_gap=max(gaps,default=0),transition_encoded_frames=sum(.7<=t<=1.1 for t in encoded),transition_requested_frames=[f for f in render_frames if 16<=f<=27])
+            print(json.dumps(summary))
+            (root/(stem+'-summary.json')).write_text(json.dumps(summary,indent=2))
+          PY
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: RFDR-A1-5-D3-${{ matrix.source.label }}-${{ github.run_id }}
+          path: diagnostic-output/
+          retention-days: 14
+          if-no-files-found: error
