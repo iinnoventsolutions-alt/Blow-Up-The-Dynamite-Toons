@@ -20,4 +20,5 @@ needle="page.on('dialog',d=>d.accept());"
 replacement="""page.on('console',msg=>{if(msg.text().includes('[RFDR-D45]'))process.stdout.write(msg.text()+'\\n');});"""+needle
 assert t.count(needle)==1,'browser log hook insertion point changed'
 test.write_text(t)
-assert "[RFDR-D45]" in source.read_text() and "[RFDR-D45]" in test.read_text()\nprint('Applied CI-only frame submission timestamp instrumentation and browser console relay')
+assert "[RFDR-D45]" in source.read_text() and "[RFDR-D45]" in test.read_text()
+print('Applied CI-only frame submission timestamp instrumentation and browser console relay')
