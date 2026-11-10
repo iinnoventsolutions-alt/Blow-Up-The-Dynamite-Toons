@@ -1,0 +1,92 @@
+name: RFDR A1.5 D2 Capture Timing Stress Diagnostics
+on:
+  push:
+    branches: [RFDR-A1.5-D2-Capture-Timing]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  stress-dissolve:
+    runs-on: macos-15
+    timeout-minutes: 85
+    strategy:
+      fail-fast: false
+      matrix:
+        source:
+          - { label: Working-baseline, sha: a109faef6c7b39f402e63825a3f1f845297536a9 }
+          - { label: RFDR-Animatic, sha: 4b5ca1f466b0b54bbc1c2398ff57f60f0cec35e5 }
+    steps:
+      - name: Checkout immutable comparison commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ matrix.source.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Install capture dependencies
+        run: |
+          npx playwright install chromium
+          brew list ffmpeg >/dev/null 2>&1 || brew install ffmpeg
+      - run: npm run build
+      - name: Run idle and CPU-contention comparisons
+        shell: bash
+        run: |
+          mkdir -p diagnostic-output
+          printf 'source=%s\nsha=%s\n' '${{ matrix.source.label }}' '${{ matrix.source.sha }}' > diagnostic-output/provenance.txt
+          for mode in idle stressed; do
+            for attempt in 1 2 3; do
+              echo "BEGIN $mode attempt $attempt"
+              rm -rf test-results
+              pids=""
+              if [ "$mode" = stressed ]; then
+                for i in 1 2 3 4; do
+                  (while :; do :; done) &
+                  pids="$pids $!"
+                done
+              fi
+              set +e
+              node --experimental-strip-types tests/ui-audio.mjs > "diagnostic-output/$mode-$attempt.log" 2>&1
+              status=$?
+              set -e
+              for pid in $pids; do kill "$pid" 2>/dev/null || true; done
+              for pid in $pids; do wait "$pid" 2>/dev/null || true; done
+              echo "$status" > "diagnostic-output/$mode-$attempt.exit"
+              if [ -f test-results/audio-animatic.webm ]; then
+                ffprobe -v error -select_streams v:0 -show_entries frame=best_effort_timestamp_time,pict_type -of csv=p=0 test-results/audio-animatic.webm > "diagnostic-output/$mode-$attempt-frames.csv" || true
+                ffprobe -v error -show_streams -show_format -of json test-results/audio-animatic.webm > "diagnostic-output/$mode-$attempt-streams.json" || true
+                cp test-results/audio-animatic.webm "diagnostic-output/$mode-$attempt.webm"
+              fi
+              grep -E 'Animatic dissolve diagnostic samples|Animatic export missing dissolve frame|PASS audio|AssertionError' "diagnostic-output/$mode-$attempt.log" || true
+              echo "END $mode attempt $attempt exit=$status"
+            done
+          done
+      - name: Summarize encoded frame timing and failures
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import csv
+          root=Path('diagnostic-output')
+          for p in sorted(root.glob('*.exit')):
+              stem=p.stem
+              frames=root/(stem+'-frames.csv')
+              times=[]
+              if frames.exists():
+                  for row in csv.reader(frames.open()):
+                      try: times.append(float(row[0]))
+                      except (ValueError,IndexError): pass
+              gaps=[round(b-a,3) for a,b in zip(times,times[1:])]
+              window=[t for t in times if 0.7<=t<=1.1]
+              print(f'{stem}: exit={p.read_text().strip()} frames={len(times)} max_gap={max(gaps,default=0)} transition_frames={len(window)} transition_timestamps={window}')
+          PY
+      - name: Upload source-specific diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: RFDR-A1-5-D2-${{ matrix.source.label }}-${{ github.run_id }}
+          path: diagnostic-output/
+          retention-days: 14
+          if-no-files-found: error
