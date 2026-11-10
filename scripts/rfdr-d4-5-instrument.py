@@ -13,8 +13,8 @@ replacement="""const storyboardFrame=nextFrame;
      nextFrame++;"""
 assert s.count(needle)==1,'frame submission insertion point changed'
 s=s.replace(needle,replacement)
-s=s.replace('  const begin=()=>{const anchor=', "  const begin=()=>{const session=++window.__rfdrExportSession;console.warn('[RFDR-D45] '+JSON.stringify({kind:'start',session}));const anchor=")
-s='window.__rfdrExportSession ||= 0;\n'+s
+s=s.replace('  const begin=()=>{const anchor=', "  const begin=()=>{const session=++rfdrExportSession;console.warn('[RFDR-D45] '+JSON.stringify({kind:'start',session}));const anchor=")
+s='let rfdrExportSession=0;\n'+s
 s=s.replace('kind:\'frame\',frame:storyboardFrame','kind:\'frame\',session,frame:storyboardFrame')
 source.write_text(s)
 test=Path('tests/ui-audio.mjs')
