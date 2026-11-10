@@ -23,6 +23,9 @@ needle="page.on('dialog',d=>d.accept());"
 replacement="""page.on('console',msg=>{if(msg.text().includes('[RFDR-D45]'))process.stdout.write(msg.text()+'\\n');});"""+needle
 assert t.count(needle)==1,'browser log hook insertion point changed'
 t=t.replace(needle,replacement)
+marker="await video.saveAs('test-results/audio-animatic.webm');"
+assert t.count(marker)==1,'export download insertion point changed'
+t=t.replace(marker,marker+"console.log('[RFDR-D45-DOWNLOAD] saved=audio-animatic.webm');")
 test.write_text(t)
 source_marker = '[RFDR-D45]' in source.read_text()
 test_marker = '[RFDR-D45]' in test.read_text()
