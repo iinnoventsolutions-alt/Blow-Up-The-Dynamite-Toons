@@ -1,0 +1,60 @@
+name: RFDR A1.5 D4.5.1 Instrumentation Recovery
+on:
+  push:
+    branches: [RFDR-A1.5-D4.5.1-Instrumentation-Recovery]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  capture-encoding:
+    runs-on: macos-15
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: |
+          npx playwright install chromium
+          brew list ffmpeg >/dev/null 2>&1 || brew install ffmpeg
+      - name: Instrument disposable CI checkout
+        run: python3 scripts/rfdr-d4-5-instrument.py
+      - run: npm run build
+      - name: Four independent encoded-video timing comparisons
+        shell: bash
+        run: |
+          mkdir -p diagnostic-output
+          for attempt in 1 2 3 4; do
+            rm -rf test-results
+            set +e
+            node --experimental-strip-types tests/ui-audio.mjs > "diagnostic-output/attempt-$attempt-browser.log" 2>&1
+            browser_status=$?
+            set -e
+            echo "$browser_status" > "diagnostic-output/attempt-$attempt-browser.exit"
+            if [ -f test-results/audio-animatic.webm ]; then
+              mkdir -p "diagnostic-output/attempt-$attempt"
+              python3 scripts/rfdr-d4-3-timeline-diagnostics.py test-results/audio-animatic.webm "diagnostic-output/attempt-$attempt" > "diagnostic-output/attempt-$attempt-timeline.log"
+              python3 scripts/rfdr-d4-5-correlate.py "diagnostic-output/attempt-$attempt-browser.log" "diagnostic-output/attempt-$attempt/timeline.json" "diagnostic-output/attempt-$attempt/correlation.json"
+            else
+              echo "No encoded video for attempt $attempt"\n              exit 1
+            fi
+          done
+      - name: Summarize all attempts
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          files=sorted(Path('diagnostic-output').glob('attempt-*/correlation.json'))\n          if len(files)!=4: raise SystemExit(f'Expected four telemetry correlations; found {len(files)}')\n          for p in files:
+            print(p.parent.name,json.dumps(json.loads(p.read_text())))
+          PY
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: RFDR-A1-5-D4-5-1-telemetry-${{ github.run_id }}
+          path: diagnostic-output/
+          retention-days: 14
+          if-no-files-found: error
