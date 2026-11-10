@@ -38,7 +38,8 @@ jobs:
               python3 scripts/rfdr-d4-3-timeline-diagnostics.py test-results/audio-animatic.webm "diagnostic-output/attempt-$attempt" > "diagnostic-output/attempt-$attempt-timeline.log"
               python3 scripts/rfdr-d4-5-correlate.py "diagnostic-output/attempt-$attempt-browser.log" "diagnostic-output/attempt-$attempt/timeline.json" "diagnostic-output/attempt-$attempt/correlation.json"
             else
-              echo "No encoded video for attempt $attempt"\n              exit 1
+              echo "No encoded video for attempt $attempt"
+              exit 1
             fi
           done
       - name: Summarize all attempts
@@ -47,7 +48,9 @@ jobs:
           python3 - <<'PY'
           import json
           from pathlib import Path
-          files=sorted(Path('diagnostic-output').glob('attempt-*/correlation.json'))\n          if len(files)!=4: raise SystemExit(f'Expected four telemetry correlations; found {len(files)}')\n          for p in files:
+          files=sorted(Path('diagnostic-output').glob('attempt-*/correlation.json'))
+          if len(files)!=4: raise SystemExit(f'Expected four telemetry correlations; found {len(files)}')
+          for p in files:
             print(p.parent.name,json.dumps(json.loads(p.read_text())))
           PY
       - name: Upload diagnostics
