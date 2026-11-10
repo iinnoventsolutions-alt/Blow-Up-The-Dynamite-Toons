@@ -6,7 +6,7 @@ await mkdir('diagnostic-output',{recursive:true});
 const browser=await chromium.launch({headless:true});
 try {
  const page=await browser.newPage();
- await page.goto('http://localhost:4317').catch(async()=>{await page.goto('about:blank');});
+ await page.goto('about:blank');
  const result=await page.evaluate(async()=>{
   const result={secureContext:isSecureContext,videoEncoder:typeof VideoEncoder==='function',videoFrame:typeof VideoFrame==='function',audioEncoder:typeof AudioEncoder==='function',audioData:typeof AudioData==='function',mediaRecorder:typeof MediaRecorder==='function',webmMuxerBundled:false};
   if(!result.videoEncoder||!result.videoFrame)return result;
