@@ -1,0 +1,67 @@
+name: RFDR A1.5 D4.3 Timeline Accuracy Diagnostics
+on:
+  push:
+    branches: [RFDR-A1.5-D4.3-Timeline-Diagnostics]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  timing-diagnostics:
+    runs-on: macos-15
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: |
+          npx playwright install chromium
+          brew list ffmpeg >/dev/null 2>&1 || brew install ffmpeg
+      - run: npm run build
+      - name: Verify source-level regression and Electron handshake
+        run: node --test tests/animatic-frame-consistency.test.mjs tests/animatic-electron-handshake.test.mjs
+      - name: Repeat real export with timeline diagnostics
+        shell: bash
+        run: |
+          mkdir -p diagnostic-output
+          for attempt in 1 2 3 4; do
+            rm -rf test-results
+            set +e
+            node --experimental-strip-types tests/ui-audio.mjs > "diagnostic-output/attempt-$attempt.log" 2>&1
+            status=$?
+            set -e
+            echo "$status" > "diagnostic-output/attempt-$attempt.exit"
+            if [ -f test-results/audio-animatic.webm ]; then
+              mkdir -p "diagnostic-output/attempt-$attempt"
+              python3 scripts/rfdr-d4-3-timeline-diagnostics.py test-results/audio-animatic.webm "diagnostic-output/attempt-$attempt" | tee "diagnostic-output/attempt-$attempt-analysis.log"
+              cp test-results/audio-animatic.webm "diagnostic-output/attempt-$attempt.webm"
+            else
+              echo "No export video for attempt $attempt" | tee "diagnostic-output/attempt-$attempt-analysis.log"
+            fi
+          done
+      - name: Summarize timing drift and test outcomes
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('diagnostic-output')
+          for f in sorted(root.glob('attempt-*.exit')):
+            folder=root/f.stem
+            analysis=folder/'timeline.json'
+            if analysis.exists():
+              d=json.loads(analysis.read_text())
+              print(f'{f.stem}: test_exit={f.read_text().strip()} duration={d["duration"]} frames={d["encoded_frames"]} max_gap={d["max_frame_gap"]} first_blend={d["first_blend"]} last_blend={d["last_blend"]} expected_window_blends={d["blend_in_expected_window"]} late_blends={d["blend_after_1_2"]}')
+            else: print(f'{f.stem}: test_exit={f.read_text().strip()} no video analysis')
+          PY
+      - name: Upload timing evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: RFDR-A1-5-D4-3-timeline-${{ github.run_id }}
+          path: diagnostic-output/
+          retention-days: 14
+          if-no-files-found: error
