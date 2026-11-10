@@ -20,5 +20,9 @@ needle="page.on('dialog',d=>d.accept());"
 replacement="""page.on('console',msg=>{if(msg.text().includes('[RFDR-D45]'))process.stdout.write(msg.text()+'\\n');});"""+needle
 assert t.count(needle)==1,'browser log hook insertion point changed'
 test.write_text(t)
-assert "[RFDR-D45]" in source.read_text() and "[RFDR-D45]" in test.read_text()
+source_marker = '[RFDR-D45]' in source.read_text()
+test_marker = '[RFDR-D45]' in test.read_text()
+print(f'D4.5.1 instrumentation validation: source_marker={source_marker}, browser_marker={test_marker}', flush=True)
+assert source_marker, 'Missing export-source telemetry marker'
+assert test_marker, 'Missing browser console relay marker'
 print('Applied CI-only frame submission timestamp instrumentation and browser console relay')
