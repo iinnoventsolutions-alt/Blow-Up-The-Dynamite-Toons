@@ -13,7 +13,28 @@ export async function exportAnimatic(project:Project,signal:AbortSignal,onProgre
  const blob=await new Promise<Blob>((resolve,reject)=>{let failure:Error|undefined;const abort=()=>{failure ||= new Error('Animatic export cancelled.');cancelAnimationFrame(raf);if(recording.state!=='inactive')recording.stop();else reject(failure);};const visibility=()=>{if(document.hidden){failure=new Error('Export stopped because the application became hidden. Keep it visible while exporting.');abort();}};recording.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};recording.onerror=()=>{failure=new Error('Video recording failed.');if(recording.state!=='inactive')recording.stop();else reject(failure);};recording.onstop=()=>{signal.removeEventListener('abort',abort);document.removeEventListener('visibilitychange',visibility);if(failure)reject(failure);else if(!chunks.length)reject(new Error('No video data was recorded.'));else resolve(new Blob(chunks,{type:'video/webm'}));};signal.addEventListener('abort',abort,{once:true});document.addEventListener('visibilitychange',visibility);
   // Do not gate rendering on MediaRecorder.onstart: Electron may defer that
   // event until the first canvas frame is submitted.
-  const begin=()=>{const anchor=ctx.currentTime+.05,total=projectFrames(project),duration=total/project.fps;stop=scheduleAudio(project,ctx,output,0,anchor,buffers);let last=-1;const tick=()=>{try{if(signal.aborted){abort();return;}const elapsed=Math.max(0,ctx.currentTime-anchor),frame=Math.min(total-1,Math.floor(elapsed*project.fps));if(frame!==last){paintPlayback(canvas,project,frame,width,pictures);videoTrack.requestFrame();last=frame;}onProgress(Math.min(1,elapsed/duration));if(elapsed>=duration){stop();setTimeout(()=>{if(recording.state==='recording'){recording.requestData();recording.stop();}},200);}else raf=requestAnimationFrame(tick);}catch(e){failure=e as Error;abort();}};raf=requestAnimationFrame(tick);};
+  const begin=()=>{const anchor=ctx.currentTime+.05,total=projectFrames(project),duration=total/project.fps;stop=scheduleAudio(project,ctx,output,0,anchor,buffers);// Preserve every storyboard frame in sequence. A delayed callback must not
+  // jump directly to a later frame (which can erase a short dissolve).
+  // At most one frame is submitted per animation callback so the capture track
+  // has a rendering opportunity between submissions.
+  let nextFrame=0;
+  const tick=()=>{
+   try{
+    if(signal.aborted){abort();return;}
+    const elapsed=Math.max(0,ctx.currentTime-anchor);
+    if(nextFrame<total && elapsed>=nextFrame/project.fps){
+     paintPlayback(canvas,project,nextFrame,width,pictures);
+     videoTrack.requestFrame();
+     nextFrame++;
+    }
+    onProgress(Math.min(1,Math.min(elapsed/duration,nextFrame/total)));
+    if(nextFrame>=total && elapsed>=duration){
+     stop();
+     setTimeout(()=>{if(recording.state==='recording'){recording.requestData();recording.stop();}},200);
+    }else raf=requestAnimationFrame(tick);
+   }catch(e){failure=e as Error;abort();}
+  };
+  raf=requestAnimationFrame(tick);};
   recording.start(1000);
   begin();
  });return await withWebmDuration(blob,projectFrames(project)/project.fps);
