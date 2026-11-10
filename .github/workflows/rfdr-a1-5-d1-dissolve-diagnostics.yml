@@ -1,0 +1,69 @@
+name: RFDR A1.5 D1 Dissolve Capture Diagnostics
+on:
+  push:
+    branches:
+      - RFDR-A1.5-D1-Dissolve-Diagnostics
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compare-dissolve:
+    runs-on: macos-15
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        source:
+          - label: Working-baseline
+            sha: a109faef6c7b39f402e63825a3f1f845297536a9
+          - label: RFDR-Animatic
+            sha: 4b5ca1f466b0b54bbc1c2398ff57f60f0cec35e5
+    steps:
+      - name: Checkout exact comparison source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ matrix.source.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Install Chromium and ffmpeg
+        run: |
+          npx playwright install chromium
+          brew list ffmpeg >/dev/null 2>&1 || brew install ffmpeg
+      - name: Production build
+        run: npm run build
+      - name: Repeat original dissolve regression with exact source
+        shell: bash
+        run: |
+          mkdir -p diagnostic-output
+          printf 'source=%s\nsha=%s\nrunner=%s\n' '${{ matrix.source.label }}' '${{ matrix.source.sha }}' "$RUNNER_OS" > diagnostic-output/provenance.txt
+          for attempt in 1 2 3; do
+            echo "Attempt $attempt for ${{ matrix.source.label }}"
+            rm -rf test-results
+            set +e
+            node --experimental-strip-types tests/ui-audio.mjs > "diagnostic-output/attempt-${attempt}.log" 2>&1
+            status=$?
+            set -e
+            echo "$status" > "diagnostic-output/attempt-${attempt}.exit"
+            grep -E 'Animatic dissolve diagnostic samples|Animatic export missing dissolve frame|encoded video frame timestamps|PASS audio|AssertionError' "diagnostic-output/attempt-${attempt}.log" || true
+            if [ -d test-results ]; then
+              mkdir -p "diagnostic-output/attempt-${attempt}-files"
+              cp -R test-results/. "diagnostic-output/attempt-${attempt}-files/" || true
+            fi
+          done
+      - name: Summarize reproducibility
+        if: always()
+        shell: bash
+        run: |
+          for f in diagnostic-output/attempt-*.exit; do echo "$f: $(cat "$f")"; done
+      - name: Upload evidence for both comparison commits
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: RFDR-A1-5-D1-${{ matrix.source.label }}-${{ github.run_id }}
+          path: diagnostic-output/
+          retention-days: 14
+          if-no-files-found: error
