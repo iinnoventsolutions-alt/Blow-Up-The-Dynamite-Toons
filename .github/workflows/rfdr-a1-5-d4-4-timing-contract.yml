@@ -1,0 +1,69 @@
+name: RFDR A1.5 D4.4 Encoded Timeline Contract
+on:
+  push:
+    branches: [RFDR-A1.5-D4.4-Timing-Contract]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  timeline-contract:
+    runs-on: macos-15
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: |
+          npx playwright install chromium
+          brew list ffmpeg >/dev/null 2>&1 || brew install ffmpeg
+      - run: npm run build
+      - name: Repeat encoded video tests and enforce timing contract
+        shell: bash
+        run: |
+          mkdir -p diagnostic-output
+          for attempt in 1 2 3 4; do
+            rm -rf test-results
+            set +e
+            node --experimental-strip-types tests/ui-audio.mjs > "diagnostic-output/attempt-$attempt-browser.log" 2>&1
+            browser_status=$?
+            set -e
+            echo "$browser_status" > "diagnostic-output/attempt-$attempt-browser.exit"
+            if [ -f test-results/audio-animatic.webm ]; then
+              mkdir -p "diagnostic-output/attempt-$attempt"
+              set +e
+              python3 scripts/rfdr-d4-3-timeline-diagnostics.py test-results/audio-animatic.webm "diagnostic-output/attempt-$attempt" --strict > "diagnostic-output/attempt-$attempt-contract.log" 2>&1
+              contract_status=$?
+              set -e
+              echo "$contract_status" > "diagnostic-output/attempt-$attempt-contract.exit"
+              cat "diagnostic-output/attempt-$attempt-contract.log"
+            else
+              echo 2 > "diagnostic-output/attempt-$attempt-contract.exit"
+              echo "No video exported" > "diagnostic-output/attempt-$attempt-contract.log"
+            fi
+          done
+      - name: Report strict failures without treating diagnostic collection as production acceptance
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('diagnostic-output')
+          failures=0
+          for i in range(1,5):
+            browser=(root/f'attempt-{i}-browser.exit').read_text().strip()
+            contract=(root/f'attempt-{i}-contract.exit').read_text().strip()
+            print(f'attempt-{i}: browser={browser} strict_timing_contract={contract}')
+            failures+=int(browser!='0' or contract!='0')
+          (root/'summary.txt').write_text(f'strict_failed_attempts={failures}/4\n')
+          print(f'Strict failures: {failures}/4; diagnostic workflow success is NOT export acceptance')
+          PY
+      - name: Upload timing and encoded-video evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: RFDR-A1-5-D4-4-timing-${{ github.run_id }}
+          path: diagnostic-output/
+          retention-days: 14
+          if-no-files-found: error
