@@ -19,6 +19,7 @@ t=test.read_text()
 needle="page.on('dialog',d=>d.accept());"
 replacement="""page.on('console',msg=>{if(msg.text().includes('[RFDR-D45]'))process.stdout.write(msg.text()+'\\n');});"""+needle
 assert t.count(needle)==1,'browser log hook insertion point changed'
+t=t.replace(needle,replacement)
 test.write_text(t)
 source_marker = '[RFDR-D45]' in source.read_text()
 test_marker = '[RFDR-D45]' in test.read_text()
