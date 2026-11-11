@@ -88,6 +88,8 @@ jobs:
         run: python3 scripts/rfdr-d4-6-5l2-duration-prototype.py
       - name: Validate corrected silent WebM Chromium duration and playback
         run: node tests/rfdr-d4-6-5l2-duration-playback.mjs
+      - name: Validate corrected silent and audio WebM in Electron
+        run: node tests/rfdr-d4-6-5m-electron-playback.mjs
       - name: Confirm original muxer output remains an expected failing negative control
         shell: bash
         run: |
