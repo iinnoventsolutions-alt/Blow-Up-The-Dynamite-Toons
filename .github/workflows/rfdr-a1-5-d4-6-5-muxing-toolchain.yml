@@ -80,6 +80,10 @@ jobs:
         run: node -e "import('esbuild').then(m=>m.build({entryPoints:['tests/rfdr-d4-6-5l-silent-fixture.js'],bundle:true,format:'esm',platform:'browser',outfile:'diagnostic-output/d4-6-5l-bundle.js'}))"
       - name: Validate silent-export normal and stress fixtures
         run: node tests/rfdr-d4-6-5l-silent-acceptance.mjs
+      - name: Verify isolated WebCodecs cancellation and retry
+        run: node tests/rfdr-d4-6-5l1-cancel-retry.mjs
+      - name: Diagnose silent-export final-frame duration
+        run: python3 scripts/rfdr-d4-6-5l1-silent-endpoint.py
       - name: Confirm original muxer output remains an expected failing negative control
         shell: bash
         run: |
