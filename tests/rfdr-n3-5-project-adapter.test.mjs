@@ -28,8 +28,8 @@ test('N3.5 real project frame ordering, scene isolation, and full sequential pos
  assert.deepEqual(out.frames[2].camera,resolveCompatibleCamera(p,'s1','a',2).pose);
  assert.deepEqual(out.frames[4].camera,pose(140,60));
  assert.deepEqual(out.frames[5].camera,pose(140,60)); // downstream IN inheritance
- assert.deepEqual(out.frames[9].camera,cameraAt(p.scenes[1],0,p));
- assert.deepEqual(out.frames[11].camera,cameraAt(p.scenes[1],2,p));
+ assert.deepEqual(out.frames[9].camera,pose(700,-15));
+ assert.deepEqual(out.frames[11].camera,pose(750,-5));
  assert.equal(out.frames[9].cameraEngine,'legacy');
  assert.equal(out.frames[5].cameraEngine,'sequential');
  assert.deepEqual(p,before);
