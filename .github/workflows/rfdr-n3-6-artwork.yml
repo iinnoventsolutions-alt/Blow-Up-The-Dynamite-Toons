@@ -1,0 +1,29 @@
+name: RFDR N3.6 Isolated Artwork Rendering Feasibility
+on:
+  push:
+    branches: [RFDR-A1.5-D4.6.5-WebM-Muxing-Prototype]
+    paths:
+      - 'src/deterministic-artwork-renderer.ts'
+      - 'tests/rfdr-n3-6-artwork-render.test.mjs'
+      - '.github/workflows/rfdr-n3-6-artwork.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  artwork:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+      - run: |
+          npm ci
+          npx tsc --noEmit
+          npx playwright install --with-deps chromium
+      - name: Browser pixel equivalence and cancellation
+        run: node --experimental-strip-types --test tests/rfdr-n3-6-artwork-render.test.mjs
+      - name: N2–N3.5.1 regressions
+        run: node --experimental-strip-types --test tests/rfdr-n2-deterministic-export-contract.test.mjs tests/rfdr-n3-1-frame-scheduler.test.mjs tests/rfdr-n3-2-frame-metadata.test.mjs tests/rfdr-n3-3-audio-mixer.test.mjs tests/rfdr-n3-4-adapter-integration.test.mjs tests/rfdr-n3-5-project-adapter.test.mjs tests/rfdr-n3-5-1-project-fidelity.test.mjs
