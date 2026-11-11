@@ -57,6 +57,9 @@ jobs:
         run: npx playwright install chromium
       - name: Test direct WebCodecs WebM muxing
         run: node tests/rfdr-d4-6-5c-direct-muxing.mjs
+      - name: Investigate Opus stream-copy trim metadata
+        if: success()
+        run: python3 scripts/rfdr-d4-6-5e-trim-feasibility.py
       - name: Inspect Opus padding and decoded dissolve (strict acceptance)
         run: python3 scripts/rfdr-d4-6-5d-padding-dissolve.py
       - name: Upload toolchain evidence
