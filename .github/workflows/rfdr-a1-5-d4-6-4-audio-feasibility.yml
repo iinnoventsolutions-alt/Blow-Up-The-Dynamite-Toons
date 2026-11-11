@@ -1,0 +1,31 @@
+name: RFDR A1.5 D4.6.4 Audio Muxing Feasibility
+on:
+  push:
+    branches: [RFDR-A1.5-D4.6.4-Audio-Muxing-Feasibility]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audio-feasibility:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install chromium
+      - name: Build unchanged production application
+        run: npm run build
+      - name: Validate offline audio and explicit Opus timestamps
+        run: node tests/rfdr-d4-6-4-opus-audio-feasibility.mjs
+      - name: Upload audio timestamp evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: RFDR-D4-6-4-audio-feasibility-${{ github.run_id }}
+          path: diagnostic-output/
+          retention-days: 14
+          if-no-files-found: error
