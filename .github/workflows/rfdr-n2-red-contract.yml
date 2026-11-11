@@ -29,8 +29,10 @@ jobs:
           if [ "$result" -eq 0 ]; then
             echo 'N2 contract now GREEN; inspect actual coverage before declaring implementation complete.'
           else
-            grep -q 'not ok' diagnostic-output/n2-red-contract.log || exit 1
-            grep -q 'ERR_MODULE_NOT_FOUND' diagnostic-output/n2-red-contract.log || exit 1
+            # Node 24 uses a spec reporter in CI; do not assume TAP 'not ok' lines.
+            count=$(grep -c 'ERR_MODULE_NOT_FOUND' diagnostic-output/n2-red-contract.log || true)
+            test "$count" -ge 6 || { echo "Expected six missing-adapter failures; found $count"; exit 1; }
+            grep -q 'src/deterministic-export-adapter.ts' diagnostic-output/n2-red-contract.log || exit 1
             echo 'N2 RED confirmed: production-facing deterministic adapter is not yet implemented.'
           fi
       - name: Upload RED evidence
