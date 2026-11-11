@@ -8,7 +8,7 @@ permissions:
 jobs:
   muxing-toolchain-gate:
     runs-on: macos-15
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -18,25 +18,34 @@ jobs:
       - run: npm ci
       - name: Verify unchanged production build
         run: npm run build
-      - name: Probe muxing verification toolchain
+      - name: Install CI-only FFmpeg validation utilities
         shell: bash
         run: |
+          brew install ffmpeg
+          command -v ffmpeg
+          command -v ffprobe
+      - name: Validate WebM VP8 and Opus toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
           mkdir -p diagnostic-output
           {
             echo "runner=macos-15"
             echo "node=$(node --version)"
-            echo "ffmpeg_path=$(command -v ffmpeg || echo missing)"
-            echo "ffprobe_path=$(command -v ffprobe || echo missing)"
-            if command -v ffmpeg >/dev/null 2>&1; then
-              ffmpeg -version | head -n 2
-              echo "webm_muxer:"
-              ffmpeg -hide_banner -muxers 2>/dev/null | grep -E '(^| )webm( |$)' || true
-              echo "vp8_opus_encoders:"
-              ffmpeg -hide_banner -encoders 2>/dev/null | grep -E 'libvpx|libopus' || true
-            fi
-            if command -v ffprobe >/dev/null 2>&1; then
-              ffprobe -version | head -n 2
-            fi
+            echo "ffmpeg_path=$(command -v ffmpeg)"
+            echo "ffprobe_path=$(command -v ffprobe)"
+            ffmpeg -version | head -n 2
+            ffprobe -version | head -n 2
+            echo "webm muxer:"
+            ffmpeg -hide_banner -muxers | grep -E '^[[:space:]]*E[[:space:]]+webm[[:space:]]'
+            echo "vp8 decoder:"
+            ffmpeg -hide_banner -decoders | grep -E '^[[:space:]]*V[^[:space:]]*[[:space:]]+vp8[[:space:]]'
+            echo "opus decoder:"
+            ffmpeg -hide_banner -decoders | grep -E '^[[:space:]]*A[^[:space:]]*[[:space:]]+opus[[:space:]]'
+            echo "libvpx VP8 encoder:"
+            ffmpeg -hide_banner -encoders | grep -E '^[[:space:]]*V[^[:space:]]*[[:space:]]+libvpx[[:space:]]'
+            echo "libopus encoder:"
+            ffmpeg -hide_banner -encoders | grep -E '^[[:space:]]*A[^[:space:]]*[[:space:]]+libopus[[:space:]]'
           } | tee diagnostic-output/muxing-toolchain.txt
       - name: Upload toolchain evidence
         if: always()
