@@ -1,0 +1,31 @@
+name: RFDR N1.3 FFmpeg WebM Feasibility
+on:
+  push:
+    branches: [RFDR-A1.5-D4.6.5-WebM-Muxing-Prototype]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ffmpeg-webm-feasibility:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install FFmpeg
+        run: brew install ffmpeg
+      - name: Record encoder and licensing evidence
+        run: |
+          mkdir -p diagnostic-output
+          ffmpeg -version > diagnostic-output/n1-3-ffmpeg-version.txt
+          ffmpeg -encoders | grep -E 'libvpx|libopus' > diagnostic-output/n1-3-encoders.txt
+          ffmpeg -buildconf > diagnostic-output/n1-3-buildconf.txt
+      - name: Strict six-second WebM VP8 Opus proof
+        run: python3 scripts/rfdr-n1-3-ffmpeg-webm-feasibility.py
+      - name: Upload N1.3 evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: RFDR-N1-3-FFmpeg
+          path: diagnostic-output/n1-3-*
+          retention-days: 14
+          if-no-files-found: error
