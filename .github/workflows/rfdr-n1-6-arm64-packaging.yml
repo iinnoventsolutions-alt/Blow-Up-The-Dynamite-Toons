@@ -41,7 +41,16 @@ jobs:
         run: |
           set -euo pipefail
           npm run build
-          npx electron-builder --mac dir --arm64 --publish never -c.extraResources.0.from=n1-6-resources/ffmpeg -c.extraResources.0.to=ffmpeg
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const config = {
+            ...pkg.build,
+            extraResources: [{ from: 'n1-6-resources/ffmpeg', to: 'ffmpeg' }],
+          };
+          fs.writeFileSync('/tmp/n1-6-electron-builder.json', JSON.stringify(config, null, 2));
+          JS
+          npx electron-builder --mac dir --arm64 --publish never --config /tmp/n1-6-electron-builder.json
           find release -name '*.app' -maxdepth 4 -print | tee diagnostic-output/n1-6-apps.txt
       - name: Validate packaged binary and runtime
         shell: bash
