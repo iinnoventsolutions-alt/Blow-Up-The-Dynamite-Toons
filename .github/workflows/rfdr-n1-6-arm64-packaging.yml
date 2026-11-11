@@ -33,7 +33,23 @@ jobs:
           make install
           mkdir -p "$GITHUB_WORKSPACE/n1-6-resources"
           cp "$RUNNER_TEMP/n1-6-lgpl/bin/ffmpeg" "$GITHUB_WORKSPACE/n1-6-resources/ffmpeg"
+          # Bundle codec dylibs and rewrite Homebrew paths to app-relative paths.
+          mkdir -p "$GITHUB_WORKSPACE/n1-6-resources/lib"
+          for codec in libvpx libopus; do
+            original=$(otool -L "$GITHUB_WORKSPACE/n1-6-resources/ffmpeg" | awk -v name="$codec" 'index($1, "/" name ".") { print $1; exit }')
+            test -n "$original"
+            basename=$(basename "$original")
+            cp -L "$original" "$GITHUB_WORKSPACE/n1-6-resources/lib/$basename"
+            chmod u+w "$GITHUB_WORKSPACE/n1-6-resources/lib/$basename"
+            install_name_tool -change "$original" "@executable_path/lib/$basename" "$GITHUB_WORKSPACE/n1-6-resources/ffmpeg"
+            install_name_tool -id "@loader_path/$basename" "$GITHUB_WORKSPACE/n1-6-resources/lib/$basename"
+            codesign --force --sign - "$GITHUB_WORKSPACE/n1-6-resources/lib/$basename"
+          done
+          codesign --force --sign - "$GITHUB_WORKSPACE/n1-6-resources/ffmpeg"
           otool -L "$GITHUB_WORKSPACE/n1-6-resources/ffmpeg" | tee "$GITHUB_WORKSPACE/diagnostic-output/n1-6-linked-libraries.txt"
+          for lib in "$GITHUB_WORKSPACE"/n1-6-resources/lib/*.dylib; do
+            otool -L "$lib" >> "$GITHUB_WORKSPACE/diagnostic-output/n1-6-linked-libraries.txt"
+          done
           "$GITHUB_WORKSPACE/n1-6-resources/ffmpeg" -buildconf > "$GITHUB_WORKSPACE/diagnostic-output/n1-6-buildconf.txt"
           file "$GITHUB_WORKSPACE/n1-6-resources/ffmpeg" | tee "$GITHUB_WORKSPACE/diagnostic-output/n1-6-architecture.txt"
       - name: Package ARM64 Electron app with isolated FFmpeg resource
@@ -46,7 +62,7 @@ jobs:
           const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
           const config = {
             ...pkg.build,
-            extraResources: [{ from: 'n1-6-resources/ffmpeg', to: 'ffmpeg' }],
+            extraResources: [{ from: 'n1-6-resources', to: '.' }],
           };
           fs.writeFileSync('/tmp/n1-6-electron-builder.json', JSON.stringify(config, null, 2));
           JS
@@ -69,6 +85,13 @@ jobs:
           grep -Eq '^[[:space:]]*A[^[:space:]]*[[:space:]]+libopus([[:space:]]|$)' diagnostic-output/n1-6-packaged-encoders.txt
           codesign --verify --deep --verbose=2 "$APP" 2>&1 | tee diagnostic-output/n1-6-signature.txt
           otool -L "$FFMPEG" > diagnostic-output/n1-6-packaged-dylibs.txt
+          for lib in "$APP"/Contents/Resources/lib/*.dylib; do
+            test -f "$lib"
+            test "$(lipo -archs "$lib")" = arm64
+            codesign --verify --verbose=2 "$lib"
+            otool -L "$lib" >> diagnostic-output/n1-6-packaged-dylibs.txt
+          done
+          DYLD_FALLBACK_LIBRARY_PATH=/usr/lib "$FFMPEG" -version > diagnostic-output/n1-6-isolated-runtime.txt
           python3 - <<'PY'
           from pathlib import Path
           deps=Path('diagnostic-output/n1-6-packaged-dylibs.txt').read_text().splitlines()[1:]
@@ -76,7 +99,7 @@ jobs:
           Path('diagnostic-output/n1-6-external-deps.txt').write_text('\n'.join(external))
           if external:
               raise SystemExit('N1.6 BLOCKED: packaged FFmpeg still depends on Homebrew libraries: '+str(external))
-          print('N1.6 PASS: packaged ARM64 FFmpeg runs, codecs present, no Homebrew runtime dylibs.')
+          print('N1.6 PASS: packaged ARM64 FFmpeg runs with bundled codecs and no Homebrew runtime dylibs.')
           PY
       - name: Upload N1.6 evidence
         if: always()
