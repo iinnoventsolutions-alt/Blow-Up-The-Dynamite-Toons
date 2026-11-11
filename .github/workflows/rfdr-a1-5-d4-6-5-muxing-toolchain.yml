@@ -1,0 +1,48 @@
+name: RFDR A1.5 D4.6.5 Muxing Toolchain Gate
+on:
+  push:
+    branches: [RFDR-A1.5-D4.6.5-WebM-Muxing-Prototype]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  muxing-toolchain-gate:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Verify unchanged production build
+        run: npm run build
+      - name: Probe muxing verification toolchain
+        shell: bash
+        run: |
+          mkdir -p diagnostic-output
+          {
+            echo "runner=macos-15"
+            echo "node=$(node --version)"
+            echo "ffmpeg_path=$(command -v ffmpeg || echo missing)"
+            echo "ffprobe_path=$(command -v ffprobe || echo missing)"
+            if command -v ffmpeg >/dev/null 2>&1; then
+              ffmpeg -version | head -n 2
+              echo "webm_muxer:"
+              ffmpeg -hide_banner -muxers 2>/dev/null | grep -E '(^| )webm( |$)' || true
+              echo "vp8_opus_encoders:"
+              ffmpeg -hide_banner -encoders 2>/dev/null | grep -E 'libvpx|libopus' || true
+            fi
+            if command -v ffprobe >/dev/null 2>&1; then
+              ffprobe -version | head -n 2
+            fi
+          } | tee diagnostic-output/muxing-toolchain.txt
+      - name: Upload toolchain evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: RFDR-D4-6-5-toolchain-${{ github.run_id }}
+          path: diagnostic-output/
+          retention-days: 14
+          if-no-files-found: error
