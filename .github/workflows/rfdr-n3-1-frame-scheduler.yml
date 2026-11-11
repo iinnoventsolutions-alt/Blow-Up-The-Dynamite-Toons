@@ -1,0 +1,27 @@
+name: RFDR N3.1 Isolated Frame Scheduler Gate
+on:
+  push:
+    branches: [RFDR-A1.5-D4.6.5-WebM-Muxing-Prototype]
+    paths:
+      - 'src/deterministic-frame-scheduler.ts'
+      - 'tests/rfdr-n3-1-frame-scheduler.test.mjs'
+      - '.github/workflows/rfdr-n3-1-frame-scheduler.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  frame-scheduler:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install and check TypeScript
+        run: |
+          npm ci
+          npx tsc --noEmit
+      - name: N3.1 isolated scheduler regression
+        run: node --experimental-strip-types --test tests/rfdr-n3-1-frame-scheduler.test.mjs
