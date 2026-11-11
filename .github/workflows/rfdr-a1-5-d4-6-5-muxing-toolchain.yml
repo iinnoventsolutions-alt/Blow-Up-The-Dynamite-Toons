@@ -47,6 +47,8 @@ jobs:
             echo "libopus encoder:"
             ffmpeg -hide_banner -encoders | grep -E '^[[:space:]]*A[^[:space:]]*[[:space:]]+libopus[[:space:]]'
           } | tee diagnostic-output/muxing-toolchain.txt
+      - name: Validate combined VP8 Opus WebM container baseline
+        run: bash scripts/rfdr-d4-6-5b-container-baseline.sh
       - name: Upload toolchain evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
