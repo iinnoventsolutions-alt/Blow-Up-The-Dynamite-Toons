@@ -51,6 +51,8 @@ jobs:
         run: bash scripts/rfdr-d4-6-5b-container-baseline.sh
       - name: Install isolated muxer prototype dependency
         run: npm install --no-save --package-lock=false --ignore-scripts webm-muxer@5.1.4 esbuild@0.28.2
+      - name: Inspect muxer BlockGroup and DiscardPadding capabilities
+        run: node tests/rfdr-d4-6-5f-muxer-inspection.mjs
       - name: Bundle direct WebCodecs muxing prototype
         run: node -e "import('esbuild').then(m=>m.build({entryPoints:['tests/rfdr-d4-6-5c-browser-muxer.js'],bundle:true,format:'esm',platform:'browser',outfile:'diagnostic-output/d4-6-5c-bundle.js'}))"
       - name: Install Chromium for isolated prototype
