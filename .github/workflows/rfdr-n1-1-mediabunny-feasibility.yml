@@ -1,0 +1,45 @@
+name: RFDR N1.1 Mediabunny Feasibility Gate
+on:
+  push:
+    branches: [RFDR-A1.5-D4.6.5-WebM-Muxing-Prototype]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mediabunny-feasibility:
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Verify production build unchanged
+        run: npm run build
+      - name: Install isolated feasibility dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostic-output
+          version="$(npm view mediabunny version)"
+          echo "mediabunny_version=$version" | tee diagnostic-output/n1-1-provenance.txt
+          npm view "mediabunny@$version" license dist.integrity | tee -a diagnostic-output/n1-1-provenance.txt
+          npm install --no-save --package-lock=false --ignore-scripts "mediabunny@$version" esbuild@0.28.2
+          brew install ffmpeg
+          npx playwright install chromium
+      - name: Bundle isolated Mediabunny fixture
+        run: node -e "import('esbuild').then(m=>m.build({entryPoints:['tests/rfdr-n1-1-mediabunny-fixture.js'],bundle:true,format:'esm',platform:'browser',outfile:'diagnostic-output/n1-1-bundle.js'}))"
+      - name: Generate normal stress silent and Opus fixtures
+        run: node tests/rfdr-n1-1-mediabunny-browser.mjs
+      - name: Strict VP8 and Opus decoded duration gate
+        run: python3 scripts/rfdr-n1-1-strict-acceptance.py
+      - name: Upload N1.1 evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: RFDR-N1-1-RUNID
+          path: diagnostic-output/
+          retention-days: 14
+          if-no-files-found: error
