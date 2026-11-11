@@ -1,0 +1,42 @@
+name: RFDR N2 Deterministic Export RED Contract Gate
+on:
+  push:
+    branches: [RFDR-A1.5-D4.6.5-WebM-Muxing-Prototype]
+    paths:
+      - 'tests/rfdr-n2-deterministic-export-contract.test.mjs'
+      - '.github/workflows/rfdr-n2-red-contract.yml'
+      - 'src/deterministic-export-adapter.ts'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  n2-red-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Capture isolated N2 contract failures (RED expected)
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p diagnostic-output
+          node --experimental-strip-types --test tests/rfdr-n2-deterministic-export-contract.test.mjs > diagnostic-output/n2-red-contract.log 2>&1
+          result=$?
+          cat diagnostic-output/n2-red-contract.log
+          if [ "$result" -eq 0 ]; then
+            echo 'N2 contract now GREEN; inspect actual coverage before declaring implementation complete.'
+          else
+            grep -q 'not ok' diagnostic-output/n2-red-contract.log || exit 1
+            grep -q 'ERR_MODULE_NOT_FOUND' diagnostic-output/n2-red-contract.log || exit 1
+            echo 'N2 RED confirmed: production-facing deterministic adapter is not yet implemented.'
+          fi
+      - name: Upload RED evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: RFDR-N2-RED-Contract-Evidence
+          path: diagnostic-output/n2-red-contract.log
+          retention-days: 14
