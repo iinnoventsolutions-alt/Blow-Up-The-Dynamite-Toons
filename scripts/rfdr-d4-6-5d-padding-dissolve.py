@@ -5,7 +5,11 @@ Diagnostic first: strict audio-sample acceptance intentionally fails until muxin
 import json, subprocess, pathlib, sys
 root=pathlib.Path('diagnostic-output')
 def run(*args):
- return subprocess.check_output(args,stderr=subprocess.PIPE)
+ try:
+  return subprocess.check_output(args,stderr=subprocess.PIPE)
+ except subprocess.CalledProcessError as exc:
+  print(f'Command failed: {args}; stderr: {exc.stderr.decode(errors="replace")}',file=sys.stderr)
+  raise
 all_reports=[]
 for label in ('normal','stress'):
  path=root/f'd4-6-5c-{label}.webm'
@@ -14,7 +18,7 @@ for label in ('normal','stress'):
  audio_packets=[p for p in probe['packets'] if p['stream_index']==audio_stream['index']]
  first=audio_packets[0] if audio_packets else {}
  last=audio_packets[-1] if audio_packets else {}
- decoded=run('ffmpeg','-v','error','-i',str(path),'-map','0:v:0','-vsync','0','-f','rawvideo','-pix_fmt','rgb24','-')
+ decoded=run('ffmpeg','-v','error','-i',str(path),'-map','0:v:0','-f','rawvideo','-pix_fmt','rgb24','-')
  width=320;height=180;stride=width*height*3
  frames=len(decoded)//stride
  samples=[]
