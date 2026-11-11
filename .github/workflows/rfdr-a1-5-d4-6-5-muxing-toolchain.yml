@@ -64,6 +64,8 @@ jobs:
       - name: Investigate Opus stream-copy trim metadata
         if: success()
         run: python3 scripts/rfdr-d4-6-5e-trim-feasibility.py
+      - name: Prototype final Opus BlockGroup and DiscardPadding
+        run: python3 scripts/rfdr-d4-6-5h-padding-prototype.py
       - name: Inspect Opus padding and decoded dissolve (strict acceptance)
         run: python3 scripts/rfdr-d4-6-5d-padding-dissolve.py
       - name: Upload toolchain evidence
