@@ -1,0 +1,38 @@
+name: RFDR N3.8 Isolated Artwork-to-WebM Integration
+on:
+  push:
+    branches: [RFDR-A1.5-D4.6.5-WebM-Muxing-Prototype]
+    paths:
+      - 'tests/rfdr-n3-8-artwork-webm.mjs'
+      - '.github/workflows/rfdr-n3-8-artwork-webm.yml'
+      - 'src/deterministic-artwork-renderer.ts'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  artwork-webm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies and browser
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npx playwright install --with-deps chromium
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+      - name: Encode and verify isolated artwork WebM
+        run: node tests/rfdr-n3-8-artwork-webm.mjs
+      - name: Upload video and evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: RFDR-N3-8-Artwork-WebM
+          path: diagnostic-output/n3-8/
+          retention-days: 14
+          if-no-files-found: warn
