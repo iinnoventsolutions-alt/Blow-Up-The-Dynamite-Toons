@@ -17,7 +17,7 @@ jobs:
           cache: npm
       - name: Install prerequisites
         run: |
-          brew install pkg-config libvpx opus nasm
+          brew install pkg-config libvpx opus nasm ffmpeg
           npm ci
       - name: Build isolated non-GPL ARM64 FFmpeg
         shell: bash
@@ -101,11 +101,39 @@ jobs:
               raise SystemExit('N1.6 BLOCKED: packaged FFmpeg still depends on Homebrew libraries: '+str(external))
           print('N1.6 PASS: packaged ARM64 FFmpeg runs with bundled codecs and no Homebrew runtime dylibs.')
           PY
+      - name: N1.8 six-second encode and decode using packaged FFmpeg
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP=$(find release -maxdepth 4 -name '*.app' -type d -print -quit)
+          test -n "$APP"
+          export RFDR_FFMPEG_BIN="$PWD/$APP/Contents/Resources/ffmpeg"
+          test -x "$RFDR_FFMPEG_BIN"
+          # System ffprobe inspects output only; all encode/decode calls use the packaged binary.
+          command -v ffprobe
+          python3 scripts/rfdr-n1-3-ffmpeg-webm-feasibility.py | tee diagnostic-output/n1-8-packaged-results.log
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          rows=json.loads(Path('diagnostic-output/n1-3-ffmpeg-results.json').read_text())
+          assert len(rows)==4
+          for row in rows:
+              assert row['video_frames']==144
+              assert abs(row['duration']-6)<0.05
+              if 'audio' in row['case']:
+                  assert row['audio_samples']==288000
+              else:
+                  assert row['audio_samples'] is None
+          Path('diagnostic-output/n1-8-packaged-results.json').write_text(json.dumps(rows,indent=2))
+          print('N1.8 PASS: packaged ARM64 FFmpeg produced all four six-second WebM fixtures.')
+          PY
       - name: Upload N1.6 evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: RFDR-N1-6-Packaging-Evidence
-          path: diagnostic-output/n1-6-*
+          path: |
+            diagnostic-output/n1-6-*
+            diagnostic-output/n1-8-*
           retention-days: 14
           if-no-files-found: warn
