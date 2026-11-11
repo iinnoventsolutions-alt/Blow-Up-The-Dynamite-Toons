@@ -1,12 +1,16 @@
 import {chromium} from 'playwright';
 import {mkdir,writeFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
+import {createServer} from 'node:http';
 
 await mkdir('diagnostic-output',{recursive:true});
+const server=createServer((req,res)=>{res.writeHead(200,{'content-type':'text/html; charset=utf-8'});res.end('<!doctype html><title>WebCodecs feasibility</title>');});
+await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+const port=server.address().port;
 const browser=await chromium.launch({headless:true});
 try {
  const page=await browser.newPage();
- await page.goto('about:blank');
+ await page.goto(`http://127.0.0.1:${port}/`);
  const result=await page.evaluate(async()=>{
   const result={secureContext:isSecureContext,videoEncoder:typeof VideoEncoder==='function',videoFrame:typeof VideoFrame==='function',audioEncoder:typeof AudioEncoder==='function',audioData:typeof AudioData==='function',mediaRecorder:typeof MediaRecorder==='function',webmMuxerBundled:false};
   if(!result.videoEncoder||!result.videoFrame)return result;
@@ -42,4 +46,4 @@ try {
  assert.equal(result.errors.length,0);
  assert.equal(result.encodedChunks,72);
  assert(result.monotonic&&result.timestampMatchesStoryboard,'Explicit encoded chunk timestamps did not match storyboard');
-} finally {await browser.close();}
+} finally {await browser.close();await new Promise(resolve=>server.close(resolve));}
