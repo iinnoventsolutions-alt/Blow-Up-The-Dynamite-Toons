@@ -41,7 +41,7 @@ try{
  const decoded=execFileSync('ffmpeg',['-v','error','-i',video,'-f','rawvideo','-pix_fmt','rgb24','-']);
  assert.equal(decoded.length,8*64*64*3);
  const center=i=>[...decoded.subarray((i*64*64+32*64+32)*3,(i*64*64+32*64+32)*3+3)];
- const first=center(0),last=center(7),mid=center(3);
+ const first=center(0),last=center(7),mid=center(2);
  assert(first[0]>first[2]+100,'First artwork frame is red');
  assert(last[2]>last[0]+100,'Last artwork frame is blue');
  assert(mid[0]>10&&mid[2]>10,'Transition blends red and blue');
