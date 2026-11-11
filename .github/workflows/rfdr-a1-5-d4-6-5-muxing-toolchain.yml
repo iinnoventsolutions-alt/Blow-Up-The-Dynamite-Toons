@@ -70,6 +70,12 @@ jobs:
         run: python3 scripts/rfdr-d4-6-5i-corrected-acceptance.py
       - name: Validate corrected WebM Chromium playback and seeking
         run: node tests/rfdr-d4-6-5j-browser-playback.mjs
+      - name: Bundle extended-duration fixture
+        run: node -e "import('esbuild').then(m=>m.build({entryPoints:['tests/rfdr-d4-6-5k-browser-fixture.js'],bundle:true,format:'esm',platform:'browser',outfile:'diagnostic-output/d4-6-5k-bundle.js'}))"
+      - name: Generate extended-duration normal and stress WebM
+        run: node tests/rfdr-d4-6-5k-extended-muxing.mjs
+      - name: Validate extended-duration audio and dissolve acceptance
+        run: python3 scripts/rfdr-d4-6-5k-extended-acceptance.py
       - name: Confirm original muxer output remains an expected failing negative control
         shell: bash
         run: |
