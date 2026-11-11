@@ -66,8 +66,21 @@ jobs:
         run: python3 scripts/rfdr-d4-6-5e-trim-feasibility.py
       - name: Prototype final Opus BlockGroup and DiscardPadding
         run: python3 scripts/rfdr-d4-6-5h-padding-prototype.py
-      - name: Inspect Opus padding and decoded dissolve (strict acceptance)
-        run: python3 scripts/rfdr-d4-6-5d-padding-dissolve.py
+      - name: Validate corrected WebM audio metadata and dissolve (strict acceptance)
+        run: python3 scripts/rfdr-d4-6-5i-corrected-acceptance.py
+      - name: Confirm original muxer output remains an expected failing negative control
+        shell: bash
+        run: |
+          set +e
+          python3 scripts/rfdr-d4-6-5d-padding-dissolve.py > diagnostic-output/d4-6-5i-original-negative-control.log 2>&1
+          code=$?
+          set -e
+          cat diagnostic-output/d4-6-5i-original-negative-control.log
+          if [ "$code" -eq 0 ]; then
+            echo 'Unexpected original baseline PASS: negative-control assumption changed.'
+            exit 1
+          fi
+          echo 'Original uncorrected baseline correctly fails; corrected-container gate is authoritative.'
       - name: Upload toolchain evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
