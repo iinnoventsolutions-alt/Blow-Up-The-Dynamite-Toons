@@ -28,7 +28,7 @@ try{
  const raw=Buffer.concat(result.map(f=>Buffer.from(f.rgba)));
  const rawPath=root+'/frames.rgba',video=root+'/artwork.webm';
  await writeFile(rawPath,raw);
- execFileSync('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','rawvideo','-pixel_format','rgba','-video_size','64x64','-framerate','8','-i',rawPath,'-an','-c:v','libvpx','-b:v','400k','-deadline','good','-cpu-used','2','-f','webm',video]);
+ execFileSync('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','rawvideo','-pixel_format','rgba','-video_size','64x64','-framerate','8','-i',rawPath,'-an','-vf','format=yuv420p','-c:v','libvpx','-b:v','400k','-deadline','good','-cpu-used','2','-f','webm',video]);
  const probe=JSON.parse(execFileSync('ffprobe',['-v','error','-count_frames','-show_streams','-show_format','-of','json',video],{encoding:'utf8'}));
  const stream=probe.streams.find(s=>s.codec_type==='video');
  assert.equal(stream.codec_name,'vp8');
