@@ -1,4 +1,4 @@
-name: RFDR N2 Deterministic Export RED Contract Gate
+name: RFDR N2/N3.4 Deterministic Fixture Contract Gate
 on:
   push:
     branches: [RFDR-A1.5-D4.6.5-WebM-Muxing-Prototype]
@@ -6,11 +6,14 @@ on:
       - 'tests/rfdr-n2-deterministic-export-contract.test.mjs'
       - '.github/workflows/rfdr-n2-red-contract.yml'
       - 'src/deterministic-export-adapter.ts'
+      - 'src/deterministic-frame-metadata.ts'
+      - 'src/deterministic-audio-mixer.ts'
+      - 'tests/rfdr-n3-4-adapter-integration.test.mjs'
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  n2-red-contract:
+  n2-fixture-contract:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -18,27 +21,20 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
-      - name: Capture isolated N2 contract failures (RED expected)
+      - name: Install and type-check
+        run: |
+          npm ci
+          npx tsc --noEmit
+      - name: Validate N2 and N3.4 GREEN fixture contracts
         shell: bash
         run: |
-          set -uo pipefail
+          set -euo pipefail
           mkdir -p diagnostic-output
-          result=0
-          node --experimental-strip-types --test tests/rfdr-n2-deterministic-export-contract.test.mjs > diagnostic-output/n2-red-contract.log 2>&1 || result=$?
-          cat diagnostic-output/n2-red-contract.log
-          if [ "$result" -eq 0 ]; then
-            echo 'N2 contract now GREEN; inspect actual coverage before declaring implementation complete.'
-          else
-            # Node 24 uses a spec reporter in CI; do not assume TAP 'not ok' lines.
-            count=$(grep -c 'ERR_MODULE_NOT_FOUND' diagnostic-output/n2-red-contract.log || true)
-            test "$count" -ge 6 || { echo "Expected six missing-adapter failures; found $count"; exit 1; }
-            grep -q 'src/deterministic-export-adapter.ts' diagnostic-output/n2-red-contract.log || exit 1
-            echo 'N2 RED confirmed: production-facing deterministic adapter is not yet implemented.'
-          fi
-      - name: Upload RED evidence
+          node --experimental-strip-types --test tests/rfdr-n2-deterministic-export-contract.test.mjs tests/rfdr-n3-4-adapter-integration.test.mjs tests/rfdr-n3-1-frame-scheduler.test.mjs tests/rfdr-n3-2-frame-metadata.test.mjs tests/rfdr-n3-3-audio-mixer.test.mjs 2>&1 | tee diagnostic-output/n2-n34-contract.log
+      - name: Upload contract evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: RFDR-N2-RED-Contract-Evidence
-          path: diagnostic-output/n2-red-contract.log
+          name: RFDR-N2-N34-GREEN-Contract-Evidence
+          path: diagnostic-output/n2-n34-contract.log
           retention-days: 14
