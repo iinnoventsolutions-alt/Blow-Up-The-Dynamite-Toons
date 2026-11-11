@@ -1,0 +1,34 @@
+name: RFDR N1.4 FFmpeg Distribution Audit
+on:
+  push:
+    branches: [RFDR-A1.5-D4.6.5-WebM-Muxing-Prototype]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Inspect FFmpeg binary and dependency licensing
+        run: |
+          brew install ffmpeg
+          python3 scripts/rfdr-n1-4-ffmpeg-distribution-audit.py
+      - name: Validate packaging remains unchanged
+        run: |
+          python3 - <<'PY'
+          import json
+          p=json.load(open('package.json'))
+          assert not p['build'].get('extraResources'), 'Unexpected FFmpeg resource integration'
+          assert not any('ffmpeg' in str(x).lower() for x in p['build']['files']), 'Unexpected FFmpeg packaging'
+          print('N1.4 PASS: production packaging unchanged; no redistributable binary approved.')
+          PY
+      - name: Upload distribution evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: RFDR-N1-4-Audit
+          path: diagnostic-output/n1-4-*
+          retention-days: 14
+          if-no-files-found: error
