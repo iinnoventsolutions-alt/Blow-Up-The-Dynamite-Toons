@@ -1,0 +1,79 @@
+name: RFDR N1.6 Isolated ARM64 Packaging Gate
+on:
+  push:
+    branches: [RFDR-A1.5-D4.6.5-WebM-Muxing-Prototype]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  packaged-arm64:
+    runs-on: macos-15
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install prerequisites
+        run: |
+          brew install pkg-config libvpx opus nasm
+          npm ci
+      - name: Build isolated non-GPL ARM64 FFmpeg
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostic-output
+          curl --fail --location --retry 3 --output /tmp/n1-6-ffmpeg.tar.xz https://ffmpeg.org/releases/ffmpeg-8.0.1.tar.xz
+          mkdir -p /tmp/n1-6-src
+          tar -xf /tmp/n1-6-ffmpeg.tar.xz -C /tmp/n1-6-src --strip-components=1
+          cd /tmp/n1-6-src
+          ./configure --prefix="$RUNNER_TEMP/n1-6-lgpl" --disable-gpl --disable-nonfree --disable-version3 --disable-autodetect --enable-libvpx --enable-libopus --enable-encoder=libvpx_vp8,libopus --enable-decoder=vp8,opus,pcm_s16le --enable-demuxer=matroska,rawvideo,wav --enable-muxer=webm,s16le --enable-parser=opus,vp8 --enable-protocol=file,pipe --disable-doc --disable-ffplay --disable-ffprobe --disable-debug --enable-small --pkg-config-flags=--static
+          make -j 4
+          make install
+          mkdir -p "$GITHUB_WORKSPACE/n1-6-resources"
+          cp "$RUNNER_TEMP/n1-6-lgpl/bin/ffmpeg" "$GITHUB_WORKSPACE/n1-6-resources/ffmpeg"
+          otool -L "$GITHUB_WORKSPACE/n1-6-resources/ffmpeg" | tee "$GITHUB_WORKSPACE/diagnostic-output/n1-6-linked-libraries.txt"
+          "$GITHUB_WORKSPACE/n1-6-resources/ffmpeg" -buildconf > "$GITHUB_WORKSPACE/diagnostic-output/n1-6-buildconf.txt"
+          file "$GITHUB_WORKSPACE/n1-6-resources/ffmpeg" | tee "$GITHUB_WORKSPACE/diagnostic-output/n1-6-architecture.txt"
+      - name: Package ARM64 Electron app with isolated FFmpeg resource
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build
+          npx electron-builder --mac dir --arm64 --publish never -c.extraResources.0.from=n1-6-resources/ffmpeg -c.extraResources.0.to=ffmpeg
+          find release -name '*.app' -maxdepth 4 -print | tee diagnostic-output/n1-6-apps.txt
+      - name: Validate packaged binary and runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP=$(find release -maxdepth 4 -name '*.app' -type d -print -quit)
+          test -n "$APP"
+          FFMPEG="$APP/Contents/Resources/ffmpeg"
+          test -x "$FFMPEG"
+          file "$FFMPEG" | tee diagnostic-output/n1-6-packaged-binary.txt
+          lipo -archs "$FFMPEG" | tee diagnostic-output/n1-6-packaged-archs.txt
+          test "$(lipo -archs "$FFMPEG")" = arm64
+          "$FFMPEG" -version > diagnostic-output/n1-6-packaged-version.txt
+          "$FFMPEG" -encoders > diagnostic-output/n1-6-packaged-encoders.txt
+          grep -Eq '^[[:space:]]*V[^[:space:]]*[[:space:]]+libvpx([[:space:]]|$)' diagnostic-output/n1-6-packaged-encoders.txt
+          grep -Eq '^[[:space:]]*A[^[:space:]]*[[:space:]]+libopus([[:space:]]|$)' diagnostic-output/n1-6-packaged-encoders.txt
+          codesign --verify --deep --verbose=2 "$APP" 2>&1 | tee diagnostic-output/n1-6-signature.txt
+          otool -L "$FFMPEG" > diagnostic-output/n1-6-packaged-dylibs.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          deps=Path('diagnostic-output/n1-6-packaged-dylibs.txt').read_text().splitlines()[1:]
+          external=[line.strip() for line in deps if '/opt/homebrew/' in line or '/usr/local/' in line]
+          Path('diagnostic-output/n1-6-external-deps.txt').write_text('\n'.join(external))
+          if external:
+              raise SystemExit('N1.6 BLOCKED: packaged FFmpeg still depends on Homebrew libraries: '+str(external))
+          print('N1.6 PASS: packaged ARM64 FFmpeg runs, codecs present, no Homebrew runtime dylibs.')
+          PY
+      - name: Upload N1.6 evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: RFDR-N1-6-Packaging-Evidence
+          path: diagnostic-output/n1-6-*
+          retention-days: 14
+          if-no-files-found: warn
