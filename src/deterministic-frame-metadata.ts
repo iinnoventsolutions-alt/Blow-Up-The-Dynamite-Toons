@@ -2,7 +2,7 @@
  * N3.2 isolated camera/transition metadata resolver for deterministic fixtures.
  * This does not replace production sequential-camera or transitionAt logic.
  */
-import { scheduleDeterministicFrames, type N31ScheduleInput } from './deterministic-frame-scheduler';
+import { scheduleDeterministicFrames, type N31ScheduleInput } from './deterministic-frame-scheduler.ts';
 
 export interface N32Keyframe { frame: number; x: number }
 export interface N32CameraTrack { panelId: string; keyframes: readonly N32Keyframe[] }
