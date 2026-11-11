@@ -49,6 +49,14 @@ jobs:
           } | tee diagnostic-output/muxing-toolchain.txt
       - name: Validate combined VP8 Opus WebM container baseline
         run: bash scripts/rfdr-d4-6-5b-container-baseline.sh
+      - name: Install isolated muxer prototype dependency
+        run: npm install --no-save --package-lock=false --ignore-scripts webm-muxer@5.1.4
+      - name: Bundle direct WebCodecs muxing prototype
+        run: node -e "import('esbuild').then(m=>m.build({entryPoints:['tests/rfdr-d4-6-5c-browser-muxer.js'],bundle:true,format:'esm',platform:'browser',outfile:'diagnostic-output/d4-6-5c-bundle.js'}))"
+      - name: Install Chromium for isolated prototype
+        run: npx playwright install chromium
+      - name: Test direct WebCodecs WebM muxing
+        run: node tests/rfdr-d4-6-5c-direct-muxing.mjs
       - name: Upload toolchain evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
