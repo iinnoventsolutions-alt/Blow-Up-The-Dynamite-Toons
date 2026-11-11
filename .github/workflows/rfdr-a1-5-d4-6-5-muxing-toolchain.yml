@@ -68,6 +68,8 @@ jobs:
         run: python3 scripts/rfdr-d4-6-5h-padding-prototype.py
       - name: Validate corrected WebM audio metadata and dissolve (strict acceptance)
         run: python3 scripts/rfdr-d4-6-5i-corrected-acceptance.py
+      - name: Validate corrected WebM Chromium playback and seeking
+        run: node tests/rfdr-d4-6-5j-browser-playback.mjs
       - name: Confirm original muxer output remains an expected failing negative control
         shell: bash
         run: |
