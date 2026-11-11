@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """N1.3 isolated FFmpeg WebM VP8/Opus proof; no production integration."""
-import json,math,pathlib,struct,subprocess,wave
+import json,math,os,pathlib,struct,subprocess,wave
+FFMPEG=os.environ.get('RFDR_FFMPEG_BIN','ffmpeg')
 root=pathlib.Path('diagnostic-output');root.mkdir(exist_ok=True)
 W,H,FPS,FRAMES,RATE,SAMPLES=320,180,24,144,48000,288000
 def run(args):
@@ -25,7 +26,7 @@ for audio in (False,True):
       value=int(5000*math.sin(2*math.pi*440*i/RATE)) if i<RATE*3 else 0
       block.extend(struct.pack('<h',value))
      w.writeframesraw(block)
-  cmd=['ffmpeg','-hide_banner','-loglevel','error','-y','-f','rawvideo','-pixel_format','rgb24','-video_size',f'{W}x{H}','-framerate',str(FPS),'-i',str(raw)]
+  cmd=[FFMPEG,'-hide_banner','-loglevel','error','-y','-f','rawvideo','-pixel_format','rgb24','-video_size',f'{W}x{H}','-framerate',str(FPS),'-i',str(raw)]
   if audio:cmd+=['-i',str(wav)]
   cmd+=['-map','0:v:0']
   if audio:cmd+=['-map','1:a:0']
@@ -43,7 +44,7 @@ for audio in (False,True):
   samples=None
   if audio:
    assert next(s for s in probe['streams'] if s['codec_type']=='audio')['codec_name']=='opus'
-   decoded=subprocess.run(['ffmpeg','-v','error','-i',str(output),'-map','0:a:0','-ar','48000','-ac','1','-f','s16le','-'],check=True,capture_output=True).stdout
+   decoded=subprocess.run([FFMPEG,'-v','error','-i',str(output),'-map','0:a:0','-ar','48000','-ac','1','-f','s16le','-'],check=True,capture_output=True).stdout
    samples=len(decoded)//2
    assert samples==SAMPLES,(label,samples)
   result={'case':label,'duration':duration,'video_frames':int(video['nb_read_frames']),'audio_samples':samples,'bytes':output.stat().st_size}
