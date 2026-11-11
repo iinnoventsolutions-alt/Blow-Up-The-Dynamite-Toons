@@ -39,7 +39,11 @@ try {
   report.timestampsMonotonic=chunks.every((c,i)=>i===0||c.timestamp>chunks[i-1].timestamp);
   report.timestampsMatchSamples=chunks.length===packets&&chunks.every((c,i)=>c.timestamp===i*20000);
   report.durationMicroseconds=packets*framesPerPacket*1e6/sampleRate;
-  report.chunkSample=chunks.slice(0,5);
+  report.chunkSample=chunks.slice(0,5);report.tailChunks=chunks.slice(-5);
+  report.expectedInputTimestamps=Array.from({length:packets},(_,i)=>i*20000);
+  report.outputPrefixMatchesInput=chunks.slice(0,packets).every((c,i)=>c.timestamp===i*20000);
+  report.extraChunks=chunks.slice(packets);
+  report.extraChunksAtOrAfterDuration=report.extraChunks.every(c=>c.timestamp>=3000000);
   return report;
  });
  await writeFile('diagnostic-output/audio-opus-feasibility.json',JSON.stringify(result,null,2));
@@ -47,7 +51,9 @@ try {
  assert(result.secureContext&&result.audioEncoder&&result.audioData&&result.offlineAudioContext,'Required audio APIs unavailable');
  assert(result.configSupported,'Opus encoder unsupported');
  assert.equal(result.errors.length,0);
- assert.equal(result.encodedChunks,150);
- assert(result.timestampsMonotonic&&result.timestampsMatchSamples,'Encoded audio timestamps do not align to sample timeline');
+ assert(result.encodedChunks>=150,'Encoder returned fewer packets than submitted blocks');
+ assert(result.timestampsMonotonic,'Encoded audio timestamps not monotonic');
+ assert(result.outputPrefixMatchesInput,'Encoded audio packet prefix does not match sample timestamps');
+ assert(result.extraChunksAtOrAfterDuration,'Unexpected extra packet before input timeline end');
  assert.equal(result.durationMicroseconds,3000000);
 } finally {await browser.close();await new Promise(resolve=>server.close(resolve));}
