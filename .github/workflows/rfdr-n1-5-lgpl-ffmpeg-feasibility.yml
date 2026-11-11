@@ -31,8 +31,8 @@ jobs:
           otool -L "$RUNNER_TEMP/n1-5-lgpl/bin/ffmpeg" > "$GITHUB_WORKSPACE/diagnostic-output/n1-5-dylibs.txt"
           file "$RUNNER_TEMP/n1-5-lgpl/bin/ffmpeg" > "$GITHUB_WORKSPACE/diagnostic-output/n1-5-architecture.txt"
           test "$(uname -m)" = arm64
-          grep -q libvpx_vp8 "$GITHUB_WORKSPACE/diagnostic-output/n1-5-encoders.txt"
-          grep -q libopus "$GITHUB_WORKSPACE/diagnostic-output/n1-5-encoders.txt"
+          grep -Eq '^[[:space:]]*V[^[:space:]]*[[:space:]]+libvpx([[:space:]]|$)' "$GITHUB_WORKSPACE/diagnostic-output/n1-5-encoders.txt"
+          grep -Eq '^[[:space:]]*A[^[:space:]]*[[:space:]]+libopus([[:space:]]|$)' "$GITHUB_WORKSPACE/diagnostic-output/n1-5-encoders.txt"
           ! grep -q -- '--enable-gpl' "$GITHUB_WORKSPACE/diagnostic-output/n1-5-buildconf.txt"
           ! grep -q -- '--enable-nonfree' "$GITHUB_WORKSPACE/diagnostic-output/n1-5-buildconf.txt"
           echo 'N1.5 PASS: non-GPL FFmpeg built for ARM64 with VP8 and Opus.'
