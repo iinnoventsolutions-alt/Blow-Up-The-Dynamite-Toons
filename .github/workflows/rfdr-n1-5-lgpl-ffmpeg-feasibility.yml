@@ -1,0 +1,46 @@
+name: RFDR N1.5 LGPL FFmpeg Build Feasibility
+on:
+  push:
+    branches: [RFDR-A1.5-D4.6.5-WebM-Muxing-Prototype]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  lgpl-ffmpeg:
+    runs-on: macos-15
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install build prerequisites
+        run: brew install pkg-config libvpx opus nasm
+      - name: Build isolated non-GPL FFmpeg with VP8 and Opus
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostic-output
+          curl --fail --location --retry 3 --output /tmp/ffmpeg-8.0.1.tar.xz https://ffmpeg.org/releases/ffmpeg-8.0.1.tar.xz
+          mkdir -p /tmp/n1-5-ffmpeg
+          tar -xf /tmp/ffmpeg-8.0.1.tar.xz -C /tmp/n1-5-ffmpeg --strip-components=1
+          cd /tmp/n1-5-ffmpeg
+          ./configure --prefix="$RUNNER_TEMP/n1-5-lgpl" --disable-gpl --disable-nonfree --disable-version3 --disable-autodetect --enable-libvpx --enable-libopus --enable-encoder=libvpx_vp8,libopus --enable-decoder=vp8,opus,pcm_s16le --enable-demuxer=matroska,rawvideo,wav --enable-muxer=webm,s16le --enable-parser=opus,vp8 --enable-protocol=file,pipe --disable-doc --disable-ffplay --disable-ffprobe --disable-debug --enable-small --pkg-config-flags=--static
+          make -j 4
+          make install
+          "$RUNNER_TEMP/n1-5-lgpl/bin/ffmpeg" -version > "$GITHUB_WORKSPACE/diagnostic-output/n1-5-version.txt"
+          "$RUNNER_TEMP/n1-5-lgpl/bin/ffmpeg" -buildconf > "$GITHUB_WORKSPACE/diagnostic-output/n1-5-buildconf.txt"
+          "$RUNNER_TEMP/n1-5-lgpl/bin/ffmpeg" -encoders > "$GITHUB_WORKSPACE/diagnostic-output/n1-5-encoders.txt"
+          otool -L "$RUNNER_TEMP/n1-5-lgpl/bin/ffmpeg" > "$GITHUB_WORKSPACE/diagnostic-output/n1-5-dylibs.txt"
+          file "$RUNNER_TEMP/n1-5-lgpl/bin/ffmpeg" > "$GITHUB_WORKSPACE/diagnostic-output/n1-5-architecture.txt"
+          test "$(uname -m)" = arm64
+          grep -q libvpx_vp8 "$GITHUB_WORKSPACE/diagnostic-output/n1-5-encoders.txt"
+          grep -q libopus "$GITHUB_WORKSPACE/diagnostic-output/n1-5-encoders.txt"
+          ! grep -q -- '--enable-gpl' "$GITHUB_WORKSPACE/diagnostic-output/n1-5-buildconf.txt"
+          ! grep -q -- '--enable-nonfree' "$GITHUB_WORKSPACE/diagnostic-output/n1-5-buildconf.txt"
+          echo 'N1.5 PASS: non-GPL FFmpeg built for ARM64 with VP8 and Opus.'
+      - name: Upload N1.5 build evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: RFDR-N1-5-LGPL-Feasibility
+          path: diagnostic-output/n1-5-*
+          retention-days: 14
+          if-no-files-found: warn
