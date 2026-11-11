@@ -15,7 +15,7 @@ try {
   const result={secureContext:isSecureContext,videoEncoder:typeof VideoEncoder==='function',videoFrame:typeof VideoFrame==='function',audioEncoder:typeof AudioEncoder==='function',audioData:typeof AudioData==='function',mediaRecorder:typeof MediaRecorder==='function',webmMuxerBundled:false};
   if(!result.videoEncoder||!result.videoFrame)return result;
   const codec='vp8',width=320,height=180,fps=24,count=72;
-  const stress=location.search.includes('stress');
+  const stress=new URLSearchParams(location.search).get('stress')==='stress';
   const config={codec,width,height,bitrate:500000,framerate:fps};
   const support=await VideoEncoder.isConfigSupported(config);
   result.videoConfigSupported=support.supported;
