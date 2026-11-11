@@ -57,6 +57,8 @@ jobs:
         run: npx playwright install chromium
       - name: Test direct WebCodecs WebM muxing
         run: node tests/rfdr-d4-6-5c-direct-muxing.mjs
+      - name: Inspect Opus padding and decoded dissolve (strict acceptance)
+        run: python3 scripts/rfdr-d4-6-5d-padding-dissolve.py
       - name: Upload toolchain evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
