@@ -23,8 +23,8 @@ jobs:
         run: |
           set -uo pipefail
           mkdir -p diagnostic-output
-          node --experimental-strip-types --test tests/rfdr-n2-deterministic-export-contract.test.mjs > diagnostic-output/n2-red-contract.log 2>&1
-          result=$?
+          result=0
+          node --experimental-strip-types --test tests/rfdr-n2-deterministic-export-contract.test.mjs > diagnostic-output/n2-red-contract.log 2>&1 || result=$?
           cat diagnostic-output/n2-red-contract.log
           if [ "$result" -eq 0 ]; then
             echo 'N2 contract now GREEN; inspect actual coverage before declaring implementation complete.'
