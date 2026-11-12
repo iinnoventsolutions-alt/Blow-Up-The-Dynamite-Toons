@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
-import {mkdtempSync,mkdirSync,writeFileSync,symlinkSync,chmodSync,rmSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,symlinkSync,chmodSync,rmSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 const require=createRequire(import.meta.url);
@@ -13,7 +13,7 @@ try{
  assert.throws(()=>packagedEncoder(resources,'darwin'),/ENOENT/);
  const binary=path.join(resources,'ffmpeg');
  writeFileSync(binary,'#!/bin/sh\\nprintf "ffmpeg version N3.15-test\\\\n"\\n',{mode:0o755});
- assert.equal(packagedEncoder(resources,'darwin'),binary);
+ assert.equal(packagedEncoder(resources,'darwin'),realpathSync(binary));
  const probe=await probePackagedEncoder(resources);
  assert.match(probe.version,/N3.15-test/);
  chmodSync(binary,0o644);assert.throws(()=>packagedEncoder(resources,'darwin'),/not executable/);
