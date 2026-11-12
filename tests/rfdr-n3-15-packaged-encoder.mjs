@@ -12,7 +12,7 @@ try{
  assert.throws(()=>packagedEncoder('relative','darwin'),/resources path/);
  assert.throws(()=>packagedEncoder(resources,'darwin'),/ENOENT/);
  const binary=path.join(resources,'ffmpeg');
- writeFileSync(binary,'#!/bin/sh\\nprintf "ffmpeg version N3.15-test\\\\n"\\n',{mode:0o755});
+ writeFileSync(binary,'#!/bin/sh\nprintf "ffmpeg version N3.15-test\\n"\n',{mode:0o755});
  assert.equal(packagedEncoder(resources,'darwin'),realpathSync(binary));
  const probe=await probePackagedEncoder(resources);
  assert.match(probe.version,/N3.15-test/);
@@ -21,7 +21,7 @@ try{
  const external=path.join(root,'external');writeFileSync(external,'x',{mode:0o755});
  symlinkSync(external,binary);assert.throws(()=>packagedEncoder(resources,'darwin'),/external symlink/);
  rmSync(binary);
- writeFileSync(binary,'#!/bin/sh\\nsleep 2\\n',{mode:0o755});
+ writeFileSync(binary,'#!/bin/sh\nsleep 2\n',{mode:0o755});
  await assert.rejects(probePackagedEncoder(resources,{timeoutMs:50}),/timed out/);
  const controller=new AbortController();controller.abort();
  await assert.rejects(probePackagedEncoder(resources,{signal:controller.signal}),/abort/i);
