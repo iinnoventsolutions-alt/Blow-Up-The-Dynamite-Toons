@@ -134,6 +134,28 @@ try{
  console.log('N3.9.4 compatibility',JSON.stringify({stream:audioStream,padding,independentOriginal,independentDemuxed}));
  assert.equal(independentOriginal.exit,0,'Independent decoder must accept standalone Opus');
  assert.equal(independentDemuxed.exit,0,'Independent decoder must accept WebM-demuxed Opus');
+ // N3.9.5: consolidated acceptance gate, with only the documented FFmpeg warning tolerated.
+ assert.deepEqual(mismatches,[],'Standalone and WebM Opus packet payloads must match');
+ assert.equal(originalPackets.length,51,'Expected 51 encoded Opus packets');
+ assert.equal(Number(audioStream.sample_rate),48000);
+ assert.equal(Number(audioStream.initial_padding),312);
+ assert(padding.some(p=>Number(p.discard_padding)===648),'Final Opus discard padding must be preserved');
+ assert.equal(standaloneEvidence.warnings.length,0,'Standalone Opus should decode without warnings');
+ const knownWarning=/Error parsing Opus packet header\\./;
+ const unexpectedWarnings=webmEvidence.warnings.filter(w=>!knownWarning.test(w));
+ assert.deepEqual(unexpectedWarnings,[],'Unexpected WebM decoder warnings');
+ const regression={
+  checkpoint:'RFDR N3.9.5',status:'PASS',video:{codec:'vp8',frames:8,fps:8,pts,visual:{first,mid,last}},
+  audio:{codec:'opus',sampleRate:48000,decodedSamples:samples,packetCount:originalPackets.length,
+   payloadMismatches:mismatches.length,preSkip:Number(audioStream.initial_padding),discardPadding:648,
+   independentDecoders:{standalone:independentOriginal.exit,demuxed:independentDemuxed.exit},
+   rms:{before,during,after}},
+  durationSeconds:Number(avProbe.format.duration),
+  knownFinding:{classification:'FFmpeg WebM/Opus decoder warning; packet payloads identical and independent decoding passes',
+   warningObserved:rootCause.webmWarning,warningText:'Error parsing Opus packet header.'}
+ };
+ await writeFile(root+'/n3-9-5-regression.json',JSON.stringify(regression,null,2));
+ console.log('N3.9.5 consolidated regression',JSON.stringify(regression));
  const avReport={status:'PASS',videoFrames:8,decodedAudioSamples:samples,duration:Number(avProbe.format.duration),codecs:avProbe.streams.map(s=>s.codec_name),rms:{before,during,after}};
  await writeFile(root+'/av-report.json',JSON.stringify(avReport,null,2));
  console.log('N3.9',JSON.stringify(avReport));
