@@ -1,0 +1,25 @@
+name: RFDR N3.15-B Isolated FFmpeg Sink
+on:
+  push:
+    branches: [RFDR-A1.5-D4.6.5-WebM-Muxing-Prototype]
+    paths:
+      - 'desktop/isolated-ffmpeg-sink.cjs'
+      - 'tests/rfdr-n3-15b-ffmpeg-sink.mjs'
+      - '.github/workflows/rfdr-n3-15b-ffmpeg-sink.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sink-contract:
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: node tests/rfdr-n3-15b-ffmpeg-sink.mjs
+      - run: node tests/rfdr-n3-15-packaged-encoder.mjs
