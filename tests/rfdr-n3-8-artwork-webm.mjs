@@ -81,6 +81,22 @@ try{
  await writeFile(root+'/opus-packet-diagnostics.json',JSON.stringify(packetReport,null,2));
  console.log('N3.9.1 packet diagnostics',JSON.stringify(packetReport));
  assert(packetRows.length>0&&monotonic&&decodeCheck.status===0,'Opus packet timestamps and decoder must be valid');
+ // N3.9.2: isolate encoder output from WebM muxing, retaining exact PCM input.
+ const standalone=root+'/standalone.opus';
+ execFileSync('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','f32le','-ar','48000','-ac','1','-i',audioPath,'-c:a','libopus','-b:a','64k','-f','opus',standalone]);
+ const inspect=(file)=>{
+  const decoded=spawnSync('ffmpeg',['-hide_banner','-v','warning','-i',file,'-map','0:a:0','-f','null','-'],{encoding:'utf8'});
+  const packets=JSON.parse(execFileSync('ffprobe',['-v','error','-select_streams','a:0','-show_packets','-show_entries','packet=pts_time,duration_time,size,flags','-of','json',file],{encoding:'utf8'})).packets??[];
+  const warnings=(decoded.stderr??'').split('\\n').filter(x=>/opus|error|invalid|corrupt/i.test(x));
+  return {exit:decoded.status,packetCount:packets.length,firstPTS:packets[0]?.pts_time,lastPTS:packets.at(-1)?.pts_time,packetSizes:packets.map(p=>Number(p.size)),warnings};
+ };
+ const standaloneEvidence=inspect(standalone),webmEvidence=inspect(muxed);
+ const rootCause={standalone:standaloneEvidence,webm:webmEvidence,encoderWarning:standaloneEvidence.warnings.some(x=>/Error parsing Opus packet header/.test(x)),webmWarning:webmEvidence.warnings.some(x=>/Error parsing Opus packet header/.test(x))};
+ await writeFile(root+'/opus-root-cause.json',JSON.stringify(rootCause,null,2));
+ console.log('N3.9.2 root cause',JSON.stringify({...rootCause,standalone:{...standaloneEvidence,packetSizes:undefined},webm:{...webmEvidence,packetSizes:undefined}}));
+ assert.equal(standaloneEvidence.exit,0);
+ assert.equal(webmEvidence.exit,0);
+ assert(standaloneEvidence.packetCount>0&&webmEvidence.packetCount>0);
  const avReport={status:'PASS',videoFrames:8,decodedAudioSamples:samples,duration:Number(avProbe.format.duration),codecs:avProbe.streams.map(s=>s.codec_name),rms:{before,during,after}};
  await writeFile(root+'/av-report.json',JSON.stringify(avReport,null,2));
  console.log('N3.9',JSON.stringify(avReport));
