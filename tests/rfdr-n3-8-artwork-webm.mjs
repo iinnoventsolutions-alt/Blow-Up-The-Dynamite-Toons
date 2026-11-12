@@ -97,6 +97,25 @@ try{
  assert.equal(standaloneEvidence.exit,0);
  assert.equal(webmEvidence.exit,0);
  assert(standaloneEvidence.packetCount>0&&webmEvidence.packetCount>0);
+ // N3.9.3: compare demuxed Opus packet payload hashes, including any discard-padding packet.
+ const crypto=await import('node:crypto');
+ const packetPayloads=(file)=>{
+  const probe=JSON.parse(execFileSync('ffprobe',['-v','error','-select_streams','a:0','-show_packets','-show_data','-show_entries','packet=pts_time,duration_time,size,flags,data,side_data_list','-of','json',file],{encoding:'utf8'}));
+  return (probe.packets??[]).map(p=>{
+   const bytes=Buffer.from((p.data??'').split('\\n').map(line=>line.replace(/^[0-9a-f]+:\\s*/i,'').split('  ')[0].replace(/[^0-9a-f]/gi,'')).join(''),'hex');
+   return {size:Number(p.size),bytes:bytes.length,sha256:crypto.createHash('sha256').update(bytes).digest('hex'),sideData:p.side_data_list??[]};
+  });
+ };
+ const originalPackets=packetPayloads(standalone),muxedPackets=packetPayloads(muxed);
+ const mismatches=originalPackets.map((p,i)=>i).filter(i=>originalPackets[i].sha256!==muxedPackets[i]?.sha256);
+ const remuxed=root+'/remuxed.webm';
+ execFileSync('ffmpeg',['-hide_banner','-loglevel','error','-y','-i',standalone,'-c:a','copy','-f','webm',remuxed]);
+ const remuxCheck=inspect(remuxed);
+ const packetComparison={standaloneCount:originalPackets.length,muxedCount:muxedPackets.length,mismatches,standaloneSizes:originalPackets.map(p=>p.size),muxedSizes:muxedPackets.map(p=>p.size),standaloneSideData:originalPackets.filter(p=>p.sideData.length).map((p,i)=>({index:i,data:p.sideData})),muxedSideData:muxedPackets.filter(p=>p.sideData.length).map((p,i)=>({index:i,data:p.sideData})),remux:{exit:remuxCheck.exit,packetCount:remuxCheck.packetCount,warnings:remuxCheck.warnings}};
+ await writeFile(root+'/opus-payload-comparison.json',JSON.stringify(packetComparison,null,2));
+ console.log('N3.9.3 payload comparison',JSON.stringify({standaloneCount:packetComparison.standaloneCount,muxedCount:packetComparison.muxedCount,mismatches,remux:packetComparison.remux}));
+ assert.equal(remuxCheck.exit,0);
+ assert.equal(originalPackets.length,muxedPackets.length);
  const avReport={status:'PASS',videoFrames:8,decodedAudioSamples:samples,duration:Number(avProbe.format.duration),codecs:avProbe.streams.map(s=>s.codec_name),rms:{before,during,after}};
  await writeFile(root+'/av-report.json',JSON.stringify(avReport,null,2));
  console.log('N3.9',JSON.stringify(avReport));
