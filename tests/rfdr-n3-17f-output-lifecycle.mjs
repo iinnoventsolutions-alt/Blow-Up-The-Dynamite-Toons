@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+import {mkdtemp,readFile,readdir,rm,writeFile} from 'node:fs/promises';
+import os from 'node:os';import path from 'node:path';
+const require=createRequire(import.meta.url);
+const {createIsolatedExportOutput}=require('../desktop/isolated-export-output.cjs');
+const dir=await mkdtemp(path.join(os.tmpdir(),'rfdr-n317f-'));
+const owner={},signal=new AbortController().signal,bytes=new Uint8Array([1,2,3]);
+let closeCount=0,destination=path.join(dir,'result.webm');
+const dialog={showSaveDialog:async()=>({canceled:false,filePath:destination})};
+const sessions={closeOwner:async o=>{assert.equal(o,owner);closeCount++}};
+try{
+ const output=createIsolatedExportOutput({dialog,sessions,window:{}});
+ assert.equal(await output.save(owner,'result.webm',bytes,signal),destination);
+ assert.deepEqual([...await readFile(destination)],[1,2,3]);
+ await assert.rejects(output.save(owner,'result.webm',bytes,signal),/EEXIST/);
+ assert.deepEqual((await readdir(dir)).sort(),['result.webm']);
+ await assert.rejects(output.save(owner,'../escape.webm',bytes,signal),/Invalid output name/);
+ const abort=new AbortController();abort.abort();
+ await assert.rejects(output.save(owner,'result.webm',bytes,abort.signal),/abort/i);
+ await output.closeWindow(owner);assert.equal(closeCount,1);
+ await assert.rejects(output.save(owner,'result.webm',bytes,signal),/closed/);
+ const cancelled=createIsolatedExportOutput({dialog:{showSaveDialog:async()=>({canceled:true})},sessions});
+ assert.equal(await cancelled.save(owner,'result.webm',bytes,signal),null);
+ let resolveDialog;
+ const delayed=createIsolatedExportOutput({dialog:{showSaveDialog:()=>new Promise(resolve=>resolveDialog=resolve)},sessions});
+ const pending=delayed.save(owner,'result.webm',bytes,signal);
+ await Promise.resolve();await delayed.closeWindow(owner);
+ resolveDialog({canceled:false,filePath:path.join(dir,'late.webm')});
+ await assert.rejects(pending,/closed/);
+ assert.deepEqual((await readdir(dir)).sort(),['result.webm']);
+ console.log('RFDR N3.17-F output dialog, exclusive save, cancellation and cleanup PASS');
+}finally{await rm(dir,{recursive:true,force:true})}
