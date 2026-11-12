@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { transform } from 'esbuild';
+import ts from 'typescript';
 const source=readFileSync(new URL('../src/isolated-export-coordinator.ts',import.meta.url),'utf8');
-const js=(await transform(source,{loader:'ts',format:'esm'})).code;
+const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
 const {runIsolatedExport}=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
 const frame=(i,fps=8)=>({index:i,timestampUs:Math.round(i*1e6/fps),pixels:new Uint8Array(4)});
 const make=()=>{const calls=[];let active=0,maxActive=0,disposed=0;
