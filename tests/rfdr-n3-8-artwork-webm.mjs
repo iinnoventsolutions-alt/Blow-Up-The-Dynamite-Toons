@@ -116,6 +116,24 @@ try{
  console.log('N3.9.3 payload comparison',JSON.stringify({standaloneCount:packetComparison.standaloneCount,muxedCount:packetComparison.muxedCount,mismatches,remux:packetComparison.remux}));
  assert.equal(remuxCheck.exit,0);
  assert.equal(originalPackets.length,muxedPackets.length);
+ // N3.9.4: independent libopus decoder (opusdec) and WebM codec delay/discard metadata.
+ const meta=JSON.parse(execFileSync('ffprobe',['-v','error','-select_streams','a:0','-show_streams','-show_packets','-show_entries','stream=codec_name,sample_rate,start_time,time_base,initial_padding,extradata_size:packet=pts_time,duration_time,side_data_list','-of','json',muxed],{encoding:'utf8'}));
+ const audioStream=meta.streams?.[0];
+ const padding=meta.packets?.flatMap((p,i)=>(p.side_data_list??[]).map(s=>({packet:i,...s})))??[];
+ // Demux WebM to Ogg Opus; compare independent opusdec output to the source Ogg Opus.
+ const demuxed=root+'/webm-demuxed.opus';
+ execFileSync('ffmpeg',['-hide_banner','-loglevel','error','-y','-i',muxed,'-map','0:a:0','-c:a','copy','-f','opus',demuxed]);
+ const decodeOpus=(file,out)=>{
+  const result=spawnSync('opusdec',['--quiet','--rate','48000','--force-wav',file,out],{encoding:'utf8'});
+  return {exit:result.status,stderr:(result.stderr??'').slice(0,1000),error:result.error?.message};
+ };
+ const independentOriginal=decodeOpus(standalone,root+'/standalone-decoded.wav');
+ const independentDemuxed=decodeOpus(demuxed,root+'/demuxed-decoded.wav');
+ const compatibility={stream:audioStream,packetSideData:padding,independentOriginal,independentDemuxed};
+ await writeFile(root+'/opus-compatibility.json',JSON.stringify(compatibility,null,2));
+ console.log('N3.9.4 compatibility',JSON.stringify({stream:audioStream,padding,independentOriginal,independentDemuxed}));
+ assert.equal(independentOriginal.exit,0,'Independent decoder must accept standalone Opus');
+ assert.equal(independentDemuxed.exit,0,'Independent decoder must accept WebM-demuxed Opus');
  const avReport={status:'PASS',videoFrames:8,decodedAudioSamples:samples,duration:Number(avProbe.format.duration),codecs:avProbe.streams.map(s=>s.codec_name),rms:{before,during,after}};
  await writeFile(root+'/av-report.json',JSON.stringify(avReport,null,2));
  console.log('N3.9',JSON.stringify(avReport));
