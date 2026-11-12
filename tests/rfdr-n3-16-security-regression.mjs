@@ -1,7 +1,7 @@
 /** N3.16 isolated security and regression gate: no production wiring. */
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
-import {mkdtempSync,mkdirSync,writeFileSync,rmSync,readFileSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,rmSync,readFileSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {EventEmitter} from 'node:events';
@@ -30,7 +30,7 @@ try{
   await assert.rejects(sink.writeAudio({sampleRate:44100,samples:new Float32Array(4)},signal),/format/);
   await sink.writeAudio(null,signal);
   await assert.rejects(sink.finish(signal),/FFmpeg export failed/);
-  assert.equal(observed.binary,path.join(resources,'ffmpeg'));
+  assert.equal(observed.binary,realpathSync(path.join(resources,'ffmpeg')));
   assert.equal(observed.opts.shell,false);
   assert.deepEqual(observed.args.slice(0,5),['-hide_banner','-loglevel','error','-nostdin','-y']);
   assert(observed.args.includes('yuv420p'));
