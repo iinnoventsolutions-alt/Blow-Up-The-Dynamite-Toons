@@ -23,7 +23,7 @@ async function createIsolatedFfmpegSink({resourcesPath,width,height,fps,signal,s
    await handle.close();handle=null;
    const args=['-hide_banner','-loglevel','error','-nostdin','-y','-f','rawvideo','-pixel_format','rgba','-video_size',width+'x'+height,'-framerate',String(fps),'-i',frames];
    if(hasAudio)args.push('-f','f32le','-ar','48000','-ac','1','-i',audioFile);
-   args.push('-map','0:v:0',...(hasAudio?['-map','1:a:0']:[]),'-c:v','libvpx','-b:v','1M',...(hasAudio?['-c:a','libopus']:['-an']),'-f','webm',output);
+   args.push('-map','0:v:0',...(hasAudio?['-map','1:a:0']:[]),'-c:v','libvpx','-pix_fmt','yuv420p','-auto-alt-ref','0','-b:v','1M',...(hasAudio?['-c:a','libopus']:['-an']),'-f','webm',output);
    await new Promise((resolve,reject)=>{
     let done=false,stderr='';let child;
     const finish=(err)=>{if(done)return;done=true;s?.removeEventListener('abort',abort);signal?.removeEventListener('abort',abort);if(err)reject(err);else resolve()};
