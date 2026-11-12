@@ -69,6 +69,18 @@ try{
  const rms=(start,end)=>{let sum=0;for(let i=start;i<end;i++){const v=decodedAudio.readFloatLE(i*4);sum+=v*v;}return Math.sqrt(sum/(end-start));};
  const before=rms(0,9600),during=rms(18000,30000),after=rms(42000,48000);
  assert(before<.005&&during>.08&&after<.005,'Audio clip must remain aligned at 0.25–0.75 seconds');
+ // N3.9.1: isolate packet-header diagnostics from successful sample-count assertions.
+ const packetProbe=JSON.parse(execFileSync('ffprobe',['-v','error','-select_streams','a:0','-show_packets','-show_entries','packet=pts_time,duration_time,size,flags','-of','json',muxed],{encoding:'utf8'}));
+ const packetRows=packetProbe.packets??[];
+ const packetPTS=packetRows.map(p=>Number(p.pts_time));
+ const monotonic=packetPTS.every((v,i)=>Number.isFinite(v)&&(i===0||v>=packetPTS[i-1]));
+ const {spawnSync}=await import('node:child_process');
+ const decodeCheck=spawnSync('ffmpeg',['-hide_banner','-v','warning','-i',muxed,'-map','0:a:0','-f','null','-'],{encoding:'utf8'});
+ const warningLines=(decodeCheck.stderr??'').split('\\n').filter(line=>/opus|error|invalid|corrupt/i.test(line));
+ const packetReport={packetCount:packetRows.length,monotonic,firstPTS:packetPTS[0],lastPTS:packetPTS.at(-1),minPacketSize:Math.min(...packetRows.map(p=>Number(p.size))),decodeExit:decodeCheck.status,warnings:warningLines};
+ await writeFile(root+'/opus-packet-diagnostics.json',JSON.stringify(packetReport,null,2));
+ console.log('N3.9.1 packet diagnostics',JSON.stringify(packetReport));
+ assert(packetRows.length>0&&monotonic&&decodeCheck.status===0,'Opus packet timestamps and decoder must be valid');
  const avReport={status:'PASS',videoFrames:8,decodedAudioSamples:samples,duration:Number(avProbe.format.duration),codecs:avProbe.streams.map(s=>s.codec_name),rms:{before,during,after}};
  await writeFile(root+'/av-report.json',JSON.stringify(avReport,null,2));
  console.log('N3.9',JSON.stringify(avReport));
