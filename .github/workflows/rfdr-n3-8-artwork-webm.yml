@@ -25,7 +25,7 @@ jobs:
           npx tsc --noEmit
           npx playwright install --with-deps chromium
           sudo apt-get update -qq
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg opus-tools
       - name: Encode and verify isolated artwork WebM
         run: node tests/rfdr-n3-8-artwork-webm.mjs
       - name: Upload video and evidence
