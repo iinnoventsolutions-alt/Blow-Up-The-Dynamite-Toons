@@ -15,17 +15,21 @@ try{
  await page.goto('http://127.0.0.1:4398');
  const result=await page.evaluate(async()=>{
   const {renderIsolatedProjectFrame}=await import('/src/deterministic-artwork-renderer.ts');
+  const {mixDeterministicAudio}=await import('/src/deterministic-audio-mixer.ts');
   const make=(id,color)=>({id,name:id,duration:4,dialogue:'',action:'',slugging:'',notes:'',layers:[{id:'l'+id,name:'l',visible:true,locked:false,opacity:1,strokes:[{id:'s'+id,tool:'shape',shape:'rectangle',color,size:1,fill:color,points:[[0,0,1],[64,64,1]]}]}]});
   const project={format:'innovent-storyboard',schemaVersion:5,id:'n38',title:'N3.8',subtitle:'',width:64,height:64,fps:8,
    scenes:[{id:'scene',name:'Scene',camera:[],panels:[make('a','#ff0000'),make('b','#0000ff')]}],
    transitions:[{id:'d',fromId:'a',toId:'b',type:'dissolve',duration:3,direction:'right'}],audioAssets:[],audioTracks:[]};
   const frames=[];
   for(let i=0;i<8;i++){const f=await renderIsolatedProjectFrame(project,i,{width:64});frames.push({timestampUs:f.timestampUs,rgba:Array.from(f.pixels)});}
-  return frames;
+  const src=new Float32Array(48000);for(let i=0;i<src.length;i++)src[i]=0.25*Math.sin(2*Math.PI*440*i/48000);
+  const mixed=mixDeterministicAudio({durationSeconds:1,clips:[{startSeconds:.25,trimStartSeconds:0,durationSeconds:.5,sourceSamples:src}]});
+  return {frames,audio:Array.from(mixed.samples)};
  });
- assert.equal(result.length,8);
- assert.deepEqual(result.map(f=>f.timestampUs),[0,125000,250000,375000,500000,625000,750000,875000]);
- const raw=Buffer.concat(result.map(f=>Buffer.from(f.rgba)));
+ assert.equal(result.frames.length,8);
+ assert.equal(result.audio.length,48000);
+ assert.deepEqual(result.frames.map(f=>f.timestampUs),[0,125000,250000,375000,500000,625000,750000,875000]);
+ const raw=Buffer.concat(result.frames.map(f=>Buffer.from(f.rgba)));
  const rawPath=root+'/frames.rgba',video=root+'/artwork.webm';
  await writeFile(rawPath,raw);
  execFileSync('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','rawvideo','-pixel_format','rgba','-video_size','64x64','-framerate','8','-i',rawPath,'-an','-vf','format=yuv420p','-c:v','libvpx','-b:v','400k','-deadline','good','-cpu-used','2','-f','webm',video]);
@@ -48,4 +52,25 @@ try{
  const report={status:'PASS',frames:8,fps:8,duration:Number(probe.format.duration),codec:stream.codec_name,pts,first,mid,last,bytes:(await readFile(video)).length};
  await writeFile(root+'/report.json',JSON.stringify(report,null,2));
  console.log(JSON.stringify(report));
+
+ // N3.9: use the accepted N3.3 mixer output, not a synthetic FFmpeg tone source.
+ const audioPath=root+'/mixed.f32',muxed=root+'/artwork-audio.webm';
+ const pcm=Buffer.alloc(result.audio.length*4);
+ result.audio.forEach((v,i)=>pcm.writeFloatLE(v,i*4));
+ await writeFile(audioPath,pcm);
+ execFileSync('ffmpeg',['-hide_banner','-loglevel','error','-y','-i',video,'-f','f32le','-ar','48000','-ac','1','-i',audioPath,'-map','0:v:0','-map','1:a:0','-c:v','copy','-c:a','libopus','-b:a','64k','-t','1','-f','webm',muxed]);
+ const avProbe=JSON.parse(execFileSync('ffprobe',['-v','error','-count_frames','-show_streams','-show_format','-of','json',muxed],{encoding:'utf8'}));
+ assert.deepEqual(new Set(avProbe.streams.map(s=>s.codec_name)),new Set(['vp8','opus']));
+ assert.equal(Number(avProbe.streams.find(s=>s.codec_type==='video').nb_read_frames),8);
+ assert(Math.abs(Number(avProbe.format.duration)-1)<.05);
+ const decodedAudio=execFileSync('ffmpeg',['-v','error','-i',muxed,'-map','0:a:0','-ar','48000','-ac','1','-f','f32le','-']);
+ const samples=decodedAudio.length/4;
+ assert.equal(samples,48000,'Opus output must decode to exactly one second');
+ const rms=(start,end)=>{let sum=0;for(let i=start;i<end;i++){const v=decodedAudio.readFloatLE(i*4);sum+=v*v;}return Math.sqrt(sum/(end-start));};
+ const before=rms(0,9600),during=rms(18000,30000),after=rms(42000,48000);
+ assert(before<.005&&during>.08&&after<.005,'Audio clip must remain aligned at 0.25–0.75 seconds');
+ const avReport={status:'PASS',videoFrames:8,decodedAudioSamples:samples,duration:Number(avProbe.format.duration),codecs:avProbe.streams.map(s=>s.codec_name),rms:{before,during,after}};
+ await writeFile(root+'/av-report.json',JSON.stringify(avReport,null,2));
+ console.log('N3.9',JSON.stringify(avReport));
+
 }finally{await browser?.close();server.kill();}
