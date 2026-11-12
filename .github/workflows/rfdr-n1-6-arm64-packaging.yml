@@ -135,6 +135,14 @@ jobs:
           test -n "$APP"
           export RFDR_PACKAGED_RESOURCES="$PWD/$APP/Contents/Resources"
           node tests/rfdr-n3-15c-packaged-export.mjs | tee diagnostic-output/n3-15c-packaged-results.log
+      - name: N3.17-G packaged isolated pipeline and output lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP=$(find release -maxdepth 4 -name '*.app' -type d -print -quit)
+          test -n "$APP"
+          export RFDR_PACKAGED_RESOURCES="$PWD/$APP/Contents/Resources"
+          node tests/rfdr-n3-17g-packaged-lifecycle.mjs | tee diagnostic-output/n3-17g-packaged-results.log
       - name: Upload N1.6 evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -144,5 +152,6 @@ jobs:
             diagnostic-output/n1-6-*
             diagnostic-output/n1-8-*
             diagnostic-output/n3-15c-*
+            diagnostic-output/n3-17g-*
           retention-days: 14
           if-no-files-found: warn
