@@ -141,7 +141,7 @@ try{
  assert.equal(Number(audioStream.initial_padding),312);
  assert(padding.some(p=>Number(p.discard_padding)===648),'Final Opus discard padding must be preserved');
  assert.equal(standaloneEvidence.warnings.length,0,'Standalone Opus should decode without warnings');
- const knownWarning=/Error parsing Opus packet header\\./;
+ const knownWarning=/Error parsing Opus packet header[.]/;
  const unexpectedWarnings=webmEvidence.warnings.filter(w=>!knownWarning.test(w));
  assert.deepEqual(unexpectedWarnings,[],'Unexpected WebM decoder warnings');
  const regression={
