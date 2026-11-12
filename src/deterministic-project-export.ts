@@ -1,7 +1,6 @@
 /** N3.13 isolated project-to-coordinator bridge; sink injected, production exporter untouched. */
 import type {Project} from './model.ts';
 import {inspectDeterministicProject} from './deterministic-project-adapter.ts';
-import {renderIsolatedProjectFrame} from './deterministic-artwork-renderer.ts';
 import {mixProjectAudio, type DecodeMono} from './deterministic-project-audio.ts';
 import {runIsolatedExport, type ExportSink, type ExportFrame} from './isolated-export-coordinator.ts';
 export interface ProjectExportBridge {
@@ -13,7 +12,7 @@ export interface ProjectExportBridge {
 }
 export async function exportIsolatedProject(project:Project,options:ProjectExportBridge):Promise<Uint8Array>{
  const schedule=inspectDeterministicProject(project,options.signal);
- const render=options.render??((p:Project,i:number,s:AbortSignal)=>renderIsolatedProjectFrame(p,i,{signal:s}));
+ const render=options.render??(async(p:Project,i:number,s:AbortSignal)=>{const {renderIsolatedProjectFrame}=await import('./deterministic-artwork-renderer.ts');return renderIsolatedProjectFrame(p,i,{signal:s});});
  return runIsolatedExport({
   frameCount:schedule.totalFrames,fps:schedule.fps,signal:options.signal,sink:options.sink,onProgress:options.onProgress,
   renderFrame:async(index,signal)=>{
