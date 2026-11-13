@@ -18,7 +18,7 @@ function createIsolatedBrowserIpc({ipcMain,window,pageURL,windowIsUsable,enabled
   try{check(event)}catch{return}
   if(!pending||!message||typeof message!=='object'||Array.isArray(message)||
      message.token!==pending.token||message.kind!==pending.kind)return;
-  const current=pending;pending=null;
+  const current=pending;pending=null;current.cleanup();
   if(message.error!==undefined){
    current.reject(new Error('Browser export operation failed'));
   }else{
@@ -32,12 +32,24 @@ function createIsolatedBrowserIpc({ipcMain,window,pageURL,windowIsUsable,enabled
   signal?.throwIfAborted();
   const token=randomUUID();
   return new Promise((resolve,reject)=>{
-   const entry={token,kind,resolve,reject};
+   let timer;
+   const onAbort=()=>{
+    if(pending!==entry)return;
+    pending=null;entry.cleanup();reject(signal.reason instanceof Error?signal.reason:new Error('Export aborted'));
+   };
+   const entry={token,kind,resolve,reject,cleanup:()=>{
+    clearTimeout(timer);signal?.removeEventListener('abort',onAbort);
+   }};
    pending=entry;
+   if(signal)signal.addEventListener('abort',onAbort,{once:true});
+   timer=setTimeout(()=>{
+    if(pending!==entry)return;
+    pending=null;entry.cleanup();reject(new Error('Browser response timed out'));
+   },kind==='frame'?frameTimeoutMs:audioTimeoutMs);
    try{
     if(!windowIsUsable(window))throw new Error('Trusted Electron window unavailable');
     window.webContents.send(REQUEST_CHANNEL,{token,kind,...(kind==='frame'?{index}:{})});
-   }catch(error){pending=null;reject(error)}
+   }catch(error){pending=null;entry.cleanup();reject(error)}
   });
  }
  const transport=createIsolatedBrowserTransport({
@@ -49,7 +61,7 @@ function createIsolatedBrowserIpc({ipcMain,window,pageURL,windowIsUsable,enabled
   if(closed)return;closed=true;
   ipcMain.removeListener(REPLY_CHANNEL,onReply);
   transport.close();
-  if(pending){const entry=pending;pending=null;entry.reject(new Error('Browser IPC closed'))}
+  if(pending){const entry=pending;pending=null;entry.cleanup();entry.reject(new Error('Browser IPC closed'))}
  }
  return Object.freeze({enabled:true,transport,close,channels:Object.freeze({request:REQUEST_CHANNEL,reply:REPLY_CHANNEL})});
 }
