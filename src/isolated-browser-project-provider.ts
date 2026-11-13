@@ -4,8 +4,6 @@
  */
 import type {Project} from './model.ts';
 import {inspectDeterministicProject} from './deterministic-project-adapter.ts';
-import {renderIsolatedProjectFrame} from './deterministic-artwork-renderer.ts';
-import {mixProjectAudioInBrowser} from './deterministic-project-audio.ts';
 
 export type BrowserFrame = {index:number;timestampUs:number;pixels:Uint8Array};
 export type BrowserAudio = {sampleRate:48000;samples:Float32Array}|null;
@@ -29,8 +27,14 @@ export function createBrowserProjectProvider(
   throw new TypeError('Invalid project identifier');
  if(schedule.totalFrames<1||schedule.totalFrames>100000)throw new RangeError('Invalid frame count');
  const metadata=Object.freeze({id:project.id,width,height,fps,frameCount:schedule.totalFrames});
- const render=dependencies.render??renderIsolatedProjectFrame;
- const audio=dependencies.audio??mixProjectAudioInBrowser;
+ const render=dependencies.render??(async(p:Project,i:number,options:{width:number;signal:AbortSignal})=>{
+   const {renderIsolatedProjectFrame}=await import('./deterministic-artwork-renderer.ts');
+   return renderIsolatedProjectFrame(p,i,options);
+ });
+ const audio=dependencies.audio??(async(p:Project,s:AbortSignal)=>{
+   const {mixProjectAudioInBrowser}=await import('./deterministic-project-audio.ts');
+   return mixProjectAudioInBrowser(p,s);
+ });
  return Object.freeze({
   metadata,
   async renderFrame(index:number,signal:AbortSignal){
