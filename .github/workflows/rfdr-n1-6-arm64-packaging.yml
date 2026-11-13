@@ -159,6 +159,14 @@ jobs:
           test -n "$APP"
           export RFDR_PACKAGED_RESOURCES="$PWD/$APP/Contents/Resources"
           node tests/rfdr-n3-17s-packaged-save.mjs | tee diagnostic-output/n3-17s-packaged-save.log
+      - name: N3.17-T real Electron packaged end-to-end acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP=$(find release -maxdepth 4 -name '*.app' -type d -print -quit)
+          test -n "$APP"
+          export RFDR_PACKAGED_RESOURCES="$PWD/$APP/Contents/Resources"
+          ./node_modules/.bin/electron tests/rfdr-n3-17t-electron-packaged.cjs | tee diagnostic-output/n3-17t-electron-packaged.log
       - name: Upload N1.6 evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -171,5 +179,6 @@ jobs:
             diagnostic-output/n3-17g-*
             diagnostic-output/n3-17o-*
             diagnostic-output/n3-17s-*
+            diagnostic-output/n3-17t-*
           retention-days: 14
           if-no-files-found: warn
