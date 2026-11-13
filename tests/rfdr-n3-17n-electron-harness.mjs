@@ -27,7 +27,7 @@ const {id}=start(event,{projectId:'proj1',width:2,height:2,fps:2,outputName:'tes
 assert.match(id,/^[a-z0-9-]+$/i);
 await new Promise(resolve=>setTimeout(resolve,50));
 assert.equal(frames,2);assert.equal(audio,1);assert.equal(disposed,1);
-assert.throws(()=>start(event,{projectId:'other',width:2,height:2,fps:2,outputName:'test.webm'}),/^(?!$)/);
+assert.throws(()=>start({...event,sender:{}},{projectId:'proj1',width:2,height:2,fps:2,outputName:'test.webm'}),/Unauthorized/);
 await harness.dispose();assert.equal(handlers.size,0);assert.equal(ipcMain.listenerCount('isolated-export:browser-reply'),0);
 assert.equal(createIsolatedElectronExportHarness().enabled,false);
 console.log('RFDR N3.17-N isolated snapshot-to-IPC-to-sink integration PASS');
