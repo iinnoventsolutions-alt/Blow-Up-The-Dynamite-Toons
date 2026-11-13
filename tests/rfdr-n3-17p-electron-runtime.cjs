@@ -18,7 +18,7 @@ async function finish(error){
  try{window?.destroy()}catch{}
  rmSync(dir,{recursive:true,force:true});
  if(error)console.error(error.stack||error.message);
- else console.log('RFDR N3.17-P real Electron BrowserWindow trusted IPC smoke PASS');
+ else console.log('RFDR N3.17-P real Electron BrowserWindow and isolated harness initialization PASS');
  app.exit(error?1:0);
 }
 app.whenReady().then(async()=>{
@@ -32,14 +32,7 @@ app.whenReady().then(async()=>{
      sinkFactory:async()=>({writeFrame:async()=>{},writeAudio:async()=>{},finish:async()=>new Uint8Array([1]),dispose:async()=>{}})
     });
     const event={sender:window.webContents,senderFrame:window.webContents.mainFrame};
-    // Real webContents.send delivery and ipcMain.on reply from renderer.
-    window.webContents.executeJavaScript(`
-      requireNeverUsed = undefined;
-      window.addEventListener('message',()=>{});
-    `).catch(()=>{});
-    // Explicitly exercise sender identity using actual Electron objects.
-    const response=await ipcMain._invokeForTest?.('isolated-export:start',event,{projectId:'electron1',width:2,height:2,fps:2,outputName:'electron.webm'});
-    if(response!==undefined)throw Error('Unexpected private Electron test hook');
+    // Verify real BrowserWindow frame identity; renderer IPC round-trip is a later gate.
     if(window.webContents.mainFrame.url!==pageURL)throw Error('Unexpected main frame URL');
     await finish();
    }catch(error){await finish(error)}
