@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {createBrowserProjectProvider} from '../src/isolated-browser-project-provider.ts';
+const panel=(id)=>({id,name:id,duration:2,dialogue:'',action:'',slugging:'',notes:'',layers:[]});
+const project={format:'innovent-storyboard',schemaVersion:5,id:'browser1',title:'Browser',subtitle:'',width:32,height:32,fps:8,scenes:[{id:'scene',name:'Scene',camera:[],panels:[panel('a')]}],transitions:[],audioAssets:[],audioTracks:[]};
+const render=async(p,index)=>({index,timestampUs:index*125000,width:p.width,height:p.height,pixels:new Uint8ClampedArray(p.width*p.height*4)});
+const provider=createBrowserProjectProvider(project,{render,audio:async()=>({sampleRate:48000,samples:new Float32Array([.25])})});
+assert.deepEqual(provider.metadata,{id:'browser1',width:32,height:32,fps:8,frameCount:2});
+const signal=new AbortController().signal;
+const frame=await provider.renderFrame(1,signal);assert.equal(frame.timestampUs,125000);assert.equal(frame.pixels.length,4096);
+const audio=await provider.renderAudio(signal);assert.equal(audio.samples[0],.25);
+await assert.rejects(provider.renderFrame(2,signal),/bounds/);
+const broken=createBrowserProjectProvider(project,{render:async()=>({...await render(project,0),timestampUs:99}),audio:async()=>null});
+await assert.rejects(broken.renderFrame(0,signal),/mismatch/);
+const badAudio=createBrowserProjectProvider(project,{render,audio:async()=>({sampleRate:44100,samples:new Float32Array(1)})});
+await assert.rejects(badAudio.renderAudio(signal),/Invalid browser audio/);
+const controller=new AbortController();controller.abort();
+await assert.rejects(provider.renderFrame(0,controller.signal),/abort/i);
+console.log('RFDR N3.17-K browser project rendering/audio boundary PASS');
