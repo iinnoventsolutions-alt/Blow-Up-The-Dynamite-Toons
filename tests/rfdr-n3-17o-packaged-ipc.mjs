@@ -42,14 +42,16 @@ try{
  let result;
  for(let attempt=0;attempt<120;attempt++){
   await new Promise(resolve=>setTimeout(resolve,250));
-  const status=handlers.get('isolated-export:progress')(trustedEvent,id);
+  let status;
+  try{status=handlers.get('isolated-export:progress')(trustedEvent,id)}
+  catch(error){if(/Unknown or unauthorized export session/.test(error.message))break;throw error}
   if(status===null||status?.state==='done'||status?.status==='done')break;
  }
  // The session coordinator deliberately drops completed bytes; validate
  // end-to-end encoding through a separate captured backend in later wiring.
  assert.equal(frameRequests,8);
  assert.equal(audioRequests,1);
- assert.equal(handlers.get('isolated-export:progress')(trustedEvent,id),null);
+ assert.throws(()=>handlers.get('isolated-export:progress')(trustedEvent,id),/Unknown or unauthorized export session/);
  assert.equal(handlers.size,3);
  console.log('RFDR N3.17-O packaged encoder + isolated IPC composition completed (session bytes not yet retrievable)');
 }finally{
