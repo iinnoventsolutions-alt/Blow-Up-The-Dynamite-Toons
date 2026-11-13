@@ -44,7 +44,7 @@ export function createBrowserProjectProvider(
    signal.throwIfAborted();
    const expected=schedule.frames[index];
    if(frame.index!==index||frame.timestampUs!==expected.timestampUs||frame.width!==width||frame.height!==height||
-      !(frame.pixels instanceof Uint8Array)||frame.pixels.byteLength!==width*height*4)
+      !(frame.pixels instanceof Uint8Array||frame.pixels instanceof Uint8ClampedArray)||frame.pixels.byteLength!==width*height*4)
     throw new Error('Browser frame geometry or timing mismatch');
    return {index,timestampUs:frame.timestampUs,pixels:new Uint8Array(frame.pixels)};
   },
