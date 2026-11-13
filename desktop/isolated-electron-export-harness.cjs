@@ -4,7 +4,8 @@
 const {createIsolatedBrowserIpc}=require('./isolated-browser-ipc.cjs');
 const {createTrustedExportBackend}=require('./isolated-export-backend.cjs');
 const {createIsolatedExportRuntime}=require('./isolated-export-runtime.cjs');
-function createIsolatedElectronExportHarness({ipcMain,window,pageURL,windowIsUsable,registry,resourcesPath,sinkFactory,enabled=false}={}){
+const {createIsolatedExportOutput}=require('./isolated-export-output.cjs');
+function createIsolatedElectronExportHarness({ipcMain,window,pageURL,windowIsUsable,registry,resourcesPath,sinkFactory,dialog,enabled=false}={}){
  if(!enabled)return Object.freeze({enabled:false,dispose:async()=>{}});
  if(!registry||typeof registry.resolveProject!=='function')throw new TypeError('Trusted project registry required');
  const browser=createIsolatedBrowserIpc({ipcMain,window,pageURL,windowIsUsable,enabled:true});
@@ -16,7 +17,15 @@ function createIsolatedElectronExportHarness({ipcMain,window,pageURL,windowIsUsa
    renderAudio:(_project,signal)=>browser.transport.audio(signal),
    ...(sinkFactory?{sinkFactory}:{})
   });
-  runtime=createIsolatedExportRuntime({ipcMain,window,pageURL,windowIsUsable,enabled:true,startExport});
+  let output;
+  runtime=createIsolatedExportRuntime({ipcMain,window,pageURL,windowIsUsable,enabled:true,startExport,
+   ...(dialog?{saveOutput:async(owner,name,bytes,signal)=>{
+    if(!output)output=createIsolatedExportOutput({
+     dialog,window,sessions:{closeOwner:async()=>{}}
+    });
+    return output.save(owner,name,bytes,signal);
+   }}:{})
+  });
  }catch(error){browser.close();throw error}
  let disposed=false;
  return Object.freeze({enabled:true,async dispose(){
