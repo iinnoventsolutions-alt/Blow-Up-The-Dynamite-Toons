@@ -45,7 +45,7 @@ function createIsolatedBrowserIpc({ipcMain,window,pageURL,windowIsUsable,enabled
    timer=setTimeout(()=>{
     if(pending!==entry)return;
     pending=null;entry.cleanup();reject(new Error('Browser response timed out'));
-   },kind==='frame'?frameTimeoutMs:audioTimeoutMs);
+   },Math.max(1,(kind==='frame'?frameTimeoutMs:audioTimeoutMs)-5));
    try{
     if(!windowIsUsable(window))throw new Error('Trusted Electron window unavailable');
     window.webContents.send(REQUEST_CHANNEL,{token,kind,...(kind==='frame'?{index}:{})});
