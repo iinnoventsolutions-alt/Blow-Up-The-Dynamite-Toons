@@ -1,0 +1,25 @@
+name: RFDR N3.17-R2 Main-Owned Export Completion
+on:
+  push:
+    branches: [RFDR-A1.5-D4.6.5-WebM-Muxing-Prototype]
+    paths:
+      - 'desktop/isolated-export-runtime.cjs'
+      - 'tests/rfdr-n3-17r2-output-delivery.mjs'
+      - '.github/workflows/rfdr-n3-17r2-output-delivery.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  delivery:
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: node tests/rfdr-n3-17r2-output-delivery.mjs
+      - run: ./node_modules/.bin/electron tests/rfdr-n3-17q-electron-ipc.cjs
