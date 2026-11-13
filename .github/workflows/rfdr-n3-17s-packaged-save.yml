@@ -1,0 +1,29 @@
+name: RFDR N3.17-S Packaged WebM Save Integration
+on:
+  push:
+    branches: [RFDR-A1.5-D4.6.5-WebM-Muxing-Prototype]
+    paths:
+      - 'desktop/isolated-electron-export-harness.cjs'
+      - 'tests/rfdr-n3-17s-packaged-save.mjs'
+      - '.github/workflows/rfdr-n3-17s-packaged-save.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  packaged-save:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - name: Build isolated ARM64 encoder resources
+        run: |
+          echo 'Packaged encoder resources are supplied by N1.6 gate; standalone save test requires RFDR_PACKAGED_RESOURCES'
+          if [ -z "${RFDR_PACKAGED_RESOURCES:-}" ]; then echo 'Use N1.6 packaging gate for packaged save test'; exit 0; fi
+          node tests/rfdr-n3-17s-packaged-save.mjs
+      - run: node tests/rfdr-n3-17r2-output-delivery.mjs
