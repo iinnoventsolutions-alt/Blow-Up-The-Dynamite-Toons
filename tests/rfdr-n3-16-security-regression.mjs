@@ -18,17 +18,19 @@ try{
  let observed;
  const fake=(binary,args,opts)=>{
   observed={binary,args,opts};
-  const child=new EventEmitter();child.stderr=new EventEmitter();child.kill=()=>{queueMicrotask(()=>child.emit('close',null))};
-  queueMicrotask(()=>child.emit('close',1));
+  const child=new EventEmitter();child.stderr=new EventEmitter();child.stdin=new EventEmitter();
+  child.stdin.write=(_bytes,cb)=>queueMicrotask(()=>cb());
+  child.stdin.end=()=>queueMicrotask(()=>child.emit('close',1));
+  child.kill=()=>{queueMicrotask(()=>child.emit('close',null))};
   return child;
  };
  const sink=await createIsolatedFfmpegSink({resourcesPath:resources,width:2,height:2,fps:8,signal,spawnProcess:fake});
  try{
   await assert.rejects(sink.writeFrame({index:1,pixels:new Uint8Array(16)},signal),/order/);
-  await sink.writeFrame({index:0,pixels:new Uint8Array(16)},signal);
-  await assert.rejects(sink.writeFrame({index:0,pixels:new Uint8Array(16)},signal),/order/);
   await assert.rejects(sink.writeAudio({sampleRate:44100,samples:new Float32Array(4)},signal),/format/);
   await sink.writeAudio(null,signal);
+  await sink.writeFrame({index:0,pixels:new Uint8Array(16)},signal);
+  await assert.rejects(sink.writeFrame({index:0,pixels:new Uint8Array(16)},signal),/order/);
   await assert.rejects(sink.finish(signal),/FFmpeg export failed/);
   assert.equal(observed.binary,realpathSync(path.join(resources,'ffmpeg')));
   assert.equal(observed.opts.shell,false);
