@@ -18,7 +18,7 @@ function createIsolatedExportRuntime({ipcMain,window,pageURL,windowIsUsable,enab
    if(windowIsUsable(window))window.webContents.send('isolated-export:complete',{id:context.id,status:destination===null?'cancelled':'saved'});
    return destination;
   }catch(error){
-   if(saveOutput&&windowIsUsable(window))window.webContents.send('isolated-export:complete',{id:context.id,status:context.signal.aborted?'cancelled':'failed'});
+   if(saveOutput&&windowIsUsable(window))window.webContents.send('isolated-export:complete',{id:context.id,status:context.signal.aborted?'cancelled':'failed',error:context.signal.aborted?undefined:(error instanceof Error?error.message:'Unknown export failure').slice(0,240)});
    throw error;
   }
  }});

@@ -10,7 +10,7 @@ declare global {
         cancel(id:string):Promise<unknown>;
         onRequest(callback:(request:import('./isolated-electron-renderer').IsolatedBrowserRequest)=>void):()=>void;
         reply(message:import('./isolated-electron-renderer').IsolatedBrowserReply):void;
-        onComplete(callback:(result:{id:string;status:'saved'|'cancelled'|'failed'})=>void):()=>void;
+        onComplete(callback:(result:{id:string;status:'saved'|'cancelled'|'failed';error?:string})=>void):()=>void;
       };
       exportPdf(data: ArrayBuffer, name: string, openAfter: boolean): Promise<Result<{ name: string } | null>>;
       save(text: string, saveAs: boolean): Promise<Result<{ name: string } | null>>;

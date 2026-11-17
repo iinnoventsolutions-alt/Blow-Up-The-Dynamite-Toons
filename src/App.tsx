@@ -275,9 +275,9 @@ export default function App() {
       resultValue(await window.desktop.snapshot(serializeProject(snapshot)));
       if (abort.signal.aborted) throw new Error('Export cancelled');
       const outputName = (snapshot.title.replace(/[^a-zA-Z0-9 _-]/g, '').slice(0, 90) || 'Storyboard') + '.webm';
-      const completion = new Promise<'saved' | 'cancelled' | 'failed'>((resolve, reject) => {
+      const completion = new Promise<{status:'saved' | 'cancelled' | 'failed';error?:string}>((resolve, reject) => {
         unsubscribe = channel.onComplete(result => {
-          if (result.id === sessionId) resolve(result.status);
+          if (result.id === sessionId) resolve(result);
         });
         abort.signal.addEventListener('abort', () => reject(new Error('Export cancelled')), {once:true});
       });
@@ -291,8 +291,8 @@ export default function App() {
           if (typeof progress?.progress === 'number') setExportProgress(progress.progress);
         }).catch(() => {});
       }, 250);
-      const status = await completion;
-      if (status !== 'saved') throw new Error(status === 'cancelled' ? 'Export cancelled' : 'FFmpeg export failed');
+      const result = await completion;
+      if (result.status !== 'saved') throw new Error(result.status === 'cancelled' ? 'Export cancelled' : (result.error || 'FFmpeg export failed'));
       report('FFmpeg WebM video exported.');
     } catch (error) {
       if (sessionId && abort.signal.aborted) await channel.cancel(sessionId).catch(() => {});
