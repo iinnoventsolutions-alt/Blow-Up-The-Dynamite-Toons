@@ -8,6 +8,7 @@ const { windowIsUsable, sendToWindow, closeWindow } = require('./window-lifecycl
 const { assertTrustedSender } = require('./ipc-security.cjs');
 const { createIsolatedExportRuntime } = require('./isolated-export-runtime.cjs');
 const { createTrustedProjectRegistry } = require('./isolated-export-project-registry.cjs');
+const { createIsolatedElectronExportHarness } = require('./isolated-electron-export-harness.cjs');
 const metadata = require('../src/build-info.json');
 const previousDataDirectory = app.getPath('userData');
 // Preserve packaged recovery/preferences across the display-name correction.
@@ -82,10 +83,16 @@ app.whenReady().then(async () => {
     win.webContents.on('will-navigate', (event) => event.preventDefault());
     win.loadFile(pagePath);
     const thisWindow = win;
-    // N3.17-H: fail-closed runtime hook; no export backend or renderer API is enabled.
-    const isolatedExportRuntime = createIsolatedExportRuntime({
-      ipcMain, window: thisWindow, pageURL, windowIsUsable
-    });
+    // Explicit developer opt-in only. The normal application remains on MediaRecorder.
+    // Never accept renderer-supplied project snapshots or file destinations.
+    const exportOptIn = !app.isPackaged && process.env.RFDR_ENABLE_PRODUCTION_EXPORT === '1';
+    const isolatedExportRuntime = exportOptIn
+      ? createIsolatedElectronExportHarness({
+          ipcMain, window: thisWindow, pageURL, windowIsUsable,
+          registry: exportProjects, resourcesPath: process.resourcesPath,
+          dialog, enabled: true
+        })
+      : createIsolatedExportRuntime({ipcMain, window: thisWindow, pageURL, windowIsUsable});
     thisWindow.on('closed', () => { void isolatedExportRuntime.dispose().catch(() => {});
     });
     thisWindow.on('closed', () => {
