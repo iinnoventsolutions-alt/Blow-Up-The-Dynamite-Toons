@@ -8,7 +8,7 @@ import {mixProjectAudioInBrowser} from './deterministic-project-audio.ts';
 import {projectFrames} from './model.ts';
 
 export type IsolatedBrowserRequest={token:string;kind:'frame'|'audio';index?:number};
-export type IsolatedBrowserReply={token:string;kind:'frame'|'audio';data:unknown};
+export type IsolatedBrowserReply={token:string;kind:'frame'|'audio';data:unknown;error?:string};
 export interface IsolatedBrowserChannel {
  onRequest:(callback:(request:IsolatedBrowserRequest)=>void)=>()=>void;
  reply:(message:IsolatedBrowserReply)=>void;
@@ -34,8 +34,9 @@ export function attachIsolatedStoryboardRenderer(channel:IsolatedBrowserChannel,
      :await mixProjectAudioInBrowser(project,controller.signal);
     if(!closed&&!controller.signal.aborted)channel.reply({token:request.token,kind:request.kind,data});
    }catch{
-    // Invalid/missing data must fail the authenticated main-side timeout/validation gate.
-    // Never send an untrusted error object or expose project details through IPC.
+    // Fail promptly through the existing authenticated main-side error channel.
+    // Do not expose internal exception details or project data.
+    if(!closed&&!controller.signal.aborted)channel.reply({token:request.token,kind:request.kind,data:null,error:'Export renderer failed'});
    }finally{controllers.delete(controller)}
   })();
  });

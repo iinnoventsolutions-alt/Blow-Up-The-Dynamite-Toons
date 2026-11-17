@@ -19,6 +19,12 @@ jobs:
         run: |
           brew install pkg-config libvpx opus nasm ffmpeg
           npm ci
+      - name: Production integration candidate TypeScript and renderer contract gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build
+          node --experimental-strip-types --test tests/rfdr-production-renderer.test.mjs
       - name: Build isolated non-GPL ARM64 FFmpeg
         shell: bash
         run: |
