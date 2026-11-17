@@ -31,5 +31,13 @@ for(let i=0;i<100&&!messages.some(m=>m.data.id===bad.id);i++)await new Promise(r
 const result=messages.find(m=>m.data.id===bad.id);
 assert.equal(result.data.status,'failed');
 assert.equal(JSON.stringify(result).includes('sensitive'),false);
+assert.equal(result.data.error,'FFmpeg export failed; check the isolated export diagnostic logs');
 await broken.dispose();
+const budget=createIsolatedExportRuntime({ipcMain,window,pageURL:'file:///trusted.html',windowIsUsable:w=>w===window,enabled:true,
+ startExport:async()=>{throw new RangeError('Export exceeds raw disk budget')},
+ saveOutput:async()=>{throw Error('Unexpected save call')}});
+const budgetRun=await handlers.get('isolated-export:start')(event,req);
+for(let i=0;i<100&&!messages.some(m=>m.data.id===budgetRun.id);i++)await new Promise(r=>setTimeout(r,5));
+assert.equal(messages.find(m=>m.data.id===budgetRun.id).data.error,'Export exceeds the 512 MB raw-frame storage limit');
+await budget.dispose();
 console.log('RFDR N3.17-R2 opt-in main-owned output delivery and sanitized completion PASS');
