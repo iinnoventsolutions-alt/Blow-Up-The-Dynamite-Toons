@@ -2,6 +2,12 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('desktop', {
   // Production export bridge is opt-in: main must register authenticated handlers before activation.
   isolatedExport: Object.freeze({
+    onAvailability: callback => {
+      if (typeof callback !== 'function') throw new TypeError('Export availability callback required');
+      const listener = (_event, enabled) => callback(enabled === true);
+      ipcRenderer.on('isolated-export:available', listener);
+      return () => ipcRenderer.removeListener('isolated-export:available', listener);
+    },
     start: request => ipcRenderer.invoke('isolated-export:start', request),
     progress: id => ipcRenderer.invoke('isolated-export:progress', id),
     cancel: id => ipcRenderer.invoke('isolated-export:cancel', id),

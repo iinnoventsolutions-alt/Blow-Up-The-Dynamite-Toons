@@ -93,6 +93,7 @@ app.whenReady().then(async () => {
           dialog, enabled: true
         })
       : createIsolatedExportRuntime({ipcMain, window: thisWindow, pageURL, windowIsUsable});
+    thisWindow.webContents.on('did-finish-load', () => { if (exportOptIn && windowIsUsable(thisWindow)) thisWindow.webContents.send('isolated-export:available', true); });
     thisWindow.on('closed', () => { void isolatedExportRuntime.dispose().catch(() => {});
     });
     thisWindow.on('closed', () => {

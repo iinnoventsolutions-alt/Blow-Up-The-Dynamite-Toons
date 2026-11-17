@@ -4,6 +4,7 @@ declare global {
   interface Window {
     desktop?: {
       isolatedExport?: {
+        onAvailability(callback:(enabled:boolean)=>void):()=>void;
         start(request: {projectId:string;width:number;height:number;fps:number;outputName:string}):Promise<{id:string}>;
         progress(id:string):Promise<unknown>;
         cancel(id:string):Promise<unknown>;
