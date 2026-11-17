@@ -16,14 +16,15 @@ try{
  for(const withAudio of [false,true]){
   const sink=await createIsolatedFfmpegSink({resourcesPath,width,height,fps,signal});
   try{
+   const samples=new Float32Array(48000);
+   for(let i=0;i<samples.length;i++)samples[i]=0.15*Math.sin(2*Math.PI*440*i/48000);
+   // Streaming sink requires the audio input to exist before FFmpeg starts reading stdin.
+   await sink.writeAudio(withAudio?{sampleRate:48000,samples}:null,signal);
    for(let i=0;i<frames;i++){
     const pixels=new Uint8Array(width*height*4);
     for(let k=0;k<pixels.length;k+=4){pixels[k]=i*25;pixels[k+1]=k/4%width*7;pixels[k+2]=90;pixels[k+3]=255}
     await sink.writeFrame({index:i,timestampUs:Math.round(i*1e6/fps),pixels},signal);
    }
-   const samples=new Float32Array(48000);
-   for(let i=0;i<samples.length;i++)samples[i]=0.15*Math.sin(2*Math.PI*440*i/48000);
-   await sink.writeAudio(withAudio?{sampleRate:48000,samples}:null,signal);
    const data=await sink.finish(signal);
    assert(data.byteLength>100,'WebM output must not be empty');
    const file=path.join(dir,withAudio?'audio.webm':'silent.webm');writeFileSync(file,data);
