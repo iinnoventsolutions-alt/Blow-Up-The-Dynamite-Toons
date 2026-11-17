@@ -10,6 +10,7 @@ const PdfExportDialog=lazy(()=>import('./PdfExportDialog'));
 const PerformanceDiagnostics=lazy(()=>import('./PerformanceDiagnostics'));
 import { browserRecent,rememberBrowserProject,browserRecovery,snapshotBrowserProject,clearBrowserRecovery } from './browser-store';
 import { exportAnimatic } from './animatic-export';
+import { attachIsolatedStoryboardRenderer } from './isolated-electron-renderer';
 import AudioProperties from './AudioProperties';
 import type { AudioSelection } from './AudioLanes';
 import { audioContext, importAudio, releaseUnusedAudio } from './audio-engine';
@@ -61,6 +62,15 @@ function Modal({ title, children, close }: { title: string; children: ReactNode;
 }
 export default function App() {
   const [history, setHistory] = useState<History | null>(null), project = history?.present;
+  // Read-only renderer endpoint. The trusted main process still controls whether
+  // FFmpeg sessions may start; normal Export Animatic remains unchanged.
+  const isolatedProjectRef = useRef<Project | null>(null);
+  isolatedProjectRef.current = project ?? null;
+  useEffect(() => {
+    const channel = window.desktop?.isolatedExport;
+    if (!channel) return;
+    return attachIsolatedStoryboardRenderer(channel, () => isolatedProjectRef.current);
+  }, []);
   const [inspectorTab, setInspectorTab] = useState<'Tools'|'Camera'|'Panel'|'Layers'>('Panel');
   const [maskOutsideCamera,setMaskOutsideCamera] = useState(false);
   const [cameraClipboard,setCameraClipboard] = useState<PanelCameraClipboard|null>(null);
