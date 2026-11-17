@@ -12,11 +12,11 @@ const signal=new AbortController().signal;
 try{
  await assert.rejects(createIsolatedFfmpegSink({resourcesPath:resources,width:0,height:4,fps:8,signal}),/dimensions/);
  const calls=[];
- const fake=(binary,args)=>{calls.push({binary,args});const {EventEmitter}=require('node:events');const child=new EventEmitter();child.stderr=new EventEmitter();child.kill=()=>{};queueMicrotask(()=>child.emit('close',1));return child};
+ const fake=(binary,args)=>{calls.push({binary,args});const {EventEmitter}=require('node:events');const child=new EventEmitter();child.stderr=new EventEmitter();child.stdin=new EventEmitter();child.stdin.write=(_bytes,cb)=>queueMicrotask(()=>cb());child.stdin.end=()=>queueMicrotask(()=>child.emit('close',1));child.kill=()=>{};return child};
  const sink=await createIsolatedFfmpegSink({resourcesPath:resources,width:2,height:2,fps:8,signal,spawnProcess:fake});
  await assert.rejects(sink.writeFrame({index:0,pixels:new Uint8Array(4)},signal),/RGBA size/);
- await sink.writeFrame({index:0,pixels:new Uint8Array(16)},signal);
  await sink.writeAudio(null,signal);
+ await sink.writeFrame({index:0,pixels:new Uint8Array(16)},signal);
  await assert.rejects(sink.finish(signal),/FFmpeg export failed/);
  assert.equal(calls.length,1);assert(calls[0].args.includes('-an'));
  await sink.dispose();await sink.dispose();

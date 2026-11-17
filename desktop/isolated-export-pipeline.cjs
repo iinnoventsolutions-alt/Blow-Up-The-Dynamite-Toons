@@ -12,7 +12,18 @@ function createIsolatedExportPipeline({resourcesPath,renderFrame,renderAudio,fra
   const sink=await sinkFactory({resourcesPath,width,height,fps,signal,maxRawBytes});
   try{
    signal.throwIfAborted();report(0);
-   // Audio is prepared first so FFmpeg can open both inputs while video frames stream.
+   const audio=await renderAudio(request,signal);
+   signal.throwIfAborted();
+   if(audio!==null&&(!audio||audio.sampleRate!==48000||!(audio.samples instanceof Float32Array)||audio.samples.byteLength>128*1024*1024||audio.samples.byteLength>maxRawBytes))throw new RangeError('Invalid audio or raw disk budget');
+   await sink.writeAudio(audio,signal);
+   for(let index=0;index<frameCount;index++){
+    signal.throwIfAborted();
+    const frame=await renderFrame(request,index,signal);
+    signal.throwIfAborted();
+    if(!frame||frame.index!==index||frame.timestampUs!==Math.round(index*1e6/fps)||!(frame.pixels instanceof Uint8Array)||frame.pixels.byteLength!==frameBytes)throw new Error('Invalid frame sequence or RGBA size');
+    await sink.writeFrame(frame,signal);
+    signal.throwIfAborted();report((index+1)/(frameCount+1));
+   }
    signal.throwIfAborted();report((frameCount+.5)/(frameCount+1));
    const output=await sink.finish(signal);
    signal.throwIfAborted();
