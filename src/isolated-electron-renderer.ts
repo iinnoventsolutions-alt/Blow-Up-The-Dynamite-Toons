@@ -3,8 +3,6 @@
  * Main process must authenticate the IPC sender and own project metadata.
  */
 import type {Project} from './model.ts';
-import {renderIsolatedProjectFrame} from './deterministic-artwork-renderer.ts';
-import {mixProjectAudioInBrowser} from './deterministic-project-audio.ts';
 import {projectFrames} from './model.ts';
 
 export type IsolatedBrowserRequest={token:string;kind:'frame'|'audio';index?:number};
@@ -27,11 +25,12 @@ export function attachIsolatedStoryboardRenderer(channel:IsolatedBrowserChannel,
     const data=request.kind==='frame'
      ?await (async()=>{
        if(!Number.isSafeInteger(request.index)||request.index!<0||request.index!>=projectFrames(project))throw new RangeError('Invalid frame index');
+       const {renderIsolatedProjectFrame}=await import('./deterministic-artwork-renderer.ts');
        const frame=await renderIsolatedProjectFrame(project,request.index!,{signal:controller.signal,width:project.width});
        if(frame.width!==project.width||frame.height!==project.height)throw new Error('Unexpected rendered geometry');
        return {index:frame.index,timestampUs:frame.timestampUs,pixels:frame.pixels};
       })()
-     :await mixProjectAudioInBrowser(project,controller.signal);
+     :await (async()=>{const {mixProjectAudioInBrowser}=await import('./deterministic-project-audio.ts');return mixProjectAudioInBrowser(project,controller.signal)})();
     if(!closed&&!controller.signal.aborted)channel.reply({token:request.token,kind:request.kind,data});
    }catch{
     // Fail promptly through the existing authenticated main-side error channel.
