@@ -39,6 +39,8 @@ jobs:
           make install
           mkdir -p "$GITHUB_WORKSPACE/n1-6-resources"
           cp "$RUNNER_TEMP/n1-6-lgpl/bin/ffmpeg" "$GITHUB_WORKSPACE/n1-6-resources/ffmpeg"
+          # Marker is present only in the isolated CI acceptance package, never normal releases.
+          touch "$GITHUB_WORKSPACE/n1-6-resources/rfdr-test-export.marker"
           # Bundle codec dylibs and rewrite Homebrew paths to app-relative paths.
           mkdir -p "$GITHUB_WORKSPACE/n1-6-resources/lib"
           for codec in libvpx libopus; do

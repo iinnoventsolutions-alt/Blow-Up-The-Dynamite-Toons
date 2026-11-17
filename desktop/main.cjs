@@ -85,7 +85,7 @@ app.whenReady().then(async () => {
     const thisWindow = win;
     // Explicit developer opt-in only. The normal application remains on MediaRecorder.
     // Never accept renderer-supplied project snapshots or file destinations.
-    const exportOptIn = !app.isPackaged && process.env.RFDR_ENABLE_PRODUCTION_EXPORT === '1';
+    const exportOptIn = process.env.RFDR_ENABLE_PRODUCTION_EXPORT === '1' && (!app.isPackaged || (require('node:fs').existsSync(require('node:path').join(process.resourcesPath, 'rfdr-test-export.marker')) && process.env.RFDR_TEST_EXPORT === '1'));
     const isolatedExportRuntime = exportOptIn
       ? createIsolatedElectronExportHarness({
           ipcMain, window: thisWindow, pageURL, windowIsUsable,
