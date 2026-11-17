@@ -3,7 +3,6 @@ const fs=require('node:fs/promises');
 const os=require('node:os');
 const path=require('node:path');
 const {spawn}=require('node:child_process');
-const {once}=require('node:events');
 const {packagedEncoder}=require('./isolated-ffmpeg.cjs');
 async function createIsolatedFfmpegSink({resourcesPath,width,height,fps,signal,spawnProcess=spawn,maxRawBytes=512*1024*1024,encodeTimeoutMs=120000}){
  if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||width<2||height<2||width*height*4>64*1024*1024)throw new RangeError('Invalid frame dimensions');
@@ -21,6 +20,9 @@ async function createIsolatedFfmpegSink({resourcesPath,width,height,fps,signal,s
   if(hasAudio)args.push('-f','f32le','-ar','48000','-ac','1','-i',audioFile);
   args.push('-map','0:v:0',...(hasAudio?['-map','1:a:0']:[]),'-c:v','libvpx','-pix_fmt','yuv420p','-auto-alt-ref','0','-b:v','1M',...(hasAudio?['-c:a','libopus']:['-an']),'-f','webm',output);
   child=spawnProcess(binary,args,{shell:false,stdio:['pipe','ignore','pipe'],windowsHide:true});
+  // A cancelled/killed FFmpeg process can emit EPIPE after a write callback settles.
+  // Keep a lifetime listener so late pipe errors never escape to Electron's main process.
+  child.stdin.on('error',error=>{if(!signal?.aborted&&!s?.aborted&&!closed&&!failure)failure=error});
   let stderr='';
   child.stderr?.on('data',b=>{stderr=(stderr+b.toString()).slice(-4096)});
   completion=new Promise((resolve,reject)=>{
