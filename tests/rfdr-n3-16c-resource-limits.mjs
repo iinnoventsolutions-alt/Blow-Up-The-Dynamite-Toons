@@ -12,14 +12,16 @@ const signal=new AbortController().signal;
 try{
  await assert.rejects(createIsolatedFfmpegSink({resourcesPath:resources,width:2,height:2,fps:8,signal,maxRawBytes:0}),/disk budget/);
  await assert.rejects(createIsolatedFfmpegSink({resourcesPath:resources,width:2,height:2,fps:8,signal,encodeTimeoutMs:0}),/timeout/);
- const sink=await createIsolatedFfmpegSink({resourcesPath:resources,width:2,height:2,fps:8,signal,maxRawBytes:16});
+ const spawnMock=()=>{const child=new EventEmitter();child.stderr=new EventEmitter();child.stdin=new EventEmitter();child.stdin.write=(_data,callback)=>{queueMicrotask(()=>callback());return true};child.stdin.end=()=>{};child.kill=()=>{queueMicrotask(()=>child.emit('close',null));return true};return child};
+ const audioSink=await createIsolatedFfmpegSink({resourcesPath:resources,width:2,height:2,fps:8,signal,maxRawBytes:16,spawnProcess:spawnMock});
+ try{await assert.rejects(audioSink.writeAudio({sampleRate:48000,samples:new Float32Array(5)},signal),/format/)}finally{await audioSink.dispose()}
+ const sink=await createIsolatedFfmpegSink({resourcesPath:resources,width:2,height:2,fps:8,signal,maxRawBytes:16,spawnProcess:spawnMock});
  try{
   await sink.writeFrame({index:0,pixels:new Uint8Array(16)},signal);
   await assert.rejects(sink.writeFrame({index:1,pixels:new Uint8Array(16)},signal),/disk budget/);
-  await assert.rejects(sink.writeAudio({sampleRate:48000,samples:new Float32Array(1)},signal),/disk budget/);
  }finally{await sink.dispose()}
  let killed=false;
- const spawnProcess=()=>{const child=new EventEmitter();child.stderr=new EventEmitter();child.kill=()=>{killed=true;queueMicrotask(()=>child.emit('close',null))};return child};
+ const spawnProcess=()=>{const child=spawnMock();child.kill=()=>{killed=true;queueMicrotask(()=>child.emit('close',null));return true};return child};
  const timed=await createIsolatedFfmpegSink({resourcesPath:resources,width:2,height:2,fps:8,signal,encodeTimeoutMs:20,spawnProcess});
  try{
   await timed.writeFrame({index:0,pixels:new Uint8Array(16)},signal);
