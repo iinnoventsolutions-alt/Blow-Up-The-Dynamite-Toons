@@ -30,9 +30,11 @@ jobs:
       - name: Isolated runtime, IPC and security tests
         run: |
           set -euo pipefail
-          for f in tests/rfdr-n3-16-security-regression.mjs tests/rfdr-n3-16c-resource-limits.mjs tests/rfdr-n3-17{a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,r,r2,s}-*.mjs; do
+          for f in tests/rfdr-n3-16-security-regression.mjs tests/rfdr-n3-16c-resource-limits.mjs tests/rfdr-n3-17{a,b,c,d,e,f,g,i,j,k,l,m,n,o,r,r2,s}-*.mjs; do
             if [ -f "$f" ]; then node "$f"; fi
           done
+      # N3.17-H additionally asserts production main.cjs wiring. It belongs to
+      # the later, explicitly authorized application-integration checkpoint.
       - name: Isolated FFmpeg sink and packaged encoder contracts
         run: |
           set -euo pipefail
