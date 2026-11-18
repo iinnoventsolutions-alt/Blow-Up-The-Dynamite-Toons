@@ -7,7 +7,7 @@ permissions:
   contents: read
 jobs:
   isolated-runtime:
-    runs-on: ubuntu-latest
+    runs-on: macos-15
     timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
@@ -16,8 +16,8 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg python3 opus-tools
+      - run: npx playwright install chromium
+      - run: brew install ffmpeg opus-tools
       - run: npm run build
       - name: Isolated runtime, IPC and security tests
         run: |
