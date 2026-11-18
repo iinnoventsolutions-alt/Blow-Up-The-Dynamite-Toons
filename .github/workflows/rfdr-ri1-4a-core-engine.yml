@@ -17,7 +17,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg python3
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg python3 opus-tools
       - run: npm run build
       - name: Deterministic contract and frame/audio/project tests
         run: |
