@@ -1,0 +1,33 @@
+name: RFDR RI1.4-B Isolated Runtime Regression
+on:
+  push:
+    branches: [RFDR-RI1-Controlled-Integration]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg python3 opus-tools
+      - run: npm run build
+      - name: Isolated runtime, IPC and security tests
+        run: |
+          set -euo pipefail
+          for f in tests/rfdr-n3-16-security-regression.mjs tests/rfdr-n3-16c-resource-limits.mjs tests/rfdr-n3-17{a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,r,r2,s}-*.mjs; do
+            if [ -f "$f" ]; then node "$f"; fi
+          done
+      - name: Isolated FFmpeg sink and packaged encoder contracts
+        run: |
+          set -euo pipefail
+          node tests/rfdr-n3-15-packaged-encoder.mjs
+          node tests/rfdr-n3-15b-ffmpeg-sink.mjs
+          node tests/rfdr-n3-15c-packaged-export.mjs
