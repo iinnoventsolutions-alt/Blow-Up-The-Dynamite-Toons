@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const { atomicWrite, readProject } = require('./persistence.cjs');
 const { windowIsUsable, sendToWindow, closeWindow } = require('./window-lifecycle.cjs');
 const { assertTrustedSender } = require('./ipc-security.cjs');
+const { createIsolatedExportRuntime } = require('./isolated-export-runtime.cjs');
 const metadata = require('../src/build-info.json');
 const previousDataDirectory = app.getPath('userData');
 // Preserve packaged recovery/preferences across the display-name correction.
@@ -75,6 +76,9 @@ app.whenReady().then(async () => {
     win.webContents.on('will-navigate', (event) => event.preventDefault());
     win.loadFile(pagePath);
     const thisWindow = win;
+    // RI1.5-A: fail-closed lifecycle only; no production encoder, IPC handlers or UI activation.
+    const isolatedExportRuntime = createIsolatedExportRuntime({ipcMain, window: thisWindow, pageURL, windowIsUsable});
+    thisWindow.on('closed', () => { void isolatedExportRuntime.dispose().catch(() => {}); });
     thisWindow.on('closed', () => {
       if (win === thisWindow) win = null;
       closePrompt = false;
