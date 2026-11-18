@@ -10,6 +10,7 @@ const PdfExportDialog=lazy(()=>import('./PdfExportDialog'));
 const PerformanceDiagnostics=lazy(()=>import('./PerformanceDiagnostics'));
 import { browserRecent,rememberBrowserProject,browserRecovery,snapshotBrowserProject,clearBrowserRecovery } from './browser-store';
 import { exportAnimatic } from './animatic-export';
+import { attachIsolatedStoryboardRenderer } from './isolated-electron-renderer';
 import AudioProperties from './AudioProperties';
 import type { AudioSelection } from './AudioLanes';
 import { audioContext, importAudio, releaseUnusedAudio } from './audio-engine';
@@ -61,6 +62,18 @@ function Modal({ title, children, close }: { title: string; children: ReactNode;
 }
 export default function App() {
   const [history, setHistory] = useState<History | null>(null), project = history?.present;
+  // Read-only renderer endpoint. The trusted main process still controls whether
+  // FFmpeg sessions may start; normal Export Animatic remains unchanged.
+  const [ffmpegAvailable, setFfmpegAvailable] = useState(false);
+  useEffect(() => window.desktop?.isolatedExport?.onAvailability(setFfmpegAvailable), []);
+  const isolatedProjectRef = useRef<Project | null>(null);
+  const isolatedExportSnapshotRef = useRef<Project | null>(null);
+  isolatedProjectRef.current = project ?? null;
+  useEffect(() => {
+    const channel = window.desktop?.isolatedExport;
+    if (!channel) return;
+    return attachIsolatedStoryboardRenderer(channel, () => isolatedExportSnapshotRef.current ?? isolatedProjectRef.current);
+  }, []);
   const [inspectorTab, setInspectorTab] = useState<'Tools'|'Camera'|'Panel'|'Layers'>('Panel');
   const [maskOutsideCamera,setMaskOutsideCamera] = useState(false);
   const [cameraClipboard,setCameraClipboard] = useState<PanelCameraClipboard|null>(null);
@@ -243,6 +256,56 @@ export default function App() {
   const deleteAudioTrack=async()=>{if(!audioSelection)return;const id=audioSelection.trackId;if(!preferences.warnDeleteAudio||await ask('Delete this audio track and its clips? You can undo this.')){edit(p=>{p.audioTracks=p.audioTracks.filter(t=>t.id!==id);pruneAudioAssets(p);});setAudioSelection(null);}};
   useEffect(()=>{if(audioSelection&&project&&!project.audioTracks.some(t=>t.id===audioSelection.trackId))setAudioSelection(null);},[project,audioSelection]);
   const exportVideo=async()=>{if(!project||busyRef.current)return;setPlaying(false);busyRef.current=true;const abort=new AbortController();exportAbort.current=abort;setExportProgress(0);try{const blob=await exportAnimatic(project,abort.signal,setExportProgress),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`${project.title.replace(/[^a-zA-Z0-9 _-]/g,'').slice(0,100)||'Storyboard'}.webm`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);report('Animatic video exported.');}catch(e){report((e as Error).message);}finally{busyRef.current=false;exportAbort.current=null;setExportProgress(null);}};
+  // Developer-only FFmpeg acceptance path; the existing MediaRecorder export is untouched.
+  const exportVideoFfmpeg = async () => {
+    const channel = window.desktop?.isolatedExport;
+    if (!project || !channel || !window.desktop || busyRef.current) return;
+    busyRef.current = true;
+    setPlaying(false);
+    const abort = new AbortController();
+    exportAbort.current = abort;
+    setExportProgress(0);
+    const snapshot = structuredClone(project);
+    isolatedExportSnapshotRef.current = snapshot;
+    let unsubscribe: (() => void) | undefined;
+    let poll: ReturnType<typeof setInterval> | undefined;
+    let sessionId: string | undefined;
+    try {
+      // Main validates and owns this snapshot; metadata cannot be forged by export:start.
+      resultValue(await window.desktop.snapshot(serializeProject(snapshot)));
+      if (abort.signal.aborted) throw new Error('Export cancelled');
+      const outputName = (snapshot.title.replace(/[^a-zA-Z0-9 _-]/g, '').slice(0, 90) || 'Storyboard') + '.webm';
+      const completion = new Promise<{status:'saved' | 'cancelled' | 'failed';error?:string}>((resolve, reject) => {
+        unsubscribe = channel.onComplete(result => {
+          if (result.id === sessionId) resolve(result);
+        });
+        abort.signal.addEventListener('abort', () => reject(new Error('Export cancelled')), {once:true});
+      });
+      const started = await channel.start({projectId:snapshot.id,width:snapshot.width,height:snapshot.height,fps:snapshot.fps,outputName});
+      sessionId = started.id;
+      if (abort.signal.aborted) { await channel.cancel(sessionId); throw new Error('Export cancelled'); }
+      poll = setInterval(() => {
+        if (!sessionId) return;
+        void channel.progress(sessionId).then(value => {
+          const progress = value as {progress?:number};
+          if (typeof progress?.progress === 'number') setExportProgress(progress.progress);
+        }).catch(() => {});
+      }, 250);
+      const result = await completion;
+      if (result.status !== 'saved') throw new Error(result.status === 'cancelled' ? 'Export cancelled' : (result.error || 'FFmpeg export failed'));
+      report('FFmpeg WebM video exported.');
+    } catch (error) {
+      if (sessionId && abort.signal.aborted) await channel.cancel(sessionId).catch(() => {});
+      report((error as Error).message);
+    } finally {
+      if (poll) clearInterval(poll);
+      unsubscribe?.();
+      isolatedExportSnapshotRef.current = null;
+      busyRef.current = false;
+      exportAbort.current = null;
+      setExportProgress(null);
+    }
+  };
   const jumpPitch = (offset: number) => { if (!project || !panel) return; const panels = allPanels(project); const current = panels.findIndex(p => p.panel.id === panel.id); const index = Math.max(0, Math.min(panels.length - 1, current + offset)); select(panels[index].panel.id); setPlayFrame(panels.slice(0, index).reduce((n, p) => n + p.panel.duration, 0)); };
 
   return <div className="application"><StartupSplash/>
@@ -258,7 +321,7 @@ export default function App() {
       {workspace === 'Drawing' && panel && !drawingPreview && <Profiler id="Drawing workspace" onRender={(_id,phase,actualDuration,baseDuration,startTime,commitTime)=>{if(diagnosticsEnabled()&&actualDuration>=16)recordPerformance(`React: Drawing workspace ${phase} render`,actualDuration);if(diagnosticsEnabled()&&commitTime-startTime>=50)recordPerformance('React: Drawing workspace render-to-commit elapsed',commitTime-startTime);}}><DrawingCanvas onion={onion} key={`${panel.id}-${canvasReset}`} panel={panel} project={project} layerId={layer!.id} tool={tool} color={color} size={size} zoom={zoom} onZoom={setZoom} guides={preferences.guides} cameraFrame={cameraFrame} maskOutsideCamera={maskOutsideCamera} cameraTarget={activeCameraTarget} onCameraSelect={(endpoint,frame)=>{setCameraTarget({panelId:panel.id,endpoint,frame});if(scene?.sequentialCamera)setPlayFrame(sceneStart(project,scene)+frame);}} onCameraChange={cameraDrag} onError={report} rotation={viewRotation} options={toolOptions} command={artCommand} onRotation={setViewRotation} onOptions={patch=>setToolOptions(o=>({...o,...patch}))} onSelection={setArtSelection} onColor={setColor} onSize={setSize} onLayers={layers=>edit(()=>{},source=>editPanelLayers(source,panel.id,layers,false))} /></Profiler>}
       {workspace==='Drawing'&&panel&&drawingPreview&&<div className="stage-area drawing-playback-preview"><div className="stage-paper" style={{aspectRatio:`${project.width}/${project.height}`,'--aspect':project.width/project.height} as import('react').CSSProperties}><PlaybackPreview project={project} frame={playFrame}/></div><span className="stage-hint">{playing?'Project playback':'Playback paused'} · Stop returns to drawing</span></div>}
       {workspace === 'Panel' && <><div className="panel-move-toolbar">{transitionButtons}<span>{selectedPanels.length ? `${selectedPanels.length} selected` : 'Select panels using checkboxes, ⌘/Ctrl-click, or Shift-click'}</span><Button onClick={() => { if (!selectedPanels.length && panel) setSelectedPanels([panel.id]); setShowMove(true); }}>Move selected…</Button>{selectedPanels.length > 0 && <Button onClick={() => setSelectedPanels([])}>Clear selection</Button>}</div><PanelBoard transitionId={transitionId} onTransition={selectTransition} project={project} view="panel" activeId={panel!.id} selectedIds={selectedPanels} onSelect={select} onSelection={setSelectedPanels} renderLayers={layerMini} onMove={dropPanels} onMoveScene={reorderScene}/></>}
-      {workspace === 'Timeline' && <><div className="timeline-transition-toolbar">{transitionButtons}<div className="audio-toolbar"><Button title={audioSelection?'Import audio at the playhead into the selected track.':'Import audio at the playhead, creating a separate track for each file.'} disabled={importingAudio||busy} onClick={()=>audioInput.current?.click()}>{importingAudio?'Importing…':'Import audio'}</Button><Button title="Add an empty audio track." disabled={project.audioTracks.length>=32} onClick={addAudioTrack}>+ Audio track</Button><Button title="Clear the selected track so each imported file creates a new track." onClick={()=>setAudioSelection(null)}>New-track imports</Button><Button title="Export the full storyboard as a WebM video with audio, camera motion, and transitions." onClick={()=>void exportVideo()}>Export animatic</Button>{audioEnd(project)>projectFrames(project)&&<span className="audio-tail-note">Audio extends beyond storyboard end</span>}</div></div><TimelineWorkspace seekRevision={timelineSeekRevision} audioSelection={audioSelection} onAudioSelect={selectAudio} onAudioEdit={audioEdit} transitionId={transitionId} onTransition={selectTransition} project={project} activeId={panel!.id} playFrame={playFrame} playing={playing} onTogglePlay={togglePlay} onStop={() => seek(0)} onSeek={seek} onResize={resizeDuration}/></>}
+      {workspace === 'Timeline' && <><div className="timeline-transition-toolbar">{transitionButtons}<div className="audio-toolbar"><Button title={audioSelection?'Import audio at the playhead into the selected track.':'Import audio at the playhead, creating a separate track for each file.'} disabled={importingAudio||busy} onClick={()=>audioInput.current?.click()}>{importingAudio?'Importing…':'Import audio'}</Button><Button title="Add an empty audio track." disabled={project.audioTracks.length>=32} onClick={addAudioTrack}>+ Audio track</Button><Button title="Clear the selected track so each imported file creates a new track." onClick={()=>setAudioSelection(null)}>New-track imports</Button><Button title="Export the full storyboard as a WebM video with audio, camera motion, and transitions." onClick={()=>void exportVideo()}>Export animatic</Button>{ffmpegAvailable && window.desktop?.isolatedExport && <Button title="Developer-only FFmpeg export; requires explicit opt-in and packaged resources." onClick={()=>void exportVideoFfmpeg()}>FFmpeg export (dev)</Button>}{audioEnd(project)>projectFrames(project)&&<span className="audio-tail-note">Audio extends beyond storyboard end</span>}</div></div><TimelineWorkspace seekRevision={timelineSeekRevision} audioSelection={audioSelection} onAudioSelect={selectAudio} onAudioEdit={audioEdit} transitionId={transitionId} onTransition={selectTransition} project={project} activeId={panel!.id} playFrame={playFrame} playing={playing} onTogglePlay={togglePlay} onStop={() => seek(0)} onSeek={seek} onResize={resizeDuration}/></>}
       {workspace === 'Pitch' && panel && <div className="pitch-view"><div className="pitch-screen"><PlaybackPreview project={project} frame={playFrame}/></div>{preferences.pitchCaptions&&<div className="pitch-caption">{panel.dialogue || panel.action || 'No dialogue or action notes for this panel.'}</div>}<div className="pitch-controls"><Button title="Previous panel" onClick={() => jumpPitch(-1)}>‹</Button><Button className="primary" onClick={togglePlay}>{playing ? 'Pause' : 'Play'}</Button><Button title="Next panel" onClick={() => jumpPitch(1)}>›</Button><span>{timecode(playFrame, project.fps)} / {timecode(projectFrames(project), project.fps)}</span><Button onClick={() => { if (document.fullscreenElement) void document.exitFullscreen().catch(e=>report(e.message)); else void document.querySelector('.pitch-view')?.requestFullscreen().catch(e=>report('Full screen could not start: '+e.message)); }}>Full screen</Button></div></div>}
       {workspace !== 'Panel' && workspace !== 'Timeline' && <section className="filmstrip"><div className="filmstrip-heading"><span>PANELS <small>Layers stay connected across workspaces</small></span><div><Button onClick={addPanel}>+ Panel</Button><Button onClick={addScene}>+ Scene</Button>{workspace==='Drawing'&&<>{transitionButtons}<Button title="Duplicate selected panel" onClick={duplicateActivePanel}>Duplicate</Button><Button title="Delete selected panel" onClick={()=>void removePanel()}>Delete</Button></>}</div></div>{workspace === 'Drawing' ? <PanelBoard transitionId={transitionId} onTransition={selectTransition} project={project} view="drawing" activeId={panel!.id} selectedIds={[]} onSelect={select} onSelection={() => {}} renderLayers={layerMini} onMove={dropPanels} onMoveScene={reorderScene}/> : <div className="filmstrip-scroll">{allPanels(project).map(({ scene: s, panel: p }) => <article key={p.id} className={`panel-card ${selectedId === p.id ? 'selected' : ''}`}><button className="panel-image-button" onClick={() => select(p.id)} aria-label={`Select ${s.name}, ${p.name}`}><div className="panel-card-meta"><span>{s.name} / {p.name}</span><span>{timecode(p.duration, project.fps)}</span></div><Thumbnail panel={p} project={project}/></button>{layerMini(p)}</article>)}</div>}</section>}
     </main>
