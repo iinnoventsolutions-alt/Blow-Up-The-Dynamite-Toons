@@ -1,0 +1,77 @@
+name: RFDR RI1.5-C macOS Packaging Compatibility
+on:
+  push:
+    branches: [RFDR-RI1-Controlled-Integration]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+            appdir: mac-arm64
+            binary_arch: arm64
+          - arch: x64
+            runner: macos-15
+            appdir: mac
+            binary_arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Validate TypeScript and production bundle
+        run: npm run build
+      - name: Verify fail-closed developer mode contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tests/rfdr-n3-17h-runtime.mjs
+          node tests/electron-ipc-contract.test.cjs
+          node --check desktop/main.cjs
+          node --check desktop/preload.cjs
+      - name: Build isolated ad-hoc acceptance installer
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          RFDR_ENABLE_PRODUCTION_EXPORT: '0'
+        run: npx electron-builder --mac dmg --${{ matrix.arch }} --publish never
+      - name: Validate architecture, signature, default-off packaging
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch }}
+          APPDIR: ${{ matrix.appdir }}
+          BINARY_ARCH: ${{ matrix.binary_arch }}
+        run: |
+          set -euo pipefail
+          app="release/$APPDIR/IInnovent Professional Storyboard.app"
+          test -d "$app"
+          exe="$app/Contents/MacOS/IInnovent Professional Storyboard"
+          file "$exe" | tee "release/ARCH-$ARCH.txt"
+          file "$exe" | grep -q "$BINARY_ARCH"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          test ! -e "$app/Contents/Resources/rfdr-test-export.marker"
+          test ! -e "$app/Contents/Resources/ffmpeg"
+          dmg="$(find release -maxdepth 1 -type f -name "*-$ARCH.dmg" -print -quit)"
+          test -n "$dmg"
+          hdiutil verify "$dmg"
+          shasum -a 256 "$dmg" > "release/SHA256-$ARCH.txt"
+          printf 'Branch: %s\nCommit: %s\nRun: %s\nArchitecture: %s\nDeveloper FFmpeg: disabled (no marker or encoder)\nSigning: ad-hoc; not notarized\n' "$GITHUB_REF_NAME" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$ARCH" > "release/PROVENANCE-$ARCH.txt"
+      - name: Upload acceptance installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: RFDR-RI1-5C-${{ matrix.arch }}-${{ github.run_id }}
+          path: |
+            release/*-${{ matrix.arch }}.dmg
+            release/ARCH-${{ matrix.arch }}.txt
+            release/SHA256-${{ matrix.arch }}.txt
+            release/PROVENANCE-${{ matrix.arch }}.txt
+          if-no-files-found: error
+          retention-days: 14
