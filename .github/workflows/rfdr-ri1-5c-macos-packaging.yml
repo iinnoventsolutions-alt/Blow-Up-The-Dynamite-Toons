@@ -59,7 +59,12 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$app"
           test ! -e "$app/Contents/Resources/rfdr-test-export.marker"
           test ! -e "$app/Contents/Resources/ffmpeg"
-          dmg="$(find release -maxdepth 1 -type f -name "*-$ARCH.dmg" -print -quit)"
+          # electron-builder uses an unsuffixed DMG for Intel x64 by default.
+          if [ "$ARCH" = "x64" ]; then
+            dmg="$(find release -maxdepth 1 -type f -name "*.dmg" ! -name "*-arm64.dmg" -print -quit)"
+          else
+            dmg="$(find release -maxdepth 1 -type f -name "*-$ARCH.dmg" -print -quit)"
+          fi
           test -n "$dmg"
           hdiutil verify "$dmg"
           shasum -a 256 "$dmg" > "release/SHA256-$ARCH.txt"
@@ -69,7 +74,7 @@ jobs:
         with:
           name: RFDR-RI1-5C-${{ matrix.arch }}-${{ github.run_id }}
           path: |
-            release/*-${{ matrix.arch }}.dmg
+            release/*.dmg
             release/ARCH-${{ matrix.arch }}.txt
             release/SHA256-${{ matrix.arch }}.txt
             release/PROVENANCE-${{ matrix.arch }}.txt
