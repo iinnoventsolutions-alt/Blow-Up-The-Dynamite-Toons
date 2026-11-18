@@ -1,0 +1,211 @@
+name: RFDR Intel I1.2 Isolated x64 Packaging Gate
+on:
+  push:
+    branches: [RFDR-A1.5-D4.6.5-WebM-Muxing-Prototype]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  packaged-intel:
+    runs-on: macos-15-intel
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install prerequisites
+        run: |
+          test "$(uname -m)" = x86_64
+          brew install pkg-config libvpx opus nasm ffmpeg
+          npm ci
+      - name: Production integration candidate TypeScript and renderer contract gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build
+          node --experimental-strip-types --test tests/rfdr-production-renderer.test.mjs
+      - name: Build isolated non-GPL Intel x64 FFmpeg
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostic-output
+          curl --fail --location --retry 3 --output /tmp/intel-i1-ffmpeg.tar.xz https://ffmpeg.org/releases/ffmpeg-8.0.1.tar.xz
+          mkdir -p /tmp/intel-i1-src
+          tar -xf /tmp/intel-i1-ffmpeg.tar.xz -C /tmp/intel-i1-src --strip-components=1
+          cd /tmp/intel-i1-src
+          ./configure --prefix="$RUNNER_TEMP/intel-i1-lgpl" --disable-gpl --disable-nonfree --disable-version3 --disable-autodetect --enable-libvpx --enable-libopus --enable-encoder=libvpx_vp8,libopus --enable-decoder=vp8,opus,pcm_s16le --enable-demuxer=matroska,rawvideo,wav --enable-muxer=webm,s16le --enable-parser=opus,vp8 --enable-protocol=file,pipe --disable-doc --disable-ffplay --disable-ffprobe --disable-debug --enable-small --pkg-config-flags=--static
+          make -j 4
+          make install
+          mkdir -p "$GITHUB_WORKSPACE/intel-i1-resources"
+          cp "$RUNNER_TEMP/intel-i1-lgpl/bin/ffmpeg" "$GITHUB_WORKSPACE/intel-i1-resources/ffmpeg"
+          # Marker is present only in the isolated CI acceptance package, never normal releases.
+          touch "$GITHUB_WORKSPACE/intel-i1-resources/rfdr-test-export.marker"
+          # Bundle codec dylibs and rewrite Homebrew paths to app-relative paths.
+          mkdir -p "$GITHUB_WORKSPACE/intel-i1-resources/lib"
+          for codec in libvpx libopus; do
+            original=$(otool -L "$GITHUB_WORKSPACE/intel-i1-resources/ffmpeg" | awk -v name="$codec" 'index($1, "/" name ".") { print $1; exit }')
+            test -n "$original"
+            basename=$(basename "$original")
+            cp -L "$original" "$GITHUB_WORKSPACE/intel-i1-resources/lib/$basename"
+            chmod u+w "$GITHUB_WORKSPACE/intel-i1-resources/lib/$basename"
+            install_name_tool -change "$original" "@executable_path/lib/$basename" "$GITHUB_WORKSPACE/intel-i1-resources/ffmpeg"
+            install_name_tool -id "@loader_path/$basename" "$GITHUB_WORKSPACE/intel-i1-resources/lib/$basename"
+            codesign --force --sign - "$GITHUB_WORKSPACE/intel-i1-resources/lib/$basename"
+          done
+          codesign --force --sign - "$GITHUB_WORKSPACE/intel-i1-resources/ffmpeg"
+          otool -L "$GITHUB_WORKSPACE/intel-i1-resources/ffmpeg" | tee "$GITHUB_WORKSPACE/diagnostic-output/intel-i1-linked-libraries.txt"
+          for lib in "$GITHUB_WORKSPACE"/intel-i1-resources/lib/*.dylib; do
+            otool -L "$lib" >> "$GITHUB_WORKSPACE/diagnostic-output/intel-i1-linked-libraries.txt"
+          done
+          "$GITHUB_WORKSPACE/intel-i1-resources/ffmpeg" -buildconf > "$GITHUB_WORKSPACE/diagnostic-output/intel-i1-buildconf.txt"
+          file "$GITHUB_WORKSPACE/intel-i1-resources/ffmpeg" | tee "$GITHUB_WORKSPACE/diagnostic-output/intel-i1-architecture.txt"
+      - name: Package Intel x64 Electron app with isolated FFmpeg resource
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const config = {
+            ...pkg.build,
+            extraResources: [{ from: 'intel-i1-resources', to: '.' }],
+          };
+          fs.writeFileSync('/tmp/intel-i1-electron-builder.json', JSON.stringify(config, null, 2));
+          JS
+          npx electron-builder --mac dir --x64 --publish never --config /tmp/intel-i1-electron-builder.json
+          find release -name '*.app' -maxdepth 4 -print | tee diagnostic-output/intel-i1-apps.txt
+      - name: Validate packaged binary and runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP=$(find release -maxdepth 4 -name '*.app' -type d -print -quit)
+          test -n "$APP"
+          FFMPEG="$APP/Contents/Resources/ffmpeg"
+          test -x "$FFMPEG"
+          file "$FFMPEG" | tee diagnostic-output/intel-i1-packaged-binary.txt
+          lipo -archs "$FFMPEG" | tee diagnostic-output/intel-i1-packaged-archs.txt
+          test "$(lipo -archs "$FFMPEG")" = x86_64
+          "$FFMPEG" -version > diagnostic-output/intel-i1-packaged-version.txt
+          "$FFMPEG" -encoders > diagnostic-output/intel-i1-packaged-encoders.txt
+          grep -Eq '^[[:space:]]*V[^[:space:]]*[[:space:]]+libvpx([[:space:]]|$)' diagnostic-output/intel-i1-packaged-encoders.txt
+          grep -Eq '^[[:space:]]*A[^[:space:]]*[[:space:]]+libopus([[:space:]]|$)' diagnostic-output/intel-i1-packaged-encoders.txt
+          bash scripts/verify-intel-package.sh "$APP" 2>&1 | tee diagnostic-output/intel-i1-signature.txt
+          otool -L "$FFMPEG" > diagnostic-output/intel-i1-packaged-dylibs.txt
+          for lib in "$APP"/Contents/Resources/lib/*.dylib; do
+            test -f "$lib"
+            test "$(lipo -archs "$lib")" = x86_64
+            codesign --verify --verbose=2 "$lib"
+            otool -L "$lib" >> diagnostic-output/intel-i1-packaged-dylibs.txt
+          done
+          DYLD_FALLBACK_LIBRARY_PATH=/usr/lib "$FFMPEG" -version > diagnostic-output/intel-i1-isolated-runtime.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          deps=Path('diagnostic-output/intel-i1-packaged-dylibs.txt').read_text().splitlines()[1:]
+          external=[line.strip() for line in deps if '/opt/homebrew/' in line or '/usr/local/' in line]
+          Path('diagnostic-output/intel-i1-external-deps.txt').write_text('\n'.join(external))
+          if external:
+              raise SystemExit('Intel I1.2 BLOCKED: packaged FFmpeg still depends on Homebrew libraries: '+str(external))
+          print('Intel I1.2 PASS: packaged Intel x64 FFmpeg runs with bundled codecs and no Homebrew runtime dylibs.')
+          PY
+      - name: Intel I1.2 six-second encode and decode using packaged FFmpeg
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP=$(find release -maxdepth 4 -name '*.app' -type d -print -quit)
+          test -n "$APP"
+          export RFDR_FFMPEG_BIN="$PWD/$APP/Contents/Resources/ffmpeg"
+          test -x "$RFDR_FFMPEG_BIN"
+          # System ffprobe inspects output only; all encode/decode calls use the packaged binary.
+          command -v ffprobe
+          python3 scripts/rfdr-n1-3-ffmpeg-webm-feasibility.py | tee diagnostic-output/n1-8-packaged-results.log
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          rows=json.loads(Path('diagnostic-output/n1-3-ffmpeg-results.json').read_text())
+          assert len(rows)==4
+          for row in rows:
+              assert row['video_frames']==144
+              assert abs(row['duration']-6)<0.05
+              if 'audio' in row['case']:
+                  assert row['audio_samples']==288000
+              else:
+                  assert row['audio_samples'] is None
+          Path('diagnostic-output/n1-8-packaged-results.json').write_text(json.dumps(rows,indent=2))
+          print('Intel I1.2 PASS: packaged Intel x64 FFmpeg produced all four six-second WebM fixtures.')
+          PY
+      - name: N3.15-C real packaged encoder sink end-to-end
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP=$(find release -maxdepth 4 -name '*.app' -type d -print -quit)
+          test -n "$APP"
+          export RFDR_PACKAGED_RESOURCES="$PWD/$APP/Contents/Resources"
+          node tests/rfdr-n3-15c-packaged-export.mjs | tee diagnostic-output/n3-15c-packaged-results.log
+      - name: N3.17-G packaged isolated pipeline and output lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP=$(find release -maxdepth 4 -name '*.app' -type d -print -quit)
+          test -n "$APP"
+          export RFDR_PACKAGED_RESOURCES="$PWD/$APP/Contents/Resources"
+          node tests/rfdr-n3-17g-packaged-lifecycle.mjs | tee diagnostic-output/n3-17g-packaged-results.log
+      - name: N3.17-O packaged IPC composition smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP=$(find release -maxdepth 4 -name '*.app' -type d -print -quit)
+          test -n "$APP"
+          export RFDR_PACKAGED_RESOURCES="$PWD/$APP/Contents/Resources"
+          node tests/rfdr-n3-17o-packaged-ipc.mjs | tee diagnostic-output/n3-17o-packaged-ipc.log
+      - name: N3.17-S packaged IPC to main-owned WebM save and FFprobe
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP=$(find release -maxdepth 4 -name '*.app' -type d -print -quit)
+          test -n "$APP"
+          export RFDR_PACKAGED_RESOURCES="$PWD/$APP/Contents/Resources"
+          node tests/rfdr-n3-17s-packaged-save.mjs | tee diagnostic-output/n3-17s-packaged-save.log
+      - name: N3.17-T real Electron packaged end-to-end acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP=$(find release -maxdepth 4 -name '*.app' -type d -print -quit)
+          test -n "$APP"
+          export RFDR_PACKAGED_RESOURCES="$PWD/$APP/Contents/Resources"
+          ./node_modules/.bin/electron tests/rfdr-n3-17t-electron-packaged.cjs | tee diagnostic-output/n3-17t-electron-packaged.log
+      - name: Archive isolated Intel x64 manual acceptance app
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP=$(find release -maxdepth 4 -name '*.app' -type d -print -quit)
+          test -n "$APP"
+          test -f "$APP/Contents/Resources/rfdr-test-export.marker"
+          mkdir -p diagnostic-output
+          ditto -c -k --keepParent "$APP" diagnostic-output/RFDR-FFmpeg-Intel-x64-Manual-Acceptance.zip
+      - name: Upload isolated Intel x64 manual acceptance app
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: RFDR-FFmpeg-Intel-x64-Manual-Acceptance
+          path: diagnostic-output/RFDR-FFmpeg-Intel-x64-Manual-Acceptance.zip
+          retention-days: 7
+          if-no-files-found: error
+      - name: Upload Intel I1.2 evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: RFDR-Intel-I1-2-Packaging-Evidence
+          path: |
+            diagnostic-output/intel-i1-*
+            diagnostic-output/n1-8-*
+            diagnostic-output/n3-15c-*
+            diagnostic-output/n3-17g-*
+            diagnostic-output/n3-17o-*
+            diagnostic-output/n3-17s-*
+            diagnostic-output/n3-17t-*
+          retention-days: 14
+          if-no-files-found: warn
