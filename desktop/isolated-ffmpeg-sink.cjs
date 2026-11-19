@@ -13,7 +13,7 @@ async function createIsolatedFfmpegSink({resourcesPath,width,height,fps,signal,s
  const binary=packagedEncoder(resourcesPath);
  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'rfdr-n315-'));
  const audioFile=path.join(dir,'audio.f32'),output=path.join(dir,'export.webm');
- let closed=false,count=0,rawBytes=0,hasAudio=false,child,completion,stopTimer,removeAbort=()=>{},failure=null;
+ let closed=false,count=0,hasAudio=false,child,completion,stopTimer,removeAbort=()=>{},failure=null;
  function ensure(s){if(closed)throw Error('Sink disposed');signal?.throwIfAborted();s?.throwIfAborted();if(failure)throw failure}
  function launch(s){
   const args=['-hide_banner','-loglevel','error','-nostdin','-y','-f','rawvideo','-pixel_format','rgba','-video_size',width+'x'+height,'-framerate',String(fps),'-i','pipe:0'];
@@ -49,7 +49,7 @@ async function createIsolatedFfmpegSink({resourcesPath,width,height,fps,signal,s
   async writeFrame(frame,s){
    ensure(s);
    if(frame.index!==count||frame.pixels.byteLength!==width*height*4)throw Error('Invalid frame order or RGBA size');
-   if(rawBytes+frame.pixels.byteLength>maxRawBytes)throw new RangeError('Raw video disk budget exceeded');
+   // Streamed video is piped with backpressure, not stored on disk.\n   // Bound a single in-flight frame; do not cap cumulative streamed bytes.\n   if(frame.pixels.byteLength>maxRawBytes)throw new RangeError('Raw video frame budget exceeded');
    if(!child)launch(s);
    ensure(s);
    const bytes=Buffer.from(frame.pixels.buffer,frame.pixels.byteOffset,frame.pixels.byteLength);
@@ -59,7 +59,7 @@ async function createIsolatedFfmpegSink({resourcesPath,width,height,fps,signal,s
     child.stdin.once('error',onError);
     child.stdin.write(bytes,e=>{child.stdin.removeListener('error',onError);e?reject(e):resolve()});
    });
-   ensure(s);rawBytes+=frame.pixels.byteLength;count++;
+   ensure(s);count++;
   },
   async finish(s){
    ensure(s);if(count<1)throw Error('No video frames');
