@@ -1,0 +1,216 @@
+name: RFDR RI2.7 Isolated Runtime Packaging Test
+on:
+  push:
+    branches: [RFDR-RI2-Production-Readiness]
+    paths:
+      - '.github/workflows/rfdr-ri2-7-runtime-packaging.yml'
+      - 'release-audit/ri2-4-minimal-ffmpeg-candidate.json'
+      - 'scripts/ri2-4-validate-candidate.mjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-and-smoke:
+    name: isolated runtime (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+            expected: arm64
+          - arch: x64
+            runner: macos-15-intel
+            expected: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 100
+    env:
+      FFMPEG_TAG: n7.1.1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Validate candidate policy
+        run: node scripts/ri2-4-validate-candidate.mjs
+      - name: Install source-build prerequisites (audit only)
+        run: |
+          set -euo pipefail
+          brew install pkg-config libvpx opus nasm
+      - name: Fetch pinned FFmpeg source tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --quiet --depth 1 --branch "$FFMPEG_TAG" https://github.com/FFmpeg/FFmpeg.git ffmpeg-src
+          git -C ffmpeg-src rev-parse HEAD | tee ffmpeg-source-sha.txt
+          git -C ffmpeg-src describe --tags --exact-match | grep -Fx "$FFMPEG_TAG"
+      - name: Compile minimal candidate and record build evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ri2-5-evidence
+          cp ffmpeg-source-sha.txt ri2-5-evidence/
+          python3 - <<'PY'
+          import json, pathlib, subprocess
+          candidate=json.loads(pathlib.Path('release-audit/ri2-4-minimal-ffmpeg-candidate.json').read_text())
+          flags=candidate['requiredConfigureFlags']
+          result=subprocess.run(['./configure','--disable-doc',*flags],cwd='ffmpeg-src',capture_output=True,text=True)
+          pathlib.Path('ri2-5-evidence/configure.log').write_text(result.stdout+'\n'+result.stderr)
+          if result.returncode: raise SystemExit('FFmpeg configure failed (exit '+str(result.returncode)+'): '+(result.stdout+'\\n'+result.stderr)[-5000:])
+          PY
+          make -C ffmpeg-src -j 4 ffmpeg
+          bin=ffmpeg-src/ffmpeg
+          file "$bin" | tee ri2-5-evidence/binary-architecture.txt
+          grep -F '${{ matrix.expected }}' ri2-5-evidence/binary-architecture.txt
+          shasum -a 256 "$bin" > ri2-5-evidence/binary-sha256.txt
+          echo "RI2.5.2: inspecting executable version"
+          "$bin" -hide_banner -version > ri2-5-evidence/version.txt
+          echo "RI2.5.2: inspecting build configuration"
+          "$bin" -hide_banner -buildconf > ri2-5-evidence/buildconf.txt
+          echo "RI2.5.2: inspecting encoders"
+          "$bin" -hide_banner -encoders > ri2-5-evidence/encoders.txt
+          echo "RI2.5.2: inspecting muxers"
+          "$bin" -hide_banner -muxers > ri2-5-evidence/muxers.txt
+          echo "RI2.5.2: inspecting filters"
+          "$bin" -hide_banner -filters > ri2-5-evidence/filters.txt
+          echo "RI2.5.2: inspecting linked dependencies"
+          otool -L "$bin" > ri2-5-evidence/otool-L.txt
+          "$bin" -hide_banner -h encoder=libvpx > ri2-5-evidence/libvpx-options.txt 2>&1
+          "$bin" -hide_banner -h encoder=libopus > ri2-5-evidence/libopus-options.txt 2>&1
+          if grep -Eq -- '--enable-(gpl|nonfree|version3)' ri2-5-evidence/buildconf.txt; then
+            echo 'Unexpected restricted configure flag'; exit 1
+          fi
+          echo 'RI2.5.5: configured external encoder flags'
+          grep -E -- 'enable-(encoder=libvpx|encoder=libopus|libvpx|libopus)' ri2-5-evidence/buildconf.txt || true
+          echo 'RI2.5.5: actual encoder listing (first 100 lines)'
+          sed -n '1,100p' ri2-5-evidence/encoders.txt
+          echo 'RI2.5.5: encoder listing entries mentioning VPX or Opus'
+          grep -Ei 'vpx|opus|vp8' ri2-5-evidence/encoders.txt || true
+          echo 'RI2.5.5: assert VP8 and Opus encoder availability'
+          if ! grep -Eq '^[[:space:]]*V[^[:space:]]*[[:space:]]+libvpx([[:space:]]|$)' ri2-5-evidence/encoders.txt; then
+            echo 'Missing expected libvpx VP8 encoder in actual listing'; exit 1
+          fi
+          if ! grep -Eq '^[[:space:]]*A[^[:space:]]*[[:space:]]+libopus([[:space:]]|$)' ri2-5-evidence/encoders.txt; then
+            echo 'Missing expected libopus audio encoder in actual listing'; exit 1
+          fi
+      - name: End-to-end video and audio WebM smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import math,struct
+          with open('sample.rgba','wb') as f:
+              for i in range(12):
+                  f.write(bytes((i*15%256,70,130,255))* (64*64))
+          with open('sample.f32','wb') as f:
+              for i in range(48000):
+                  f.write(struct.pack('<f',0.08*math.sin(2*math.pi*440*i/48000)))
+          PY
+          echo "RI2.5.8: inspect registered VP8 encoder and option support"
+          if ! grep -Fq -- "-auto-alt-ref" ri2-5-evidence/libvpx-options.txt; then
+            echo "Encoder option -auto-alt-ref is absent; see libvpx-options.txt evidence"
+            sed -n "1,100p" ri2-5-evidence/libvpx-options.txt
+            exit 1
+          fi
+          ffmpeg-src/ffmpeg -hide_banner -loglevel error -nostdin -y -f rawvideo -pixel_format rgba -video_size 64x64 -framerate 12 -i sample.rgba -f f32le -ar 48000 -ac 1 -i sample.f32 -map 0:v:0 -map 1:a:0 -c:v libvpx -pix_fmt yuv420p -auto-alt-ref 0 -b:v 1M -c:a libopus -f webm smoke.webm
+          file smoke.webm | tee ri2-5-evidence/smoke-file.txt
+          test -s smoke.webm
+          shasum -a 256 smoke.webm > ri2-5-evidence/smoke-sha256.txt
+          printf 'Architecture: %s\nSource tag: %s\nRun: %s\nScope: test-only; no distribution clearance\n' '${{ matrix.arch }}' "$FFMPEG_TAG" "$GITHUB_RUN_ID" > ri2-5-evidence/PROVENANCE.txt
+      - name: RI2.6 dependency closure and sanitized runtime evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib, subprocess, os, json
+          root=pathlib.Path('ffmpeg-src/ffmpeg').resolve()
+          output=pathlib.Path('ri2-5-evidence')
+          pending=[root]
+          seen=set()
+          entries=[]
+          external=set()
+          missing=set()
+          while pending:
+              current=pending.pop()
+              key=str(current)
+              if key in seen: continue
+              seen.add(key)
+              proc=subprocess.run(['otool','-L',str(current)],capture_output=True,text=True)
+              if proc.returncode:
+                  entries.append({'binary':key,'error':proc.stderr.strip()})
+                  continue
+              deps=[]
+              for line in proc.stdout.splitlines()[1:]:
+                  name=line.strip().split(' (compatibility version')[0].split(' (current version')[0].strip()
+                  if not name: continue
+                  deps.append(name)
+                  if name.startswith(('/opt/homebrew/','/usr/local/')):
+                      external.add(name)
+                      target=pathlib.Path(name)
+                      if target.exists(): pending.append(target.resolve())
+                      else: missing.add(name)
+                  elif name.startswith('/usr/lib/') or name.startswith('/System/Library/'):
+                      pass
+                  elif name.startswith('@'):
+                      external.add('UNRESOLVED_RELATIVE: '+name)
+                  elif name.startswith('/'):
+                      external.add('OTHER_ABSOLUTE: '+name)
+              entries.append({'binary':key,'dependencies':deps})
+          report={'architecture':'${{ matrix.arch }}','scope':'CI runner inspection only; not a clean-machine test','binary':str(root),'visited_binary_count':len(seen),'external_dependencies':sorted(external),'missing_dependencies':sorted(missing),'dependency_graph':entries,'redistribution_approved':False}
+          (output/'ri2-6-dependency-closure.json').write_text(json.dumps(report,indent=2)+'\n')
+          print('RI2.6.1 external dependency inventory:')
+          for name in sorted(external):
+              kind=('HOMEBREW_BUNDLE_CANDIDATE' if name.startswith(('/opt/homebrew/','/usr/local/')) else 'UNRESOLVED_OR_OTHER')
+              print(kind+': '+name)
+          print('RI2.6.1 missing dependency inventory:')
+          for name in sorted(missing): print('MISSING: '+name)
+          print('External or unresolved dependency entries:',len(external))
+          print('Missing dependencies:',len(missing))
+          print('Clean-machine independence:', 'NOT ESTABLISHED' if external else 'REQUIRES CLEAN-MACHINE TEST')
+          PY
+          env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin ffmpeg-src/ffmpeg -hide_banner -version > ri2-5-evidence/ri2-6-sanitized-launch.txt
+          echo 'Sanitized launch on CI runner passed; this does NOT prove clean-machine compatibility.' >> ri2-5-evidence/ri2-6-sanitized-launch.txt
+      - name: RI2.6.2 focused X11 dependency origin check
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo 'Direct dependencies of FFmpeg:'
+            otool -L ffmpeg-src/ffmpeg
+            echo 'Direct dependencies of Homebrew libvpx:'
+            vpx="$(brew --prefix libvpx)/lib/libvpx.12.dylib"
+            otool -L "$vpx"
+            echo 'libvpx pkg-config linkage:'
+            pkg-config --libs vpx
+            echo 'X11 dependency classification is observational; no packaging changes.'
+          } | tee ri2-5-evidence/ri2-6-2-x11-origin.txt
+      - name: RI2.7 stage relocatable runtime and test bundled library resolution
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ri2-7-stage/bin ri2-7-stage/lib
+          cp ffmpeg-src/ffmpeg ri2-7-stage/bin/ffmpeg
+          cp "$(brew --prefix libvpx)/lib/libvpx.12.dylib" ri2-7-stage/lib/
+          cp "$(brew --prefix opus)/lib/libopus.0.dylib" ri2-7-stage/lib/
+          for lib in libvpx.12.dylib libopus.0.dylib; do
+            install_name_tool -id "@loader_path/$lib" "ri2-7-stage/lib/$lib"
+          done
+          install_name_tool -change "$(brew --prefix libvpx)/lib/libvpx.12.dylib" "@executable_path/../lib/libvpx.12.dylib" ri2-7-stage/bin/ffmpeg
+          install_name_tool -change "$(brew --prefix opus)/lib/libopus.0.dylib" "@executable_path/../lib/libopus.0.dylib" ri2-7-stage/bin/ffmpeg
+          codesign --force --sign - ri2-7-stage/lib/*.dylib ri2-7-stage/bin/ffmpeg
+          otool -L ri2-7-stage/bin/ffmpeg | tee ri2-5-evidence/ri2-7-relocated-links.txt
+          if grep -E '/(opt/homebrew|usr/local)/' ri2-5-evidence/ri2-7-relocated-links.txt; then
+            echo 'ERROR: Homebrew path remains in staged executable'; exit 1
+          fi
+          env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin ri2-7-stage/bin/ffmpeg -hide_banner -version > ri2-5-evidence/ri2-7-staged-launch.txt
+          env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin ri2-7-stage/bin/ffmpeg -hide_banner -loglevel error -nostdin -y -f rawvideo -pixel_format rgba -video_size 64x64 -framerate 12 -i sample.rgba -f f32le -ar 48000 -ac 1 -i sample.f32 -map 0:v:0 -map 1:a:0 -c:v libvpx -pix_fmt yuv420p -auto-alt-ref 0 -b:v 1M -c:a libopus -f webm ri2-7-stage-smoke.webm
+          test -s ri2-7-stage-smoke.webm
+          echo 'Staged WebM export PASS on CI runner; clean-machine test and distribution authorization pending.' | tee ri2-5-evidence/ri2-7-result.txt
+      - name: Upload text evidence only (exclude binaries and media)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: RFDR-RI2-7-${{ matrix.arch }}-${{ github.run_id }}
+          path: ri2-5-evidence/
+          if-no-files-found: warn
+          retention-days: 14
