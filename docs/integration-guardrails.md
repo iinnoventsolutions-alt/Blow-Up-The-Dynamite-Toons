@@ -21,6 +21,7 @@ The target for accepted integration is `Working`. `main` remains separately prot
 | Drawing camera playback border/clipping | C2.4 accepted on `RFDR-Integration-Testing`, 8/8 M1 | `tests/ui-camera.mjs` | Off-canvas artwork visible within moved camera frame is not clipped |
 | Color Picker | C2.5 accepted on `RFDR-Integration-Testing`, 10/10 M1 | `tests/ui-camera.mjs` | Cursor sampling includes drawing margin at zoom/pan |
 | Audio rapid-release snapback | E2-AUD-01 F4 accepted, 8/8 M1 | `tests/diagnostics/e2-aud-01-rapid-release.mjs`, `tests/diagnostics/e2-aud-01-f3-event-trace.mjs` | Clip edits persist on rapid pointer release, Undo/Redo, reopen |
+| Animatic export (WebM / Electron) | E2-AUD-01-Resolution run [42450733526](https://github.com/iinnoventsolutions-alt/Blow-Up-The-Dynamite-Toons/actions/runs/42450733526), commit `78e052ce5b16f7cf2e6bf9b6f96fcc1c9afce7c1`; RFDR-A1.1 red contract run [42751485783](https://github.com/iinnoventsolutions-alt/Blow-Up-The-Dynamite-Toons/actions/runs/42751485783) | `tests/animatic-electron-handshake.test.mjs`, `tests/ui-audio.mjs`, packaged Electron ARM64 manual export | Explicit canvas frame submission, optional audio track, encoded frame/audio content, finite duration and final data flush; verify real Electron after build |
 | Sequential camera / clipboard / rotation | Run 42450733526; C2.3 M1 10/10 | `tests/ui-camera-sequential.mjs`, `tests/sequential-camera.test.ts`, `tests/sequential-camera-clipboard.test.ts` | Scene-local IN/OUT inheritance and intermediate keyframe continuity |
 
 ## Why C3.5 was needed
