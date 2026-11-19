@@ -36,7 +36,7 @@ jobs:
       - name: Install source-build prerequisites (audit only)
         run: |
           set -euo pipefail
-          brew install pkg-config libvpx opus
+          brew install pkg-config libvpx opus nasm
       - name: Fetch pinned FFmpeg source tag
         shell: bash
         run: |
@@ -63,17 +63,17 @@ jobs:
           file "$bin" | tee ri2-5-evidence/binary-architecture.txt
           grep -F '${{ matrix.expected }}' ri2-5-evidence/binary-architecture.txt
           shasum -a 256 "$bin" > ri2-5-evidence/binary-sha256.txt
-          "$bin" -hide_banner -version > ri2-5-evidence/version.txt
-          "$bin" -hide_banner -buildconf > ri2-5-evidence/buildconf.txt
-          "$bin" -hide_banner -encoders > ri2-5-evidence/encoders.txt
-          "$bin" -hide_banner -muxers > ri2-5-evidence/muxers.txt
-          "$bin" -hide_banner -filters > ri2-5-evidence/filters.txt
-          otool -L "$bin" > ri2-5-evidence/otool-L.txt
+          echo "RI2.5.2: inspecting executable version"\n          "$bin" -hide_banner -version > ri2-5-evidence/version.txt
+          echo "RI2.5.2: inspecting build configuration"\n          "$bin" -hide_banner -buildconf > ri2-5-evidence/buildconf.txt
+          echo "RI2.5.2: inspecting encoders"\n          "$bin" -hide_banner -encoders > ri2-5-evidence/encoders.txt
+          echo "RI2.5.2: inspecting muxers"\n          "$bin" -hide_banner -muxers > ri2-5-evidence/muxers.txt
+          echo "RI2.5.2: inspecting filters"\n          "$bin" -hide_banner -filters > ri2-5-evidence/filters.txt
+          echo "RI2.5.2: inspecting linked dependencies"\n          otool -L "$bin" > ri2-5-evidence/otool-L.txt
           if grep -Eq -- '--enable-(gpl|nonfree|version3)' ri2-5-evidence/buildconf.txt; then
             echo 'Unexpected restricted configure flag'; exit 1
           fi
-          grep -E '(^|[[:space:]])libvpx([[:space:]]|$)' ri2-5-evidence/encoders.txt
-          grep -E '(^|[[:space:]])libopus([[:space:]]|$)' ri2-5-evidence/encoders.txt
+          echo 'RI2.5.2: verifying libvpx encoder'\n          grep -E '(^|[[:space:]])libvpx([[:space:]]|$)' ri2-5-evidence/encoders.txt
+          echo 'RI2.5.2: verifying libopus encoder'\n          grep -E '(^|[[:space:]])libopus([[:space:]]|$)' ri2-5-evidence/encoders.txt
       - name: End-to-end video and audio WebM smoke test
         shell: bash
         run: |
