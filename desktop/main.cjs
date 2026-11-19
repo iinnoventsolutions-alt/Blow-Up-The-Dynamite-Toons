@@ -6,6 +6,9 @@ const crypto = require('node:crypto');
 const { atomicWrite, readProject } = require('./persistence.cjs');
 const { windowIsUsable, sendToWindow, closeWindow } = require('./window-lifecycle.cjs');
 const { assertTrustedSender } = require('./ipc-security.cjs');
+const { createIsolatedExportRuntime } = require('./isolated-export-runtime.cjs');
+const { createTrustedProjectRegistry } = require('./isolated-export-project-registry.cjs');
+const { createIsolatedElectronExportHarness } = require('./isolated-electron-export-harness.cjs');
 const metadata = require('../src/build-info.json');
 const previousDataDirectory = app.getPath('userData');
 // Preserve packaged recovery/preferences across the display-name correction.
@@ -15,6 +18,11 @@ app.setName(metadata.name);
 app.setPath('userData', stableDataDirectory);
 app.setAboutPanelOptions({ applicationName: metadata.name, applicationVersion: `Version ${metadata.version}`, version: `Build ${metadata.build}` });
 let win, currentPath = null, dirty = false, closePrompt = false, quitRequested = false, pendingAction = null, recentFiles = [], saveQueue = Promise.resolve();
+// Export metadata is derived from main-process validated project state.
+const exportProjects = createTrustedProjectRegistry({inspectProject(project) {
+  const frameCount = project.scenes.reduce((total, scene) => total + scene.panels.reduce((sum, panel) => sum + panel.duration, 0), 0);
+  return {id:project.id,width:project.width,height:project.height,fps:project.fps,frameCount};
+}});
 const pagePath = path.join(__dirname, '../dist/index.html');
 const pageURL = pathToFileURL(pagePath).href;
 const dataPath = (name) => path.join(app.getPath('userData'), name);
@@ -26,7 +34,7 @@ async function remember(filePath) {
   recentFiles = [{ id: existing?.id || crypto.randomUUID(), path: filePath, name: path.basename(filePath) }, ...recentFiles.filter(f => f.path !== filePath)].slice(0, 12);
   await atomicWrite(dataPath('recent.json'), JSON.stringify(recentFiles));
 }
-async function openPath(filePath) { const text = await readProject(filePath); currentPath = filePath; await remember(filePath); return { text, name: path.basename(filePath) }; }
+async function openPath(filePath) { const text = await readProject(filePath); const {parseProject} = await import('../src/project-format.js'); exportProjects.clear(); exportProjects.publish(parseProject(text)); currentPath = filePath; await remember(filePath); return { text, name: path.basename(filePath) }; }
 app.whenReady().then(async () => {
   try { const list = JSON.parse(await fs.readFile(dataPath('recent.json'), 'utf8')); if (Array.isArray(list)) recentFiles = list.filter(f => typeof f.id === 'string' && typeof f.path === 'string' && typeof f.name === 'string').slice(0, 12); } catch {}
   handle('project:recent', () => recentFiles.map(({ id, name }) => ({ id, name })));
@@ -37,7 +45,7 @@ app.whenReady().then(async () => {
     return queued(() => openPath(result.filePaths[0]));
   });
   handle('export:pdf', (data, name, openAfter) => queued(() => require('./pdf-export.cjs').exportPdf(data, name, openAfter, { dialog, shell, win })));
-  handle('project:new', () => queued(async () => { currentPath = null; }));
+  handle('project:new', () => queued(async () => { currentPath = null; exportProjects.clear(); }));
   handle('project:save', (text, saveAs) => queued(async () => {
     const { parseProject } = await import('../src/project-format.js'); const project = parseProject(text);
     let destination = currentPath;
@@ -46,12 +54,12 @@ app.whenReady().then(async () => {
       if (result.canceled) return null; destination = result.filePath;
       if (!destination.toLowerCase().endsWith('.issb')) destination += '.issb';
     }
-    await atomicWrite(destination, text); currentPath = destination; await remember(destination);
+    await atomicWrite(destination, text); exportProjects.clear(); exportProjects.publish(project); currentPath = destination; await remember(destination);
     return { name: path.basename(destination) };
   }));
-  handle('project:snapshot', (text) => queued(async () => { const { parseProject } = await import('../src/project-format.js'); parseProject(text); await atomicWrite(dataPath('recovery.innovent'), text); }));
+  handle('project:snapshot', (text) => queued(async () => { const { parseProject } = await import('../src/project-format.js'); const project = parseProject(text); await atomicWrite(dataPath('recovery.innovent'), text); exportProjects.clear(); exportProjects.publish(project); }));
   handle('project:recovery', async () => { try { const text = await readProject(dataPath('recovery.innovent')); return { title: JSON.parse(text).title }; } catch { return null; } });
-  handle('project:recover', () => queued(async () => { const text = await readProject(dataPath('recovery.innovent')); currentPath = null; return { text, name: 'Recovered project — save a copy' }; }));
+  handle('project:recover', () => queued(async () => { const text = await readProject(dataPath('recovery.innovent')); const {parseProject} = await import('../src/project-format.js'); exportProjects.clear(); exportProjects.publish(parseProject(text)); currentPath = null; return { text, name: 'Recovered project — save a copy' }; }));
   handle('project:discard-recovery', () => queued(() => fs.rm(dataPath('recovery.innovent'), { force: true })));
   ipcMain.on('project:dirty', (event, value) => { trusted(event); if (typeof value === 'boolean') dirty = value; });
   ipcMain.on('project:close-after-save', (event) => { trusted(event); if (!dirty) closeWindow(win); });
@@ -75,6 +83,16 @@ app.whenReady().then(async () => {
     win.webContents.on('will-navigate', (event) => event.preventDefault());
     win.loadFile(pagePath);
     const thisWindow = win;
+    // Developer-only opt-in. Packaged builds additionally require an explicit test marker.
+    const exportOptIn = process.env.RFDR_ENABLE_PRODUCTION_EXPORT === '1' &&
+      (!app.isPackaged || (require('node:fs').existsSync(path.join(process.resourcesPath, 'rfdr-test-export.marker')) && process.env.RFDR_TEST_EXPORT === '1'));
+    const isolatedExportRuntime = exportOptIn
+      ? createIsolatedElectronExportHarness({ipcMain, window: thisWindow, pageURL, windowIsUsable, registry: exportProjects, resourcesPath: process.resourcesPath, dialog, enabled: true})
+      : createIsolatedExportRuntime({ipcMain, window: thisWindow, pageURL, windowIsUsable});
+    thisWindow.webContents.on('did-finish-load', () => {
+      if (exportOptIn && windowIsUsable(thisWindow)) thisWindow.webContents.send('isolated-export:available', true);
+    });
+    thisWindow.on('closed', () => { void isolatedExportRuntime.dispose().catch(() => {}); });
     thisWindow.on('closed', () => {
       if (win === thisWindow) win = null;
       closePrompt = false;

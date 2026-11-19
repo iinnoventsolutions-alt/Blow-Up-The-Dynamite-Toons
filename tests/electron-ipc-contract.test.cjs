@@ -9,7 +9,16 @@ const desktop = (name) => fs.readFileSync(path.join(__dirname, '..', 'desktop', 
 test('SA-2 preload exposes only fixed, named IPC channels', () => {
   const source = desktop('preload.cjs');
   const channels = [...source.matchAll(/ipcRenderer\.(?:invoke|send)\('([^']+)'/g)].map(match => match[1]);
-  assert.equal(channels.length, 14);
+  const expected = [
+    'isolated-export:start', 'isolated-export:progress', 'isolated-export:cancel',
+    'isolated-export:browser-reply',
+    'export:pdf', 'project:save', 'project:open', 'project:recent',
+    'project:open-recent', 'project:new', 'project:recovery',
+    'project:recover', 'project:discard-recovery', 'project:snapshot',
+    'project:dirty', 'project:close-after-save', 'project:cancel-close',
+    'app:renderer-ready'
+  ];
+  assert.deepEqual([...channels].sort(), [...expected].sort());
   assert.equal(new Set(channels).size, channels.length);
   assert.doesNotMatch(source, /ipcRenderer\.(?:invoke|send)\(\s*[a-zA-Z_$]/);
   assert.doesNotMatch(source, /exposeInMainWorld\([^,]+,\s*ipcRenderer/);

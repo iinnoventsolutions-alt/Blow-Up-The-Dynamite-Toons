@@ -1,0 +1,101 @@
+name: RFDR RI1.5-D Developer FFmpeg Acceptance Installers
+on:
+  push:
+    branches: [RFDR-RI1-Controlled-Integration]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  developer-acceptance:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+            appdir: mac-arm64
+            binary_arch: arm64
+          - arch: x64
+            runner: macos-15-intel
+            appdir: mac
+            binary_arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Build and regression checks
+        run: |
+          npm run build
+          node tests/rfdr-n3-17h-runtime.mjs
+          node tests/electron-ipc-contract.test.cjs
+      - name: Prepare architecture-specific test-only FFmpeg resources
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch }}
+          BINARY_ARCH: ${{ matrix.binary_arch }}
+        run: |
+          set -euo pipefail
+          brew install ffmpeg
+          mkdir -p .rfdr-acceptance-resources
+          cp "$(command -v ffmpeg)" .rfdr-acceptance-resources/ffmpeg
+          chmod 755 .rfdr-acceptance-resources/ffmpeg
+          file .rfdr-acceptance-resources/ffmpeg
+          file .rfdr-acceptance-resources/ffmpeg | grep -q "$BINARY_ARCH"
+          .rfdr-acceptance-resources/ffmpeg -hide_banner -version | head -n 1
+          printf 'RFDR RI1.5-D isolated acceptance build only\n' > .rfdr-acceptance-resources/rfdr-test-export.marker
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const pkg=JSON.parse(fs.readFileSync("package.json","utf8"));
+            const config={...pkg.build,extraResources:[
+              {from:".rfdr-acceptance-resources/ffmpeg",to:"ffmpeg"},
+              {from:".rfdr-acceptance-resources/rfdr-test-export.marker",to:"rfdr-test-export.marker"}
+            ]};
+            fs.writeFileSync(".rfdr-acceptance-builder.json",JSON.stringify(config,null,2));
+          '
+      - name: Build test-only developer DMG
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          RFDR_ENABLE_PRODUCTION_EXPORT: '1'
+          RFDR_TEST_EXPORT: '1'
+        run: npx electron-builder --config .rfdr-acceptance-builder.json --mac dmg --${{ matrix.arch }} --publish never
+      - name: Verify developer resources, signature and installer
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch }}
+          APPDIR: ${{ matrix.appdir }}
+          BINARY_ARCH: ${{ matrix.binary_arch }}
+        run: |
+          set -euo pipefail
+          app="release/$APPDIR/IInnovent Professional Storyboard.app"
+          test -d "$app"
+          resources="$app/Contents/Resources"
+          test -f "$resources/rfdr-test-export.marker"
+          test -x "$resources/ffmpeg"
+          file "$resources/ffmpeg" | grep -q "$BINARY_ARCH"
+          file "$app/Contents/MacOS/IInnovent Professional Storyboard" | grep -q "$BINARY_ARCH"
+          "$resources/ffmpeg" -hide_banner -version | head -n 1
+          codesign --verify --deep --strict --verbose=2 "$app"
+          if [ "$ARCH" = "x64" ]; then
+            dmg="$(find release -maxdepth 1 -type f -name "*.dmg" ! -name "*-arm64.dmg" -print -quit)"
+          else
+            dmg="$(find release -maxdepth 1 -type f -name "*-$ARCH.dmg" -print -quit)"
+          fi
+          test -n "$dmg"
+          hdiutil verify "$dmg"
+          shasum -a 256 "$dmg" > "release/SHA256-DEV-$ARCH.txt"
+          printf 'Branch: %s\nCommit: %s\nRun: %s\nArchitecture: %s\nPurpose: developer-only FFmpeg manual acceptance\nActivation: RFDR_ENABLE_PRODUCTION_EXPORT=1 RFDR_TEST_EXPORT=1 at app launch\nSigning: ad-hoc, not notarized\nRedistribution: test-only; review FFmpeg licensing before release\n' "$GITHUB_REF_NAME" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$ARCH" > "release/PROVENANCE-DEV-$ARCH.txt"
+      - name: Upload developer acceptance installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: RFDR-RI1-5D-Developer-${{ matrix.arch }}-${{ github.run_id }}
+          path: |
+            release/*.dmg
+            release/SHA256-DEV-${{ matrix.arch }}.txt
+            release/PROVENANCE-DEV-${{ matrix.arch }}.txt
+          if-no-files-found: error
+          retention-days: 14
