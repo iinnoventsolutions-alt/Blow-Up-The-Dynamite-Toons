@@ -11,6 +11,7 @@
     "--enable-protocol=file",
     "--enable-protocol=pipe",
     "--enable-demuxer=rawvideo",
+    "--enable-decoder=rawvideo",
     "--enable-demuxer=pcm_f32le",
     "--enable-muxer=webm",
     "--enable-encoder=libvpx_vp8",
