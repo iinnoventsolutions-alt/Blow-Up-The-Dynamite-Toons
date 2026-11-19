@@ -56,12 +56,12 @@ jobs:
           flags=candidate['requiredConfigureFlags']
           result=subprocess.run(['./configure','--disable-doc',*flags],cwd='ffmpeg-src',capture_output=True,text=True)
           pathlib.Path('ri2-5-evidence/configure.log').write_text(result.stdout+'\n'+result.stderr)
-          if result.returncode: raise SystemExit('FFmpeg configure failed: '+result.stderr[-3000:])
+          if result.returncode: raise SystemExit('FFmpeg configure failed (exit '+str(result.returncode)+'): '+(result.stdout+'\\n'+result.stderr)[-5000:])
           PY
           make -C ffmpeg-src -j 4 ffmpeg
           bin=ffmpeg-src/ffmpeg
           file "$bin" | tee ri2-5-evidence/binary-architecture.txt
-          file "$bin" | grep -q '${{ matrix.expected }}'
+          grep -F '${{ matrix.expected }}' ri2-5-evidence/binary-architecture.txt
           shasum -a 256 "$bin" > ri2-5-evidence/binary-sha256.txt
           "$bin" -hide_banner -version > ri2-5-evidence/version.txt
           "$bin" -hide_banner -buildconf > ri2-5-evidence/buildconf.txt
@@ -72,8 +72,8 @@ jobs:
           if grep -Eq -- '--enable-(gpl|nonfree|version3)' ri2-5-evidence/buildconf.txt; then
             echo 'Unexpected restricted configure flag'; exit 1
           fi
-          "$bin" -hide_banner -encoders | grep -q libvpx
-          "$bin" -hide_banner -encoders | grep -q libopus
+          grep -E '(^|[[:space:]])libvpx([[:space:]]|$)' ri2-5-evidence/encoders.txt
+          grep -E '(^|[[:space:]])libopus([[:space:]]|$)' ri2-5-evidence/encoders.txt
       - name: End-to-end video and audio WebM smoke test
         shell: bash
         run: |
