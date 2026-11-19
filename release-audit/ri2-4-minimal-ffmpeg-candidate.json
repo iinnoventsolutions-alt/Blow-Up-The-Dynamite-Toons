@@ -18,6 +18,7 @@
     "--enable-encoder=libvpx_vp8",
     "--enable-encoder=libopus",
     "--enable-filter=aresample",
+    "--enable-filter=scale",
     "--enable-libvpx",
     "--enable-libopus"
   ],
