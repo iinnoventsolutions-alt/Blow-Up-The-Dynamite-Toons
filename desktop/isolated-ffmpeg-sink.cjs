@@ -49,7 +49,9 @@ async function createIsolatedFfmpegSink({resourcesPath,width,height,fps,signal,s
   async writeFrame(frame,s){
    ensure(s);
    if(frame.index!==count||frame.pixels.byteLength!==width*height*4)throw Error('Invalid frame order or RGBA size');
-   // Streamed video is piped with backpressure, not stored on disk.\n   // Bound a single in-flight frame; do not cap cumulative streamed bytes.\n   if(frame.pixels.byteLength>maxRawBytes)throw new RangeError('Raw video frame budget exceeded');
+   // Streamed video is piped with backpressure, not stored on disk.
+   // Bound a single in-flight frame; do not cap cumulative streamed bytes.
+   if(frame.pixels.byteLength>maxRawBytes)throw new RangeError('Raw video frame budget exceeded');
    if(!child)launch(s);
    ensure(s);
    const bytes=Buffer.from(frame.pixels.buffer,frame.pixels.byteOffset,frame.pixels.byteLength);
