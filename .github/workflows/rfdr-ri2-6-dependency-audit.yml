@@ -170,6 +170,20 @@ jobs:
           PY
           env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin ffmpeg-src/ffmpeg -hide_banner -version > ri2-5-evidence/ri2-6-sanitized-launch.txt
           echo 'Sanitized launch on CI runner passed; this does NOT prove clean-machine compatibility.' >> ri2-5-evidence/ri2-6-sanitized-launch.txt
+      - name: RI2.6.2 focused X11 dependency origin check
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo 'Direct dependencies of FFmpeg:'
+            otool -L ffmpeg-src/ffmpeg
+            echo 'Direct dependencies of Homebrew libvpx:'
+            vpx="$(brew --prefix libvpx)/lib/libvpx.12.dylib"
+            otool -L "$vpx"
+            echo 'libvpx pkg-config linkage:'
+            pkg-config --libs vpx
+            echo 'X11 dependency classification is observational; no packaging changes.'
+          } | tee ri2-5-evidence/ri2-6-2-x11-origin.txt
       - name: Upload text evidence only (exclude binaries and media)
         if: always()
         uses: actions/upload-artifact@v4
