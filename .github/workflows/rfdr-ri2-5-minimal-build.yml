@@ -69,7 +69,7 @@ jobs:
           echo "RI2.5.2: inspecting muxers"\n          "$bin" -hide_banner -muxers > ri2-5-evidence/muxers.txt
           echo "RI2.5.2: inspecting filters"\n          "$bin" -hide_banner -filters > ri2-5-evidence/filters.txt
           echo "RI2.5.2: inspecting linked dependencies"\n          otool -L "$bin" > ri2-5-evidence/otool-L.txt
-          "$bin" -hide_banner -h encoder=libvpx > ri2-5-evidence/libvpx-options.txt 2>&1
+          "$bin" -hide_banner -h encoder=libvpx-vp8 > ri2-5-evidence/libvpx-options.txt 2>&1
           "$bin" -hide_banner -h encoder=libopus > ri2-5-evidence/libopus-options.txt 2>&1
           if grep -Eq -- '--enable-(gpl|nonfree|version3)' ri2-5-evidence/buildconf.txt; then
             echo 'Unexpected restricted configure flag'; exit 1
