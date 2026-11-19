@@ -81,10 +81,19 @@ jobs:
           if grep -Eq -- '--enable-(gpl|nonfree|version3)' ri2-5-evidence/buildconf.txt; then
             echo 'Unexpected restricted configure flag'; exit 1
           fi
-          echo 'RI2.5.2: verifying libvpx encoder'
-          grep -E '(^|[[:space:]])libvpx(-vp8)?([[:space:]]|$)' ri2-5-evidence/encoders.txt
-          echo 'RI2.5.2: verifying libopus encoder'
-          grep -E '(^|[[:space:]])libopus([[:space:]]|$)' ri2-5-evidence/encoders.txt
+          echo 'RI2.5.5: configured external encoder flags'
+          grep -E -- 'enable-(encoder=libvpx|encoder=libopus|libvpx|libopus)' ri2-5-evidence/buildconf.txt || true
+          echo 'RI2.5.5: actual encoder listing (first 100 lines)'
+          sed -n '1,100p' ri2-5-evidence/encoders.txt
+          echo 'RI2.5.5: encoder listing entries mentioning VPX or Opus'
+          grep -Ei 'vpx|opus|vp8' ri2-5-evidence/encoders.txt || true
+          echo 'RI2.5.5: assert VP8 and Opus encoder availability'
+          if ! grep -Eq '^[[:space:]]*V[^[:space:]]*[[:space:]]+libvpx([[:space:]]|$)' ri2-5-evidence/encoders.txt; then
+            echo 'Missing expected libvpx VP8 encoder in actual listing'; exit 1
+          fi
+          if ! grep -Eq '^[[:space:]]*A[^[:space:]]*[[:space:]]+libopus([[:space:]]|$)' ri2-5-evidence/encoders.txt; then
+            echo 'Missing expected libopus audio encoder in actual listing'; exit 1
+          fi
       - name: End-to-end video and audio WebM smoke test
         shell: bash
         run: |
