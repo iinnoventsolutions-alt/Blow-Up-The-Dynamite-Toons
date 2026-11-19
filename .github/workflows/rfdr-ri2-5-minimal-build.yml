@@ -63,19 +63,28 @@ jobs:
           file "$bin" | tee ri2-5-evidence/binary-architecture.txt
           grep -F '${{ matrix.expected }}' ri2-5-evidence/binary-architecture.txt
           shasum -a 256 "$bin" > ri2-5-evidence/binary-sha256.txt
-          echo "RI2.5.2: inspecting executable version"\n          "$bin" -hide_banner -version > ri2-5-evidence/version.txt
-          echo "RI2.5.2: inspecting build configuration"\n          "$bin" -hide_banner -buildconf > ri2-5-evidence/buildconf.txt
-          echo "RI2.5.2: inspecting encoders"\n          "$bin" -hide_banner -encoders > ri2-5-evidence/encoders.txt
-          echo "RI2.5.2: inspecting muxers"\n          "$bin" -hide_banner -muxers > ri2-5-evidence/muxers.txt
-          echo "RI2.5.2: inspecting filters"\n          "$bin" -hide_banner -filters > ri2-5-evidence/filters.txt
-          echo "RI2.5.2: inspecting linked dependencies"\n          otool -L "$bin" > ri2-5-evidence/otool-L.txt
+          echo "RI2.5.2: inspecting executable version"
+          "$bin" -hide_banner -version > ri2-5-evidence/version.txt
+          echo "RI2.5.2: inspecting build configuration"
+          "$bin" -hide_banner -buildconf > ri2-5-evidence/buildconf.txt
+          echo "RI2.5.2: inspecting encoders"
+          "$bin" -hide_banner -encoders > ri2-5-evidence/encoders.txt
+          echo "RI2.5.2: inspecting muxers"
+          "$bin" -hide_banner -muxers > ri2-5-evidence/muxers.txt
+          echo "RI2.5.2: inspecting filters"
+          "$bin" -hide_banner -filters > ri2-5-evidence/filters.txt
+          echo "RI2.5.2: inspecting linked dependencies"
+          otool -L "$bin" > ri2-5-evidence/otool-L.txt
           "$bin" -hide_banner -h encoder=libvpx-vp8 > ri2-5-evidence/libvpx-options.txt 2>&1
+          "$bin" -hide_banner -h encoder=libvpx > ri2-5-evidence/libvpx-alias-options.txt 2>&1
           "$bin" -hide_banner -h encoder=libopus > ri2-5-evidence/libopus-options.txt 2>&1
           if grep -Eq -- '--enable-(gpl|nonfree|version3)' ri2-5-evidence/buildconf.txt; then
             echo 'Unexpected restricted configure flag'; exit 1
           fi
-          echo 'RI2.5.2: verifying libvpx encoder'\n          grep -E '(^|[[:space:]])libvpx([[:space:]]|$)' ri2-5-evidence/encoders.txt
-          echo 'RI2.5.2: verifying libopus encoder'\n          grep -E '(^|[[:space:]])libopus([[:space:]]|$)' ri2-5-evidence/encoders.txt
+          echo 'RI2.5.2: verifying libvpx encoder'
+          grep -E '(^|[[:space:]])libvpx(-vp8)?([[:space:]]|$)' ri2-5-evidence/encoders.txt
+          echo 'RI2.5.2: verifying libopus encoder'
+          grep -E '(^|[[:space:]])libopus([[:space:]]|$)' ri2-5-evidence/encoders.txt
       - name: End-to-end video and audio WebM smoke test
         shell: bash
         run: |
@@ -89,7 +98,7 @@ jobs:
               for i in range(48000):
                   f.write(struct.pack('<f',0.08*math.sin(2*math.pi*440*i/48000)))
           PY
-          echo "RI2.5.3: confirm libvpx auto-alt-ref option is exposed"
+          echo "RI2.5.4: inspect registered VP8 encoder and option support"
           if ! grep -Fq -- "-auto-alt-ref" ri2-5-evidence/libvpx-options.txt; then
             echo "Encoder option -auto-alt-ref is absent; see libvpx-options.txt evidence"
             sed -n "1,100p" ri2-5-evidence/libvpx-options.txt
