@@ -18,9 +18,9 @@ try{
  const sink=await createIsolatedFfmpegSink({resourcesPath:resources,width:2,height:2,fps:8,signal,maxRawBytes:16,spawnProcess:spawnMock});
  try{
   await sink.writeFrame({index:0,pixels:new Uint8Array(16)},signal);
-  await assert.rejects(sink.writeFrame({index:1,pixels:new Uint8Array(16)},signal),/disk budget/);
+  await sink.writeFrame({index:1,pixels:new Uint8Array(16)},signal);\n  await sink.writeFrame({index:2,pixels:new Uint8Array(16)},signal);\n  assert.equal(typeof sink.finish,'function');
  }finally{await sink.dispose()}
- let killed=false;
+ const tooSmall=await createIsolatedFfmpegSink({resourcesPath:resources,width:2,height:2,fps:8,signal,maxRawBytes:15,spawnProcess:spawnMock});\n try{await assert.rejects(tooSmall.writeFrame({index:0,pixels:new Uint8Array(16)},signal),/frame budget/)}finally{await tooSmall.dispose()}\n let killed=false;
  const spawnProcess=()=>{const child=spawnMock();child.kill=()=>{killed=true;queueMicrotask(()=>child.emit('close',null));return true};return child};
  const timed=await createIsolatedFfmpegSink({resourcesPath:resources,width:2,height:2,fps:8,signal,encodeTimeoutMs:20,spawnProcess});
  try{
