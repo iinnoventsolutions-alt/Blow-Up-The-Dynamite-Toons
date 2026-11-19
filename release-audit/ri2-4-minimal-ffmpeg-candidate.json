@@ -7,6 +7,7 @@
   "container": "webm",
   "requiredConfigureFlags": [
     "--disable-everything",
+    "--disable-xlib",
     "--enable-ffmpeg",
     "--enable-protocol=file",
     "--enable-protocol=pipe",
