@@ -1,0 +1,130 @@
+name: RFDR RI2.2 FFmpeg License and Dependency Evidence
+on:
+  push:
+    branches: [RFDR-RI2-Production-Readiness]
+    paths:
+      - '.github/workflows/rfdr-ri2-2-ffmpeg-evidence.yml'
+      - 'docs/RFDR-RI2-1-production-readiness-audit.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  encoder-evidence:
+    name: ffmpeg-evidence (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+            expected: arm64
+          - arch: x64
+            runner: macos-15-intel
+            expected: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install architecture-specific FFmpeg for audit only
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install ffmpeg
+      - name: Capture configuration, licensing signals and direct dependencies
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch }}
+          EXPECTED: ${{ matrix.expected }}
+        run: |
+          set -euo pipefail
+          mkdir -p ri2-evidence
+          encoder="$(command -v ffmpeg)"
+          resolved="$(realpath "$encoder")"
+          printf '%s\n' "$encoder" > ri2-evidence/ffmpeg-path.txt
+          printf '%s\n' "$resolved" > ri2-evidence/ffmpeg-resolved-path.txt
+          file "$resolved" | tee ri2-evidence/ffmpeg-file.txt
+          file "$resolved" | grep -q "$EXPECTED"
+          shasum -a 256 "$resolved" > ri2-evidence/ffmpeg-sha256.txt
+          ffmpeg -hide_banner -version > ri2-evidence/ffmpeg-version.txt
+          ffmpeg -hide_banner -buildconf > ri2-evidence/ffmpeg-buildconf.txt
+          ffmpeg -hide_banner -encoders > ri2-evidence/ffmpeg-encoders.txt
+          ffmpeg -hide_banner -codecs > ri2-evidence/ffmpeg-codecs.txt
+          ffmpeg -hide_banner -h encoder=libvpx > ri2-evidence/libvpx-encoder.txt 2>&1 || true
+          ffmpeg -hide_banner -h encoder=libopus > ri2-evidence/libopus-encoder.txt 2>&1 || true
+          otool -L "$resolved" > ri2-evidence/ffmpeg-otool-L.txt
+          otool -l "$resolved" > ri2-evidence/ffmpeg-otool-load-commands.txt
+          codesign -dv --verbose=4 "$resolved" > ri2-evidence/ffmpeg-codesign.txt 2>&1 || true
+          brew info --json=v2 ffmpeg > ri2-evidence/homebrew-ffmpeg-info.json
+          brew list --versions ffmpeg > ri2-evidence/homebrew-ffmpeg-version.txt
+          brew deps --tree ffmpeg > ri2-evidence/homebrew-ffmpeg-dependency-tree.txt
+          brew list --formula ffmpeg > ri2-evidence/homebrew-ffmpeg-installed-files.txt
+          printf 'Branch: %s\nCommit: %s\nRun: %s\nArchitecture: %s\nPurpose: audit evidence only; not a release artifact\n' "$GITHUB_REF_NAME" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$ARCH" > ri2-evidence/PROVENANCE.txt
+      - name: Capture recursive linked-library inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, pathlib, re, subprocess
+          root=pathlib.Path("ri2-evidence")
+          start=pathlib.Path((root/"ffmpeg-resolved-path.txt").read_text().strip())
+          pending=[start]
+          seen=set()
+          graph=[]
+          while pending:
+              path=pending.pop()
+              try: resolved=path.resolve(strict=True)
+              except OSError:
+                  graph.append({"path":str(path),"error":"not found"})
+                  continue
+              if str(resolved) in seen: continue
+              seen.add(str(resolved))
+              proc=subprocess.run(["otool","-L",str(resolved)],capture_output=True,text=True)
+              entry={"path":str(resolved),"otool_exit":proc.returncode,"dependencies":[]}
+              if proc.returncode:
+                  entry["error"]=proc.stderr.strip()
+              else:
+                  for line in proc.stdout.splitlines()[1:]:
+                      match=re.match(r"\s*(\S+)\s+\(compatibility version",line)
+                      if not match: continue
+                      dep=match.group(1)
+                      entry["dependencies"].append(dep)
+                      if dep.startswith("/opt/homebrew/") or dep.startswith("/usr/local/"):
+                          pending.append(pathlib.Path(dep))
+              graph.append(entry)
+          (root/"linked-library-graph.json").write_text(json.dumps(graph,indent=2)+"\n")
+          (root/"linked-library-inventory.txt").write_text("\n".join(e["path"] for e in graph)+"\n")
+          if any(e.get("otool_exit",0)!=0 for e in graph):
+              raise SystemExit("Could not inspect all resolved Homebrew-linked dependencies")
+          PY
+      - name: Audit-only license indicators and evidence summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '# RI2.2 FFmpeg evidence summary'
+            echo
+            echo 'This is an audit-only capture; successful execution is NOT redistribution approval.'
+            echo
+            echo '## Version and configuration'
+            head -n 12 ri2-evidence/ffmpeg-version.txt
+            echo
+            echo '## License-related configure flags (requires human/legal verification)'
+            grep -E -- '--enable-(gpl|version3|nonfree|libvpx|libopus)|--disable-(gpl|version3|nonfree)' ri2-evidence/ffmpeg-buildconf.txt || true
+            echo
+            echo '## Dependency inventory'
+            cat ri2-evidence/linked-library-inventory.txt
+            echo
+            echo '## Release gates not tested'
+            echo '- Recursive @rpath/@loader_path resolution on a clean macOS installation'
+            echo '- Bundled library license notices and source/offer obligations'
+            echo '- Developer ID signing, hardened runtime and Apple notarization'
+            echo '- Reproducible static/dynamic encoder distribution'
+          } > ri2-evidence/SUMMARY.md
+          cat ri2-evidence/SUMMARY.md
+      - name: Upload audit evidence (not distributable binaries)
+        uses: actions/upload-artifact@v4
+        with:
+          name: RFDR-RI2-2-FFmpeg-Evidence-${{ matrix.arch }}-${{ github.run_id }}
+          path: ri2-evidence/
+          if-no-files-found: error
+          retention-days: 14
