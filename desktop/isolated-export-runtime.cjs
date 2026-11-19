@@ -28,6 +28,12 @@ function createIsolatedExportRuntime({ipcMain,window,pageURL,windowIsUsable,enab
    if(windowIsUsable(window))window.webContents.send('isolated-export:complete',{id:context.id,status:destination===null?'cancelled':'saved'});
    return destination;
   }catch(error){
+   // Developer-only diagnostic: preserve internal details in Electron main logs,
+   // never forward exception text or project contents across renderer IPC.
+   if(process.env.RFDR_ENABLE_PRODUCTION_EXPORT==='1'&&process.env.RFDR_TEST_EXPORT==='1'){
+    const detail=error instanceof Error?error.message:String(error);
+    console.error('[RFDR RI1.5-D1] isolated export failure', {name:error instanceof Error?error.name:'UnknownError',message:detail.slice(0,500),code:typeof error?.code==='string'?error.code.slice(0,60):undefined});
+   }
    if(saveOutput&&windowIsUsable(window))window.webContents.send('isolated-export:complete',{id:context.id,status:context.signal.aborted?'cancelled':'failed',error:context.signal.aborted?undefined:publicExportError(error)});
    throw error;
   }
