@@ -23,6 +23,7 @@ try{
  const external=path.join(root,'external');writeFileSync(external,'x',{mode:0o755});
  symlinkSync(external,binary);assert.throws(()=>packagedEncoder(resources,'darwin'),/external symlink/);
  rmSync(binary);
+ writeFileSync(binary,'#!/bin/sh\nexit 0\n',{mode:0o755});
  const lib=path.join(resources,'ffmpeg-runtime','lib','libvpx.12.dylib');
  rmSync(lib);symlinkSync(external,lib);
  assert.throws(()=>packagedEncoder(resources,'darwin'),/dependency must remain/);
