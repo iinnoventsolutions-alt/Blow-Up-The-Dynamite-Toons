@@ -1,11 +1,10 @@
 name: RFDR RI2.14.1 Encrypted Internal Test Bundles
 on:
+  push:
+    branches: [RFDR-RI2-Production-Readiness]
+    paths:
+      - '.github/workflows/rfdr-ri2-14-1-encrypted-test-bundles.yml'
   workflow_dispatch:
-    inputs:
-      age_recipient:
-        description: 'age public recipient key (age1...); keep matching private key off GitHub'
-        required: true
-        type: string
 permissions:
   contents: read
 jobs:
@@ -243,7 +242,7 @@ jobs:
       - name: RI2.14.1 Encrypt private internal-test runtime
         shell: bash
         env:
-          AGE_RECIPIENT: ${{ inputs.age_recipient }}
+          AGE_RECIPIENT: age1h9vdupvjtgtg7hyqenvrj0lsdeczfle9kfgnuz9ryef92yvkp9msrgxu2f
         run: |
           set -euo pipefail
           if [[ ! "$AGE_RECIPIENT" =~ ^age1[023456789acdefghjklmnpqrstuvwxyz]{58}$ ]]; then
