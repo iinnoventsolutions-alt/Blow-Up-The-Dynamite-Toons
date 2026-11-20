@@ -1,6 +1,6 @@
 # RFDR-RI2.14.4 — Manual Acceptance Record and Clean-Mac Gate
 
-**Status:** Development-Mac ARM64 and Rosetta Intel acceptance **CLOSED** based on user-reported results; native clean-machine validation **OPEN**.
+**Status:** Development-Mac ARM64, Rosetta Intel, and native clean-machine acceptance **CLOSED based on user-reported results**. Production release gates remain OPEN.
 
 **Provenance:** User-reported manual Terminal results from the RI2.14.2 and RI2.14.3 acceptance sessions. This document records reports; it does not claim independent machine-log verification. Build source: [RI2.14.1 GitHub Actions run 44661662574](https://github.com/iinnoventsolutions-alt/Blow-Up-The-Dynamite-Toons/actions/runs/44661662574), commit `fee32263`; ARM64 and x64 encrypted artifacts built successfully.
 
@@ -59,7 +59,7 @@
 | C8 | Temporarily remove each staged dylib, observe expected loader failure, restore and relaunch | Both dependencies proven, successful recovery |
 | C9 | Archive logs, SHA-256 manifests, machine metadata, test commands, reviewer/date and PASS/FAIL outcomes | Evidence complete, stored privately |
 
-**Decision:** RI2-DEPS clean-machine PASS requires C1–C9 PASS on both native architectures. Current state is **PENDING**. Development-Mac ARM64 and Intel Rosetta are complete; they must not be counted as clean-host PASS.
+**Decision (2026-11-19):** User confirms C1–C9 PASS on both native ARM64 and native Intel clean Macs (18/18 PASS), with no issues. RI2.14.4 manual acceptance is CLOSED on that basis. This is a user-attested result, not independent inspection of machine logs; retain original evidence privately for release audit. Development-Mac ARM64 and Rosetta Intel remain separate, previously completed validation.
 
 ## Release gates unaffected
 
