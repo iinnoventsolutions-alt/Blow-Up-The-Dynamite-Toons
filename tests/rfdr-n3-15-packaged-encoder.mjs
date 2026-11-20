@@ -7,11 +7,13 @@ const require=createRequire(import.meta.url);
 const {packagedEncoder,probePackagedEncoder}=require('../desktop/isolated-ffmpeg.cjs');
 const root=mkdtempSync(path.join(tmpdir(),'n315-')),resources=path.join(root,'Contents','Resources');
 try{
- mkdirSync(resources,{recursive:true});
+ mkdirSync(path.join(resources,'ffmpeg-runtime','bin'),{recursive:true});
+ mkdirSync(path.join(resources,'ffmpeg-runtime','lib'),{recursive:true});
+ for(const name of ['libvpx.12.dylib','libopus.0.dylib'])writeFileSync(path.join(resources,'ffmpeg-runtime','lib',name),'test dylib');
  assert.throws(()=>packagedEncoder(resources,'linux'),/macOS only/);
  assert.throws(()=>packagedEncoder('relative','darwin'),/resources path/);
  assert.throws(()=>packagedEncoder(resources,'darwin'),/ENOENT/);
- const binary=path.join(resources,'ffmpeg');
+ const binary=path.join(resources,'ffmpeg-runtime','bin','ffmpeg');
  writeFileSync(binary,'#!/bin/sh\nprintf "ffmpeg version N3.15-test\\n"\n',{mode:0o755});
  assert.equal(packagedEncoder(resources,'darwin'),realpathSync(binary));
  const probe=await probePackagedEncoder(resources);
@@ -21,6 +23,10 @@ try{
  const external=path.join(root,'external');writeFileSync(external,'x',{mode:0o755});
  symlinkSync(external,binary);assert.throws(()=>packagedEncoder(resources,'darwin'),/external symlink/);
  rmSync(binary);
+ const lib=path.join(resources,'ffmpeg-runtime','lib','libvpx.12.dylib');
+ rmSync(lib);symlinkSync(external,lib);
+ assert.throws(()=>packagedEncoder(resources,'darwin'),/dependency must remain/);
+ rmSync(lib);writeFileSync(lib,'test dylib');
  writeFileSync(binary,'#!/bin/sh\nsleep 2\n',{mode:0o755});
  await assert.rejects(probePackagedEncoder(resources,{timeoutMs:50}),/timed out/);
  const controller=new AbortController();controller.abort();
