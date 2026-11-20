@@ -70,7 +70,7 @@ jobs:
               lines.append('libvpx and Opus upstream license texts: NOT COLLECTED by RI2.10')
               lines.append('Component source tarball/checksum and modification notices: NOT VERIFIED by RI2.10')
               lines.append('')
-          lines+=['## Decision','Evidence files collected and inspected. Missing upstream libvpx/Opus license texts, full source/build provenance and notice/offer analysis require separate collection and qualified legal review. No production redistribution authorized.']
+          lines+=['## RI2.12 upstream reference notices','libvpx upstream reference: '+('COLLECTED' if pathlib.Path('notices/libvpx-upstream-LICENSE.txt').is_file() else 'MISSING'),'Opus upstream reference: '+('COLLECTED' if pathlib.Path('notices/opus-upstream-COPYING.txt').is_file() else 'MISSING'),'These default-branch copies are not verified against exact compiled versions.','## Decision','Upstream reference notices collected; exact-version source provenance, modification notices, FFmpeg LGPL obligations and qualified legal review remain outstanding. No production redistribution authorized.']
           report='\n'.join(lines)+'\n'
           pathlib.Path('RI2-12-REVIEW.md').write_text(report)
           print(report)
@@ -81,6 +81,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: RFDR-RI2-12-review-${{ github.run_id }}
-          path: |\n            RI2-12-REVIEW.md\n            notices/
+          path: |
+            RI2-12-REVIEW.md
+            notices/
           if-no-files-found: warn
           retention-days: 14
