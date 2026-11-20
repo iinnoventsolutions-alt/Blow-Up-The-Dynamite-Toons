@@ -5,10 +5,20 @@ const {spawn}=require('node:child_process');
 function packagedEncoder(resourcesPath,platform=process.platform){
  if(platform!=='darwin')throw new Error('Packaged encoder prototype currently supports macOS only');
  if(typeof resourcesPath!=='string'||!path.isAbsolute(resourcesPath))throw new TypeError('Invalid Electron resources path');
- const candidate=path.join(resourcesPath,'ffmpeg');
- const realRoot=fs.realpathSync(resourcesPath);
+ // Relocated CI runtime keeps its dylibs next to ../bin, resolved via @executable_path/../lib.
+ const runtimeRoot=path.join(resourcesPath,'ffmpeg-runtime');
+ const candidate=path.join(runtimeRoot,'bin','ffmpeg');
+ const realResources=fs.realpathSync(resourcesPath);
+ const realRuntime=fs.realpathSync(runtimeRoot);
+ const realBin=fs.realpathSync(path.join(runtimeRoot,'bin'));
+ const realLib=fs.realpathSync(path.join(runtimeRoot,'lib'));
  const realBinary=fs.realpathSync(candidate);
- if(path.dirname(realBinary)!==realRoot)throw new Error('Packaged FFmpeg must be a direct resource, not an external symlink');
+ if(path.dirname(realRuntime)!==realResources||path.dirname(realBin)!==realRuntime||path.dirname(realLib)!==realRuntime||path.dirname(realBinary)!==realBin)
+  throw new Error('Packaged FFmpeg must remain within the bundled runtime; external symlinks are forbidden');
+ for(const name of ['libvpx.12.dylib','libopus.0.dylib']){
+  const library=fs.realpathSync(path.join(runtimeRoot,'lib',name));
+  if(path.dirname(library)!==realLib||!fs.statSync(library).isFile())throw new Error('Packaged FFmpeg dependency must remain within bundled lib directory');
+ }
  const st=fs.statSync(realBinary);
  if(!st.isFile()||(st.mode&0o111)===0)throw new Error('Packaged FFmpeg is not executable');
  return realBinary;
