@@ -23,6 +23,8 @@ jobs:
         run: |
           command -v ffprobe >/dev/null && command -v ffmpeg >/dev/null || brew install ffmpeg
           command -v python3 >/dev/null || brew install python
+          command -v pdftotext >/dev/null || brew install poppler
+          pdftotext -v
           ffprobe -version
           python3 --version
           python3 -m pip install --user --break-system-packages 'pypdf>=5,<7' 'fonttools>=4,<5'
