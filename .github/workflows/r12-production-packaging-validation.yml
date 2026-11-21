@@ -25,6 +25,8 @@ jobs:
           command -v python3 >/dev/null || brew install python
           ffprobe -version
           python3 --version
+          python3 -m pip install --user --break-system-packages 'pypdf>=5,<7'
+          python3 -c 'from pypdf import PdfReader; print("pypdf ready")'
       - name: Validate production integration syntax
         run: |
           node --check desktop/main.cjs
