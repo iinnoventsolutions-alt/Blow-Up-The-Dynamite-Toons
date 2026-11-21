@@ -19,6 +19,12 @@ jobs:
       - run: npm ci
       - name: Install Playwright Chromium for browser regressions
         run: npx playwright install chromium
+      - name: Install media and PDF test prerequisites
+        run: |
+          command -v ffprobe >/dev/null && command -v ffmpeg >/dev/null || brew install ffmpeg
+          command -v python3 >/dev/null || brew install python
+          ffprobe -version
+          python3 --version
       - name: Validate production integration syntax
         run: |
           node --check desktop/main.cjs
