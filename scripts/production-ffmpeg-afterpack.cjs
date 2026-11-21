@@ -2,11 +2,11 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const {execFileSync} = require('node:child_process');
-// electron-builder Arch enum: x64=0, arm64=3.
+// electron-builder Arch enum: x64=1, arm64=3. Accept named values for compatibility.
 const required = ['bin/ffmpeg', 'lib/libvpx.12.dylib', 'lib/libopus.0.dylib'];
 async function afterPack(context) {
   if (context.electronPlatformName !== 'darwin') return;
-  const architecture = context.arch === 3 ? 'arm64' : context.arch === 0 ? 'x64' : null;
+  const architecture = context.arch === 3 || context.arch === 'arm64' ? 'arm64' : context.arch === 1 || context.arch === 'x64' ? 'x64' : null;
   if (!architecture) throw new Error('Unsupported macOS packaging architecture');
   const variable = architecture === 'arm64' ? 'RI2_FFMPEG_ARM64_DIR' : 'RI2_FFMPEG_X64_DIR';
   const source = process.env[variable];
