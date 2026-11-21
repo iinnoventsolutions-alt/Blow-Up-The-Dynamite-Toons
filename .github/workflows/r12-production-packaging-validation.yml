@@ -33,6 +33,7 @@ jobs:
         run: |
           node --check desktop/main.cjs
           node --check scripts/production-ffmpeg-afterpack.cjs
+          node -e "const fs=require('fs'); const hook=fs.readFileSync('scripts/production-ffmpeg-afterpack.cjs','utf8'); if(!hook.includes(\"context.arch === 1\") || !hook.includes(\"context.arch === 3\")) process.exit(1)"
           node -e "const p=require('./package.json'); if(!p.build.afterPack || !p.scripts['package:mac:arm64'] || !p.scripts['package:mac:intel']) process.exit(1)"
       - run: npm test
       - run: npm run test:ui
