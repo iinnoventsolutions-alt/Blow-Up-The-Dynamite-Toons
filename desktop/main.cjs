@@ -93,7 +93,7 @@ app.whenReady().then(async () => {
       try { packagedEncoder(process.resourcesPath); productionExportReady = true; }
       catch (error) { console.error('[R1.2] Bundled FFmpeg unavailable:', error.message); }
     }
-    const exportOptIn = productionExportReady || testExportOptIn;
+    const exportOptIn = app.isPackaged ? productionExportReady : testExportOptIn;
     const isolatedExportRuntime = exportOptIn
       ? createIsolatedElectronExportHarness({ipcMain, window: thisWindow, pageURL, windowIsUsable, registry: exportProjects, resourcesPath: process.resourcesPath, dialog, enabled: true})
       : createIsolatedExportRuntime({ipcMain, window: thisWindow, pageURL, windowIsUsable});
