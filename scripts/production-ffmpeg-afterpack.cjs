@@ -2,11 +2,11 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const {execFileSync} = require('node:child_process');
-const {Arch} = require('builder-util-runtime');
+// electron-builder Arch enum: x64=1, arm64=3.
 const required = ['bin/ffmpeg', 'lib/libvpx.12.dylib', 'lib/libopus.0.dylib'];
 async function afterPack(context) {
   if (context.electronPlatformName !== 'darwin') return;
-  const architecture = context.arch === Arch.arm64 ? 'arm64' : context.arch === Arch.x64 ? 'x64' : null;
+  const architecture = context.arch === 3 ? 'arm64' : context.arch === 1 ? 'x64' : null;
   if (!architecture) throw new Error('Unsupported macOS packaging architecture');
   const variable = architecture === 'arm64' ? 'RI2_FFMPEG_ARM64_DIR' : 'RI2_FFMPEG_X64_DIR';
   const source = process.env[variable];
@@ -17,7 +17,7 @@ async function afterPack(context) {
     if (!resolved.startsWith(root + path.sep)) throw new Error('FFmpeg runtime contains an external symlink: ' + relative);
     const stat = await fs.stat(resolved);
     if (!stat.isFile()) throw new Error('FFmpeg runtime component is not a file: ' + relative);
-    const architectures = execFileSync('lipo', ['-archs', resolved], {encoding:'utf8'}).trim().split(/\\s+/);
+    const architectures = execFileSync('lipo', ['-archs', resolved], {encoding:'utf8'}).trim().split(/\s+/);
     const expected = architecture === 'x64' ? 'x86_64' : 'arm64';
     if (!architectures.includes(expected)) throw new Error('Incorrect FFmpeg component architecture: ' + relative);
   }
