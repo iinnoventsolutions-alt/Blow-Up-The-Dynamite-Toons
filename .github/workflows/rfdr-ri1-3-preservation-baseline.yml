@@ -3,8 +3,6 @@ on:
   push:
     branches:
       - RFDR-RI1-Controlled-Integration
-      - RFDR-Integration-Testing
-      - RFDR-C3.5-Onion-Skin-Resolution
       - Working
   pull_request:
     branches:
