@@ -17,6 +17,8 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
+      - name: Install Playwright Chromium for browser regressions
+        run: npx playwright install chromium
       - name: Validate production integration syntax
         run: |
           node --check desktop/main.cjs
