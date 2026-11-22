@@ -26,11 +26,15 @@ async function dragWithCue(source, target) {
   await page.mouse.up(); await paint();
 }
 try {
-  await page.goto(url); assert.equal(await page.title(), 'Innovent Professional Storyboard');
+  await page.goto(url); assert.equal(await page.title(), 'IInnovent Professional Storyboard');
   const p = fixture(), [s1, s2, s3] = p.scenes;
   await load(p, 'legacy.innovent');
   assert.deepEqual(await page.locator('.film-scene').evaluateAll(nodes => nodes.map(n => n.classList.contains('scene-shaded'))), [false, true, false]);
   await workspace('Panel');
+  const boxes = await page.locator('.panel-overview .panel-card').evaluateAll(nodes => nodes.map(n => { const r = n.getBoundingClientRect(); return { x: r.x, y: r.y }; }));
+  assert.equal(boxes[0].y, boxes[3].y, 'The next scene fills the remaining row position');
+  assert(boxes[5].y > boxes[4].y, 'A scene continues onto the next row');
+  assert.equal(boxes[5].x, boxes[0].x, 'Wrapped panels restart at the left edge');
   assert.deepEqual(await page.locator('.scene-grid').evaluateAll(nodes => nodes.map(n => n.classList.contains('scene-shaded'))), [false, true, false]);
   await workspace('Drawing'); assert.equal(await page.getByLabel('Duration in seconds').inputValue(), '5');
   assert((await page.locator('.status-bar').innerText()).includes(`Version ${metadata.version} · Build ${metadata.build}`));

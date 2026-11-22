@@ -1,0 +1,41 @@
+{
+  "checkpoint": "RFDR-RI2.4",
+  "status": "proposed-only-not-built",
+  "purpose": "Minimal WebM export encoder candidate; licensing and redistribution not approved",
+  "videoEncoder": "libvpx",
+  "audioEncoder": "libopus",
+  "container": "webm",
+  "requiredConfigureFlags": [
+    "--disable-everything",
+    "--disable-xlib",
+    "--enable-ffmpeg",
+    "--enable-protocol=file",
+    "--enable-protocol=pipe",
+    "--enable-demuxer=rawvideo",
+    "--enable-decoder=rawvideo",
+    "--enable-decoder=pcm_f32le",
+    "--enable-demuxer=pcm_f32le",
+    "--enable-muxer=webm",
+    "--enable-encoder=libvpx_vp8",
+    "--enable-encoder=libopus",
+    "--enable-filter=aresample",
+    "--enable-filter=scale",
+    "--enable-libvpx",
+    "--enable-libopus"
+  ],
+  "forbiddenConfigureFlags": [
+    "--enable-gpl",
+    "--enable-version3",
+    "--enable-nonfree",
+    "--enable-libx264",
+    "--enable-libx265",
+    "--enable-openssl"
+  ],
+  "reviewNotes": [
+    "This is a candidate configuration, not a proven build command. Exact FFmpeg configure option names and required transitive components must be validated against pinned FFmpeg source.",
+    "Version3 is prohibited in this initial candidate as a conservative review gate, not because it always implies GPL licensing.",
+    "Disable-everything may require explicit enablement of additional decoders, parsers, filters, formats, devices or protocols after compile and smoke testing.",
+    "License classification must be based on actual compiled configuration and all linked libraries; absence of GPL flags alone does not establish redistribution compliance.",
+    "No production package, binaries, signing, notarization or distribution is authorized."
+  ]
+}

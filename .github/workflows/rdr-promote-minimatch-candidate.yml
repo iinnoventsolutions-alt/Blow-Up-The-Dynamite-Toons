@@ -1,0 +1,59 @@
+name: RDR Promote Verified Minimatch Candidate
+on:
+  push:
+    branches:
+      - Release-Defect-Resolution
+    paths:
+      - .github/workflows/rdr-promote-minimatch-candidate.yml
+permissions:
+  contents: write
+  actions: read
+jobs:
+  promote-validated-lockfile:
+    if: github.repository == 'iinnoventsolutions-alt/Blow-Up-The-Dynamite-Toons'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: true
+      - name: Download exact passing-trial dependency artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api repos/${{ github.repository }}/actions/artifacts/13061348768/zip > /tmp/rdr-validated.zip
+          unzip -p /tmp/rdr-validated.zip minimatch-candidate-package.json > /tmp/rdr-package.json
+          unzip -p /tmp/rdr-validated.zip minimatch-candidate-lock.json > /tmp/rdr-package-lock.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const pkg=JSON.parse(fs.readFileSync('/tmp/rdr-package.json'));
+          const lock=JSON.parse(fs.readFileSync('/tmp/rdr-package-lock.json'));
+          if(pkg.overrides?.minimatch!=='11.0.1') throw Error('Candidate minimatch override mismatch');
+          if(pkg.devDependencies?.['electron-builder']!=='26.17.0') throw Error('Electron Builder manifest changed');
+          if(lock.packages?.['node_modules/electron-builder']?.version!=='26.17.0') throw Error('Electron Builder lock changed');
+          if(lock.packages?.['']?.overrides?.minimatch && lock.packages[''].overrides.minimatch!=='11.0.1') throw Error('Lockfile override mismatch');
+          NODE
+          cp /tmp/rdr-package.json package.json
+          cp /tmp/rdr-package-lock.json package-lock.json
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Validate committed candidate reproducibly
+        run: |
+          npm ci
+          npm audit --audit-level=low
+          npm audit --omit=dev
+          test "$(node -p "require('./package-lock.json').packages['node_modules/electron-builder'].version")" = "26.17.0"
+      - name: Commit only the two validated dependency files
+        run: |
+          set -euo pipefail
+          git add -- package.json package-lock.json
+          if git diff --cached --quiet; then
+            echo 'Validated dependency files already match; nothing to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(security): persist verified minimatch dependency override and lockfile'
+          git push origin HEAD:Release-Defect-Resolution

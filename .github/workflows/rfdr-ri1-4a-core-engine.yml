@@ -1,0 +1,34 @@
+name: RFDR RI1.4-A Core Engine Regression
+on:
+  push:
+    branches: [RFDR-RI1-Controlled-Integration]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  core-engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg python3 opus-tools
+      - run: npm run build
+      - name: Deterministic contract and frame/audio/project tests
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types --test tests/rfdr-n2-deterministic-export-contract.test.mjs tests/rfdr-n3-1-frame-scheduler.test.mjs tests/rfdr-n3-2-frame-metadata.test.mjs tests/rfdr-n3-3-audio-mixer.test.mjs tests/rfdr-n3-4-adapter-integration.test.mjs tests/rfdr-n3-5-1-project-fidelity.test.mjs tests/rfdr-n3-5-project-adapter.test.mjs tests/rfdr-n3-6-artwork-render.test.mjs
+      - name: Isolated coordinator and project export tests
+        run: |
+          set -euo pipefail
+          node tests/rfdr-n3-11-coordinator.mjs
+          node tests/rfdr-n3-12-project-audio.mjs
+          node tests/rfdr-n3-13-project-export.mjs
+          node tests/rfdr-n3-14-reliability.mjs
+      - name: Real browser artwork WebM smoke
+        run: node tests/rfdr-n3-8-artwork-webm.mjs

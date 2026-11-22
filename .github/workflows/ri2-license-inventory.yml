@@ -1,0 +1,25 @@
+name: RI2 License Inventory (documentation only)
+on:
+  push:
+    branches: [RFDR-RI2-Production-Readiness]
+    paths:
+      - 'release-audit/licenses/**'
+      - 'release-audit/ri2-4-minimal-ffmpeg-candidate.json'
+      - 'docs/RFDR-RI2-15-2-B-binary-license-verification.md'
+      - 'scripts/check-ri2-license-inventory.mjs'
+      - '.github/workflows/ri2-license-inventory.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  license-inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Validate exact-tag notices and restricted configuration policy
+        run: node scripts/check-ri2-license-inventory.mjs
+      - name: Keep release authorization blocked
+        run: echo 'Inventory validation only; no production FFmpeg distribution approval.'

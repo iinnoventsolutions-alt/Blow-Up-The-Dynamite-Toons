@@ -1,0 +1,112 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { cameraAt, changeDuration, commit, editProject, makePanel, makeProject, newHistory, redo, undo } from '../src/model.ts';
+import { cameraCorners, localPanelStart, moveCameraKey, putCameraKey, sceneStart, copyPanelCamera, pastePanelCamera, resetPanelCamera } from '../src/camera.ts';
+import { parseProject, serializeProject } from '../src/project-format.js';
+test('key insertion samples the current pose, updates at the same frame, and round trips through history',()=>{
+ const p=makeProject(),s=p.scenes[0];putCameraKey(s,p,0);putCameraKey(s,p,119,{x:1199,zoom:2,rotation:45});
+ const mid=cameraAt(s,60,p);const k=putCameraKey(s,p,60);assert.equal(k.x,mid.x);assert.equal(k.zoom,mid.zoom);
+ const id=k.id;putCameraKey(s,p,60,{x:1200});assert.equal(s.camera.length,3);assert.equal(s.camera[1].id,id);
+ let h=newHistory(p);h=commit(h,editProject(p,d=>{d.scenes[0].camera[1].zoom=3;}));assert.equal(undo(h).present.scenes[0].camera[1].zoom,k.zoom);assert.equal(redo(undo(h)).present.scenes[0].camera[1].zoom,3);
+ assert.deepEqual(parseProject(serializeProject(h.present)),h.present);
+});
+test('linear, ease and hold interpolate and camera resets between scenes',()=>{
+ const p=makeProject(),s=p.scenes[0];putCameraKey(s,p,0,{x:0,rotation:0});putCameraKey(s,p,100,{x:100,zoom:3,rotation:90});
+ assert.equal(cameraAt(s,25,p).x,25);s.camera[0].interpolation='ease';assert.equal(cameraAt(s,25,p).x,15.625);
+ s.camera[0].interpolation='hold';assert.equal(cameraAt(s,99,p).x,0);assert.equal(cameraAt(s,100,p).x,100);
+ putCameraKey(s,p,50,{x:50});s.camera[0].interpolation='hold';assert.equal(cameraAt(s,49,p).x,0);assert.equal(cameraAt(s,50,p).x,50,'Hold switches at an intermediate key exactly');
+ const noKeys={...s,camera:[]};assert.deepEqual(cameraAt(noKeys,50,p),{x:960,y:540,zoom:1,rotation:0});
+});
+test('timing edits scale within a panel and shift later keys; collisions reject atomically',()=>{
+ const p=makeProject(),s=p.scenes[0];s.panels.push(makePanel());putCameraKey(s,p,0);putCameraKey(s,p,119);putCameraKey(s,p,120);putCameraKey(s,p,239);
+ changeDuration(s,s.panels[0],60);assert.deepEqual(s.camera.map(k=>k.frame),[0,59,60,179]);
+ const before=serializeProject(p);assert.throws(()=>changeDuration(s,s.panels[0],1),/merge camera keys/);assert.equal(serializeProject(p),before);
+ assert.equal(localPanelStart(s,s.panels[1]),60);assert.equal(sceneStart(p,s),0);
+});
+test('key retiming rejects occupied or out-of-scene frames and preserves identity',()=>{
+ const p=makeProject(),s=p.scenes[0],a=putCameraKey(s,p,0),b=putCameraKey(s,p,119);
+ assert.throws(()=>moveCameraKey(s,a.id,119),/already occupies/);assert.throws(()=>moveCameraKey(s,a.id,-1),/inside the scene/);
+ moveCameraKey(s,b.id,50);assert.deepEqual(s.camera.map(k=>k.frame),[0,50]);assert.equal(s.camera[1].id,b.id);
+});
+test('frame geometry uses project aspect ratio, zoom, pan and rotation',()=>{
+ const p=makeProject();assert.deepEqual(cameraCorners({x:960,y:540,zoom:1,rotation:0},p),[[0,0],[1920,0],[1920,1080],[0,1080]]);
+ const c=cameraCorners({x:960,y:540,zoom:2,rotation:90},p);assert(Math.abs(c[0][0]-1230)<1e-8);assert(Math.abs(c[0][1]-60)<1e-8);
+});
+
+test('poses sampled from endpoint keys cannot duplicate IDs or override target frame',()=>{const p=makeProject(),s=p.scenes[0];s.panels.push(makePanel());const original=putCameraKey(s,p,0);const pose=cameraAt(s,120,p);const next=putCameraKey(s,p,120,{...pose,x:1000});assert.notEqual(next.id,original.id);assert.equal(next.frame,120);const metadata={...original,frame:0,id:original.id,y:600};const out=putCameraKey(s,p,239,metadata);assert.notEqual(out.id,original.id);assert.equal(out.frame,239);assert.equal(out.y,600);assert.doesNotThrow(()=>serializeProject(p));});
+
+test('panel camera clipboard fits intermediate keys and preserves other panel keys',()=>{
+ const p=makeProject(),s=p.scenes[0];s.panels[0].duration=20;s.panels.push(makePanel());s.panels[1].duration=40;
+ putCameraKey(s,p,0,{x:100});putCameraKey(s,p,10,{x:300});putCameraKey(s,p,19,{x:500});
+ putCameraKey(s,p,20,{x:700});putCameraKey(s,p,59,{x:900});
+ const original=copyPanelCamera(s,s.panels[0],p);
+ assert.deepEqual(original.keys.map(k=>k.frame),[0,10,19]);
+ pastePanelCamera(s,s.panels[1],p,original);
+ assert.deepEqual(s.camera.filter(k=>k.frame>=20).map(k=>k.frame),[20,41,59]);
+ assert.equal(cameraAt(s,41,p).x,300);
+ assert.equal(cameraAt(s,0,p).x,100);
+ assert.equal(cameraAt(s,19,p).x,500);
+ assert.doesNotThrow(()=>serializeProject(p));
+});
+test('panel reset restores neutral pose without deleting neighboring camera keys',()=>{
+ const p=makeProject(),s=p.scenes[0];s.panels[0].duration=10;s.panels.push(makePanel());s.panels[1].duration=10;
+ putCameraKey(s,p,0,{x:100});putCameraKey(s,p,9,{x:200});
+ putCameraKey(s,p,10,{x:300});putCameraKey(s,p,19,{x:400});
+ resetPanelCamera(s,s.panels[1],p);
+ assert.equal(cameraAt(s,0,p).x,100);
+ assert.equal(cameraAt(s,9,p).x,200);
+ assert.equal(cameraAt(s,10,p).x,p.width/2);
+ assert.equal(cameraAt(s,19,p).x,p.width/2);
+ assert.doesNotThrow(()=>serializeProject(p));
+});
+test('single-frame panel camera copy paste and reset avoid duplicate frames',()=>{
+ const p=makeProject(),s=p.scenes[0];s.panels[0].duration=1;s.panels.push(makePanel());s.panels[1].duration=1;
+ putCameraKey(s,p,0,{zoom:2});const clip=copyPanelCamera(s,s.panels[0],p);
+ pastePanelCamera(s,s.panels[1],p,clip);assert.equal(cameraAt(s,1,p).zoom,2);
+ resetPanelCamera(s,s.panels[1],p);assert.equal(cameraAt(s,1,p).zoom,1);
+ assert.equal(new Set(s.camera.map(k=>k.frame)).size,s.camera.length);
+ assert.doesNotThrow(()=>serializeProject(p));
+});
+
+test('A3: three-panel camera integration preserves neighboring motion, interpolation and save/reopen',()=>{
+ const p=makeProject(),s=p.scenes[0];s.panels[0].duration=20;s.panels.push(makePanel('Middle'),makePanel('Last'));s.panels[1].duration=40;s.panels[2].duration=20;
+ putCameraKey(s,p,0,{x:100,zoom:1});putCameraKey(s,p,10,{x:300,zoom:2});putCameraKey(s,p,19,{x:500,zoom:1});
+ putCameraKey(s,p,20,{x:700,zoom:1});putCameraKey(s,p,59,{x:900,zoom:2});
+ putCameraKey(s,p,60,{x:1100,zoom:1});putCameraKey(s,p,79,{x:1300,zoom:2});
+ const leftBefore=[0,10,19].map(frame=>cameraAt(s,frame,p));
+ const rightBefore=[60,70,79].map(frame=>cameraAt(s,frame,p));
+ const clip=copyPanelCamera(s,s.panels[0],p);
+ pastePanelCamera(s,s.panels[1],p,clip);
+ assert.deepEqual(s.camera.filter(k=>k.frame>=20&&k.frame<=59).map(k=>k.frame),[20,41,59]);
+ assert.equal(cameraAt(s,41,p).x,300,'Intermediate key maps to destination panel timeline');
+ assert.deepEqual([0,10,19].map(frame=>cameraAt(s,frame,p)),leftBefore,'Source panel remains unchanged');
+ assert.deepEqual([60,70,79].map(frame=>cameraAt(s,frame,p)),rightBefore,'Third panel remains unchanged');
+ s.camera.find(k=>k.frame===20)!.interpolation='ease';
+ const eased=cameraAt(s,30,p);assert(eased.x>100&&eased.x<300,'Playback interpolates copied camera motion');
+ const restored=parseProject(serializeProject(p));
+ assert.deepEqual([0,10,19,20,30,41,59,60,70,79].map(frame=>cameraAt(restored.scenes[0],frame,restored)),[0,10,19,20,30,41,59,60,70,79].map(frame=>cameraAt(s,frame,p)),'Save/reopen retains all panel camera samples');
+ resetPanelCamera(s,s.panels[1],p);
+ assert.deepEqual([0,10,19].map(frame=>cameraAt(s,frame,p)),leftBefore,'Reset does not affect first panel');
+ assert.deepEqual([60,70,79].map(frame=>cameraAt(s,frame,p)),rightBefore,'Reset does not affect third panel');
+ assert.equal(cameraAt(s,20,p).zoom,1);assert.equal(cameraAt(s,59,p).x,p.width/2);
+ assert.deepEqual(s.camera.filter(k=>k.frame>20&&k.frame<59),[],'Reset clears intermediate keys only in target panel');
+});
+
+
+test('RFU4-RA.1: static camera pose persists without creating scene animation keys',()=>{
+ const p=makeProject(),panel=p.scenes[0].panels[0];
+ panel.staticCamera={x:420,y:300,zoom:1.5,rotation:12};
+ const restored=parseProject(serializeProject(p));
+ assert.deepEqual(restored.scenes[0].panels[0].staticCamera,panel.staticCamera);
+ assert.equal(restored.scenes[0].camera.length,0);
+});
+test('RFU4-RA.1: legacy projects without staticCamera retain existing keyframes',()=>{
+ const p=makeProject();putCameraKey(p.scenes[0],p,0,{x:100});putCameraKey(p.scenes[0],p,119,{x:500});
+ const restored=parseProject(serializeProject(p));
+ assert.equal(restored.scenes[0].panels[0].staticCamera,undefined);
+ assert.deepEqual(restored.scenes[0].camera,p.scenes[0].camera);
+});
+test('RFU4-RA.1: invalid static camera pose is rejected',()=>{
+ const p=makeProject();p.scenes[0].panels[0].staticCamera={x:960,y:540,zoom:0,rotation:0};
+ assert.throws(()=>serializeProject(p),/static camera|Invalid project number/i);
+});
