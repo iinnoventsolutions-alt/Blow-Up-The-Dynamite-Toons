@@ -1,0 +1,29 @@
+name: R1.4 Private Distribution Package Notices
+on:
+  push:
+    branches:
+      - R1.4-Private-Distribution-Readiness
+    paths:
+      - scripts/production-ffmpeg-afterpack.cjs
+      - scripts/r14-verify-private-dmg.mjs
+      - tests/r14-packaging-notices.test.cjs
+      - release-audit/licenses/**
+      - .github/workflows/r14-private-package-notices.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  notice-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Validate production packaging and verifier syntax
+        run: |
+          node --check scripts/production-ffmpeg-afterpack.cjs
+          node --check scripts/r14-verify-private-dmg.mjs
+      - name: Verify production license notice inclusion and immutable copy
+        run: node --test tests/r14-packaging-notices.test.cjs
