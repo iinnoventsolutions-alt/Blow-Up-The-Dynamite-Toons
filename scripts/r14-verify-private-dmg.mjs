@@ -15,7 +15,7 @@ function inspectApp(app,arch){
  const resources=path.join(app,'Contents','Resources');
  const expected=arch==='arm64'?'arm64':'x86_64';
  const binary=path.join(app,'Contents','MacOS','IInnovent Professional Storyboard');
- if(!run('lipo',['-archs',binary]).split(/\\s+/).includes(expected))throw Error('App architecture mismatch');
+ if(!run('lipo',['-archs',binary]).split(/\s+/).includes(expected))throw Error('App architecture mismatch');
  for(const rel of components){
   const p=path.join(resources,'ffmpeg-runtime',rel),st=fs.lstatSync(p);
   if(!st.isFile()||st.isSymbolicLink())throw Error('Invalid runtime file: '+rel);
@@ -23,8 +23,8 @@ function inspectApp(app,arch){
   if(hash!==approved[arch][rel])throw Error('Runtime hash mismatch: '+rel);
   if(run('lipo',['-archs',p])!==expected)throw Error('Runtime architecture mismatch: '+rel);
   const links=run('otool',['-L',p]);
-  if(/\\/opt\\/homebrew\\/|\\/usr\\/local\\//.test(links))throw Error('Host-specific dependency: '+rel);
-  for(const line of links.split('\\n').slice(1)){
+  if(links.includes('/opt/homebrew/') || links.includes('/usr/local/'))throw Error('Host-specific dependency: '+rel);
+  for(const line of links.split('\n').slice(1)){
    const dep=line.trim().split(' (')[0];if(!dep)continue;
    if(dep.startsWith('@executable_path/../lib/')){if(!fs.existsSync(path.join(resources,'ffmpeg-runtime','lib',path.basename(dep))))throw Error('Missing linked library: '+dep);}
    else if(dep.startsWith('@loader_path/')){if(!fs.existsSync(path.join(path.dirname(p),path.basename(dep))))throw Error('Missing loader library: '+dep);}
