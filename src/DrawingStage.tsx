@@ -1,0 +1,258 @@
+import { drawingPoint } from './drawing-coordinates';
+import {recordPerformance,diagnosticsEnabled} from './performance-diagnostics';
+import { changedBitmapIds } from './bitmap-commit';
+import OnionSkin from './OnionSkin';
+import type { OnionSettings } from './onion';
+import { useEffect, useRef, useState } from 'react';
+import type { CSSProperties, PointerEvent } from 'react';
+import CameraOverlay from './CameraOverlay';
+import SequentialCameraOutOverlay from './SequentialCameraOutOverlay';
+import { resolveCompatibleCamera } from './sequential-camera';
+import { cameraAt, findPanel, uid, type Layer, type Panel, type Point, type Project, type Stroke } from './model';
+import { bounds, textLocalBounds, simplifyStroke, cloneArtwork, contourFromPoints, defaultToolOptions, editSelected, eligibleLayers, hitStroke, pointInPolygon, selectionBounds, transformStroke, type Selected, type Tool, type ToolOptions } from './artwork';
+import { canDraw, drawPanel, flattenLayer, layerCanvas, panelImagesReady, preloadImages } from './render';
+import { floodMask } from './flood';
+import {calculateFill,warmFillWorker} from './fill-compute';
+import { cameraCorners, localPanelStart, type CameraPose } from './camera';
+type Command={seq:number;op:string};
+type Props={onion:OnionSettings;panel:Panel;project:Project;layerId:string;tool:Tool;color:string;size:number;zoom:number;onZoom:(n:number)=>void;guides:boolean;rotation:number;options:ToolOptions;cameraFrame:number;cameraTarget:{panelId:string;endpoint:'in'|'out'|'intermediate';frame:number}|null;onCameraSelect:(endpoint:'in'|'out'|'intermediate',frame:number)=>void;maskOutsideCamera:boolean;command:Command;onCameraChange:(frame:number,pose:CameraPose)=>void;onLayers:(layers:Layer[])=>void;onColor:(color:string)=>void;onSize:(size:number)=>void;onSelection:(selected:Selected[])=>void;onRotation:(n:number)=>void;onOptions:(p:Partial<ToolOptions>)=>void;onError:(message:string)=>void};
+type Gesture={kind:'stroke'|'shape'|'region'|'transform'|'point'|'pan'|'rotate'|'zoom';start:Point;screen:[number,number];originPan:{x:number;y:number};mode?:string;original?:Panel;pointIndex?:number;pathIndex?:number;box?:{x:number;y:number;width:number;height:number};rotation?:number;};
+export default function DrawingStage({onion,panel,project,layerId,tool,color,size,zoom,onZoom,guides,rotation,options=oDefault,cameraFrame,cameraTarget,onCameraSelect,maskOutsideCamera,command,onCameraChange,onLayers,onColor,onSize,onSelection,onRotation,onOptions,onError}:Props){
+ const insertedPoint=useRef<{time:number;x:number;y:number}|null>(null);
+ const firstStroke=useRef(true),strokeStarted=useRef(0),strokeFrames=useRef(0),strokeSamples=useRef(0);
+ const fillPending=useRef(false),mounted=useRef(true),bucketCanvas=useRef<HTMLCanvasElement|null>(null);
+ useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
+ const textInput=useRef<HTMLTextAreaElement>(null),inlineRef=useRef<{id:string;layerId:string;value:string}|null>(null),[inline,setInline]=useState<{id:string;layerId:string;value:string}|null>(null);
+ const latestPanel=useRef(panel),committing=useRef(false),canvas=useRef<HTMLCanvasElement>(null),svg=useRef<SVGSVGElement>(null),live=useRef<Stroke|null>(null),gesture=useRef<Gesture|null>(null),frame=useRef(0),draft=useRef<Panel|null>(null),selectionRef=useRef<Selected[]>([]),selectedPoint=useRef<{path:number;index:number}|null>(null),space=useRef(false);
+ const [zoomRegion,setZoomRegion]=useState<{x:number;y:number;width:number;height:number}|null>(null);
+ const [selected,setSelected]=useState<Selected[]>([]),[region,setRegion]=useState<Point[]>([]),[pan,setPan]=useState({x:0,y:0}),[temporaryHand,setTemporaryHand]=useState(false),[tick,setTick]=useState(0),[busy,setBusy]=useState(false);
+ const cameraScene=findPanel(project,panel.id)!.scene;
+ const sequentialEnabled=!!cameraScene.sequentialCamera;
+ const cameraLocalFrame=cameraFrame-localPanelStart(cameraScene,panel);
+ const sequentialResult=sequentialEnabled?resolveCompatibleCamera(project,cameraScene.id,panel.id,cameraLocalFrame):null;
+ const sequentialIntermediateFrame=cameraLocalFrame;
+ const sequentialState=cameraScene.sequentialCamera?.panels[panel.id];
+ const intermediateSelected=cameraTarget?.endpoint==='intermediate'&&cameraTarget.frame===cameraFrame&&sequentialState?.mode==='animated'&&sequentialState.keys.some(k=>k.frame===sequentialIntermediateFrame&&k.frame>0&&k.frame<panel.duration-1);
+ const intermediateOutlines=sequentialState?.mode==='animated'?sequentialState.keys.filter(k=>k.frame>0&&k.frame<panel.duration-1).sort((a,b)=>a.frame-b.frame).map(k=>({frame:k.frame,pose:resolveCompatibleCamera(project,cameraScene.id,panel.id,k.frame).pose,selected:!!intermediateSelected&&cameraLocalFrame===k.frame})):[];
+ const maskPose=sequentialResult?.pose??((panel.staticCamera&&!cameraScene.camera.some(k=>k.frame>=localPanelStart(cameraScene,panel)&&k.frame<localPanelStart(cameraScene,panel)+panel.duration))?panel.staticCamera:cameraAt(cameraScene,cameraFrame,project));
+ const drawingMargin=0.25;
+ const extendedWidth=project.width*(1+2*drawingMargin),extendedHeight=project.height*(1+2*drawingMargin);
+ const layer=panel.layers.find(l=>l.id===layerId),editable=canDraw(layer),effective=temporaryHand?'hand':tool;
+ const working=()=>draft.current||latestPanel.current;
+ useEffect(()=>{latestPanel.current=panel;},[panel]);
+ const select=(items:Selected[])=>{selectionRef.current=items;setSelected(items);selectedPoint.current=null;onSelection(items);};
+ const redrawCount=useRef(0);
+ const redraw=()=>{const profiling=diagnosticsEnabled(),started=profiling?performance.now():0;if(canvas.current)drawPanel(canvas.current,working(),project,{transparent:onion.enabled,live:live.current?{layerId,stroke:live.current}:undefined,drawingMargin});if(profiling){const elapsed=performance.now()-started;const first=redrawCount.current++===0;if(first||elapsed>=16)recordPerformance(first?'Canvas redraw: first render':'Canvas redraw: render >=16ms',elapsed);}if(gesture.current?.kind==='transform'||gesture.current?.kind==='point')setTick(n=>n+1);};
+ const schedule=()=>{if(frame.current)return;frame.current=requestAnimationFrame(()=>{frame.current=0;redraw();if(strokeStarted.current&&!strokeFrames.current){strokeFrames.current=1;recordPerformance(firstStroke.current?'First stroke: pointer down to first movement frame':'Stroke: pointer down to first movement frame',performance.now()-strokeStarted.current);}});};
+ const localPoint=(x:number,y:number)=>{const c=canvas.current!,style=getComputedStyle(c);const p=drawingPoint(x,y,c.getBoundingClientRect(),parseFloat(style.width)/parseFloat(style.height),rotation,extendedWidth,extendedHeight);return {x:p.x-project.width*drawingMargin,y:p.y-project.height*drawingMargin};};
+ const point=(e:PointerEvent<SVGSVGElement>|globalThis.PointerEvent):Point=>{const p=localPoint(e.clientX,e.clientY);return [Math.max(-8192,Math.min(16384,p.x)),Math.max(-8192,Math.min(16384,p.y)),e.pointerType==='pen'&&options.pressure?Math.max(options.minSize,e.pressure||options.minSize):1];};
+ const appendStrokePoint=(p:Point)=>{const stroke=live.current;if(!stroke||stroke.points.length>=10000)return;const prev=stroke.points.at(-1)!;if(Math.hypot(p[0]-prev[0],p[1]-prev[1])<.5)return;if(stroke.points.length>1){const before=stroke.points.at(-2)!,blend=options.smoothing/(options.smoothing+30);stroke.points[stroke.points.length-1]=[prev[0]*(1-blend)+(before[0]+p[0])*.5*blend,prev[1]*(1-blend)+(before[1]+p[1])*.5*blend,prev[2]];}stroke.points.push(p);strokeSamples.current++;};
+ const appendPointerSamples=(e:PointerEvent<SVGSVGElement>)=>{const samples=e.nativeEvent.getCoalescedEvents?.()||[];for(const sample of samples)appendStrokePoint(point(sample));appendStrokePoint(point(e));};
+ const commit=async(next:Panel,vectorOnlyFillLayerId?:string)=>{
+  if(committing.current)return;
+  const profiling=diagnosticsEnabled(),mark=()=>profiling?performance.now():0;
+  const previousPanel=latestPanel.current,bitmapAt=mark();
+  const changedBitmaps=changedBitmapIds(previousPanel,next,vectorOnlyFillLayerId);
+  const bitmapChanged=changedBitmaps.size>0;
+  if(profiling)recordPerformance('Drawing commit: bitmap change detection',performance.now()-bitmapAt);
+  committing.current=true;
+  if(bitmapChanged)setBusy(true);
+  try{
+   const layersAt=mark(),layers:Layer[]=[];
+   for(const l of next.layers){
+    const previous=previousPanel.layers.find(p=>p.id===l.id);
+    if(l.kind==='bitmap'&&changedBitmaps.has(l.id))layers.push(await flattenLayer(l,project));
+    else layers.push(l);
+   }
+   if(profiling)recordPerformance('Drawing commit: layer preparation',performance.now()-layersAt);
+   const selectionAt=mark();
+   const keep=selectionRef.current.filter(item=>layers.some(l=>l.id===item.layerId&&l.kind!=='bitmap'&&l.strokes.some(s=>s.id===item.id)));
+   const pt=selectedPoint.current;
+   latestPanel.current={...next,layers};
+   if(profiling)recordPerformance('Drawing commit: selection and panel update',performance.now()-selectionAt);
+   const parentAt=mark();
+   onLayers(layers);
+   if(profiling){
+    recordPerformance('Drawing commit: parent callback',performance.now()-parentAt);
+    requestAnimationFrame(()=>{
+     if(mounted.current)recordPerformance('Drawing commit: callback to first frame',performance.now()-parentAt);
+     requestAnimationFrame(()=>{
+      if(mounted.current)recordPerformance('Drawing commit: callback to second frame',performance.now()-parentAt);
+     });
+    });
+   }
+   const finalAt=mark();
+   draft.current=null;select(keep);selectedPoint.current=pt;
+   if(profiling)recordPerformance('Drawing commit: selection finalize',performance.now()-finalAt);
+  }catch(e){onError((e as Error).message);draft.current=null;redraw();}
+  finally{committing.current=false;if(bitmapChanged)setBusy(false);}
+ };
+ const finishInline=(accept=true)=>{const edit=inlineRef.current;if(!edit)return;inlineRef.current=null;setInline(null);const next=structuredClone(panel),l=next.layers.find(l=>l.id===edit.layerId),stroke=l?.strokes.find(s=>s.id===edit.id);draft.current=null;if(accept&&l&&!l.locked&&l.visible&&stroke&&stroke.text!==edit.value){stroke.text=edit.value;onOptions({text:edit.value});void commit(next);}else redraw();};
+ useEffect(()=>{if(inline){const input=textInput.current;input?.focus();input?.setSelectionRange(inline.value.length,inline.value.length);}},[inline?.id]);
+ const cancel=()=>{inlineRef.current=null;setInline(null);gesture.current=null;live.current=null;draft.current=null;setRegion([]);cancelAnimationFrame(frame.current);frame.current=0;strokeStarted.current=0;redraw();};
+ useEffect(()=>{draft.current=null;live.current=null;gesture.current=null;select([]);setRegion([]);setPan({x:0,y:0});},[panel.id,layerId]);
+ useEffect(()=>{if(tool!=='bucket')return;const timer=setTimeout(()=>warmFillWorker(),0);return()=>clearTimeout(timer);},[tool]);
+ useEffect(()=>{
+  let active=true;
+  const profiling=diagnosticsEnabled(),started=profiling?performance.now():0;
+  // Diagnostic only: preserve the original preload-and-immediate-redraw path
+  // while checking whether frame-queued redraws caused browser regressions.
+  if(profiling&&panelImagesReady(panel))recordPerformance('Canvas: images already prepared',performance.now()-started);
+  preloadImages(panel).then(()=>{
+   if(!active)return;
+   if(profiling)recordPerformance('Canvas: panel image preparation',performance.now()-started);
+   redraw();
+  }).catch(e=>{if(active)onError(e.message);});
+  return()=>{active=false;cancelAnimationFrame(frame.current);frame.current=0;};
+ },[panel,project.width,project.height,onion.enabled]);
+ useEffect(()=>{const eligible=new Set(eligibleLayers(panel,layerId,options.selectionScope).map(l=>l.id));select(selectionRef.current.filter(s=>eligible.has(s.layerId)&&panel.layers.find(l=>l.id===s.layerId)?.strokes.some(p=>p.id===s.id)));},[options.selectionScope,panel.layers.map(l=>`${l.id}:${l.visible}:${l.locked}`).join('|')]);
+ useEffect(()=>{if(['brush','pencil','eraser','bucket','shape','picker','hand','rotate-view','camera'].includes(tool)){const hadDraft=!!draft.current;draft.current=null;if(selectionRef.current.length)select([]);if(hadDraft)schedule();}},[tool]);
+ const selectedArtwork=()=>{const s=selectionRef.current[0];return s?working().layers.find(l=>l.id===s.layerId)?.strokes.find(p=>p.id===s.id):undefined;};
+ const applyCommand=(op:string)=>{if(op==='clear'){draft.current=null;select([]);redraw();return;}if(!selectionRef.current.length)return;const next=structuredClone(working()),items=selectionRef.current;
+  if(op==='delete'&&selectedPoint.current&&['contour','pencil-editor'].includes(tool)){const pt=selectedPoint.current;editSelected(next,items,s=>{const points=tool==='contour'?s.contours?.[pt.path]:s.points;if(points&&points.length>(tool==='contour'?3:1))points.splice(pt.index,1);return s;});}
+  else if(op==='delete')editSelected(next,items,()=>null);
+  else if(op==='duplicate'){for(const l of next.layers){if(l.visible&&!l.locked)for(const item of items.filter(s=>s.layerId===l.id)){const s=l.strokes.find(s=>s.id===item.id);if(s)l.strokes.push(transformStroke(cloneArtwork(s),0,0,1,1,20,20));}}}
+  else if(op.startsWith('rotate:')){const b=selectionBounds(next,items)!;const a=Number(op.split(':')[1])*Math.PI/180;if(!Number.isFinite(a))return;editSelected(next,items,s=>transformStroke(s,b.x+b.width/2,b.y+b.height/2,1,1,0,0,a));}
+  else if(op==='style'||op==='text')editSelected(next,items,s=>{s.color=color;s.opacity=options.opacity;if(op==='style'){s.texture=options.texture;s.capStart=options.capStart;s.capEnd=options.capEnd;s.join=options.join;if(s.tool==='pencil')s.size=size;}if(s.tool==='text'){Object.assign(s,{text:options.text,font:options.font,fontSize:options.fontSize,bold:options.bold,italic:options.italic,align:options.align,tracking:options.tracking,lineSpacing:options.lineSpacing,indent:options.indent,autoKern:options.autoKern});}return s;});
+  void commit(next);
+ };
+ useEffect(()=>{if(command.seq)applyCommand(command.op);},[command.seq]);
+ useEffect(()=>{const typing=(e:KeyboardEvent)=>e.target instanceof HTMLElement&&(e.target.matches('input,textarea,select')||e.target.isContentEditable);const down=(e:KeyboardEvent)=>{if(typing(e)||document.querySelector('dialog[open]'))return;if(e.code==='Space'){e.preventDefault();space.current=true;setTemporaryHand(true);}if(e.key==='Escape')cancel();if((e.key==='Delete'||e.key==='Backspace')&&selectionRef.current.length){e.preventDefault();applyCommand('delete');}};const release=()=>{space.current=false;setTemporaryHand(false);};const up=(e:KeyboardEvent)=>{if(e.code==='Space')release();};window.addEventListener('keydown',down);window.addEventListener('keyup',up);window.addEventListener('blur',release);return()=>{window.removeEventListener('keydown',down);window.removeEventListener('keyup',up);window.removeEventListener('blur',release);};},[tool,options,color,size,panel]);
+ const rasterSelection=async(base:Panel,polygon:Point[],click?:Point,onlyLayer?:string,keepPrevious=false):Promise<{next:Panel;items:Selected[]}>=>{const next=structuredClone(base),items:Selected[]=[];for(const l of eligibleLayers(next,layerId,options.selectionScope)){if(l.kind!=='bitmap'||(onlyLayer&&l.id!==onlyLayer))continue;if(project.width*project.height>16777216)throw new Error('Bitmap selections support up to 16 megapixels. Use a smaller project.');await preloadImages({layers:[l]} as Panel);const c=layerCanvas(l,project),ctx=c.getContext('2d')!,data=ctx.getImageData(0,0,c.width,c.height),mask=click?floodMask(data.data,c.width,c.height,click[0],click[1],options.tolerance,0):new Uint8Array(c.width*c.height);if(!click)for(let y=0;y<c.height;y++)for(let x=0;x<c.width;x++)if(pointInPolygon(x+.5,y+.5,polygon))mask[y*c.width+x]=1;
+ if(keepPrevious){const old=l.strokes.filter(s=>selectionRef.current.some(item=>item.layerId===l.id&&item.id===s.id));if(old.length){const oldPixels=layerCanvas({...l,image:undefined,strokes:old},project).getContext('2d')!.getImageData(0,0,c.width,c.height).data;for(let i=0;i<mask.length;i++)if(oldPixels[i*4+3])mask[i]=1;}}
+ const patch=document.createElement('canvas');patch.width=c.width;patch.height=c.height;const out=new ImageData(c.width,c.height);let minX=c.width,minY=c.height,maxX=0,maxY=0;for(let i=0;i<mask.length;i++){if(!mask[i]||data.data[i*4+3]===0)continue;const x=i%c.width,y=Math.floor(i/c.width);minX=Math.min(minX,x);minY=Math.min(minY,y);maxX=Math.max(maxX,x);maxY=Math.max(maxY,y);out.data.set(data.data.subarray(i*4,i*4+4),i*4);data.data[i*4+3]=0;}if(minX>maxX)continue;patch.getContext('2d')!.putImageData(out,0,0);ctx.putImageData(data,0,0);const crop=document.createElement('canvas');crop.width=maxX-minX+1;crop.height=maxY-minY+1;crop.getContext('2d')!.drawImage(patch,minX,minY,crop.width,crop.height,0,0,crop.width,crop.height);const stroke:Stroke={id:uid(),tool:'image',source:crop.toDataURL('image/png'),color:'#000000',size:1,points:[[minX,minY,1],[maxX+1,maxY+1,1]]};l.image=c.toDataURL('image/png');l.strokes=[stroke];items.push({layerId:l.id,id:stroke.id});}await preloadImages(next);return{next,items};};
+ const finishSelection=async(polygon:Point[],click?:Point,shift=false)=>{let items:Selected[]=[];const base=working();for(const l of eligibleLayers(base,layerId,options.selectionScope)){if(l.kind==='bitmap')continue;for(const s of l.strokes){if(s.tool==='eraser')continue;const b=bounds(s);if(click?hitStroke(s,click[0],click[1],project.width/(svg.current?.clientWidth||500)*4):s.points.some(p=>pointInPolygon(p[0],p[1],polygon))||pointInPolygon(b.x+b.width/2,b.y+b.height/2,polygon)||polygon.some(p=>hitStroke(s,p[0],p[1],0)))items.push({layerId:l.id,id:s.id});}}if(click&&items.length)items=items.slice(-1);setBusy(true);try{let onlyLayer:string|undefined;if(click){let highest=items.length?base.layers.findIndex(l=>l.id===items[0].layerId):-1;for(const l of eligibleLayers(base,layerId,options.selectionScope)){const index=base.layers.findIndex(x=>x.id===l.id);if(l.kind==='bitmap'&&index>highest){if(project.width*project.height>16777216)continue;await preloadImages({layers:[l]} as Panel);const c=layerCanvas(l,project),x=Math.floor(click[0]),y=Math.floor(click[1]);if(x>=0&&y>=0&&x<c.width&&y<c.height&&c.getContext('2d')!.getImageData(x,y,1,1).data[3]){onlyLayer=l.id;highest=index;items=[];}}}if(items.length)onlyLayer='none';}const raster=await rasterSelection(base,polygon,click,onlyLayer,shift);draft.current=raster.next;if(raster.items.length)items.push(...raster.items);select(shift?[...selectionRef.current.filter(item=>raster.next.layers.some(l=>l.id===item.layerId&&l.strokes.some(s=>s.id===item.id))),...items.filter(s=>!selectionRef.current.some(x=>x.id===s.id))]:items);redraw();}catch(e){onError((e as Error).message);}finally{setBusy(false);}};
+ const fill=async(p:Point)=>{
+  if(!layer||fillPending.current)return;
+  fillPending.current=true;
+  const started=performance.now();let stage=started;
+  const measured=(label:string)=>{const now=performance.now();recordPerformance('Bucket '+label,now-stage);stage=now;};
+  setBusy(true);
+  try{
+   const ref=options.fillReference==='active'?{...panel,layers:[{...layer,opacity:1}]}:panel;
+   await preloadImages(ref);measured('preload images');
+   // Fill operations are serialized by fillPending, so reuse the same scratch canvas.
+   // drawPanel resets/clears the backing pixels for every operation.
+   const c=bucketCanvas.current||(()=>{
+    const scratch=document.createElement('canvas');
+    // The first 2D context request fixes its attributes for the canvas lifetime.
+    // Favor repeated getImageData reads on this bucket-only scratch surface.
+    if(!scratch.getContext('2d',{willReadFrequently:true}))throw new Error('Paint Bucket canvas is unavailable.');
+    bucketCanvas.current=scratch;
+    return scratch;
+   })();
+   // Include off-camera artwork in the fill reference, matching the visible drawing surface.
+   const extent=1+2*drawingMargin;
+   const width=Math.min(Math.round(project.width*extent),Math.round(2048*project.width/Math.max(project.width,project.height)));
+   const renderAt=performance.now();
+   drawPanel(c,ref,project,{width,transparent:true,drawingMargin});
+   measured('render');
+   const pixels=c.getContext('2d')!.getImageData(0,0,c.width,c.height);
+   measured('pixel readback');
+   if(diagnosticsEnabled())recordPerformance('Bucket render and pixel readback',performance.now()-renderAt);
+   const scaleX=project.width*extent/c.width,scaleY=project.height*extent/c.height;
+   const result=await calculateFill(pixels.data,c.width,c.height,(p[0]+project.width*drawingMargin)/scaleX,(p[1]+project.height*drawingMargin)/scaleY,options.tolerance,options.gap,scaleX,scaleY);
+   for(const contour of result.contours)for(const vertex of contour){vertex[0]-=project.width*drawingMargin;vertex[1]-=project.height*drawingMargin;}
+   recordPerformance('Bucket flood mask',result.maskMs);
+   recordPerformance('Bucket trace contours',result.contourMs);
+   recordPerformance(result.worker?'Bucket background worker elapsed':'Bucket calculation elapsed',result.worker?result.waitMs:result.maskMs+result.contourMs);
+   if(result.worker&&result.timing&&diagnosticsEnabled()){
+    recordPerformance('Bucket worker: message submission',result.timing.postMessageMs);
+    recordPerformance('Bucket worker: receive queue delay',result.timing.queueMs);
+    recordPerformance('Bucket worker: result return delay',result.timing.returnMs);
+    recordPerformance('Bucket worker: remaining overhead',result.timing.unattributedMs);
+   }
+   stage=performance.now();
+   if(!mounted.current||latestPanel.current.id!==panel.id)return; // Discard work if the user navigated away during background fill.
+   if(!result.contours.length){onError('No fillable area at this point. Adjust tolerance or gap closing.');return;}
+   // PT.1F: signed contour area subtracts holes and avoids a second full-size mask.
+   // Confirm only unusually large fills; ordinary fills remain one-click operations.
+   const signedArea=result.contours.reduce((total,path)=>{
+    let twice=0;
+    for(let i=0;i<path.length;i++){const a=path[i],b=path[(i+1)%path.length];twice+=a[0]*b[1]-b[0]*a[1];}
+    return total+twice/2;
+   },0);
+   const coverage=Math.min(1,Math.abs(signedArea)/(project.width*project.height));
+   if(coverage>=0.6){
+    const percent=Math.round(coverage*100);
+    const approved=window.confirm(`This fill covers approximately ${percent}% of the canvas.\\n\\nFill reference: ${options.fillReference==='active'?'Active layer':'All visible layers'}.\\n\\nApply this large fill? Choose Cancel to leave the artwork unchanged.`);
+    if(!approved)return;
+    if(!mounted.current||latestPanel.current.id!==panel.id)return;
+   }
+   const geometryAt=diagnosticsEnabled()?performance.now():0;
+   const next=structuredClone(panel),l=next.layers.find(l=>l.id===layerId)!;
+   l.strokes.push({id:uid(),tool:'fill',color,size:1,opacity:options.opacity,points:[p],contours:result.contours});
+   if(geometryAt)recordPerformance('Bucket: geometry and panel clone',performance.now()-geometryAt);
+   const commitAt=diagnosticsEnabled()?performance.now():0;
+   await commit(next,l.kind==='vector'?l.id:undefined);
+   if(commitAt)recordPerformance('Bucket: drawing commit function',performance.now()-commitAt);
+   measured('commit');
+  }catch(e){onError((e as Error).message);}finally{
+    // Distinguish completion of the fill handler from the next browser paint opportunity.
+    // Two frames are a proxy for visibility, not a compositor/GPU presentation timestamp.
+    const completedAt=performance.now();
+    recordPerformance('Bucket total',completedAt-started);
+    if(diagnosticsEnabled())requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      if(mounted.current)recordPerformance('Bucket click to second frame',performance.now()-started);
+    }));
+    fillPending.current=false;setBusy(false);
+   }
+ };
+ const begin=(e:PointerEvent<SVGSVGElement>)=>{if(e.button!==0||busy||committing.current||inlineRef.current)return;e.preventDefault();e.currentTarget.focus({preventScroll:true});const p=point(e),target=e.target as SVGElement,mode=target.dataset.mode;e.currentTarget.setPointerCapture(e.pointerId);
+  if(space.current||tool==='hand'){gesture.current={kind:'pan',start:p,screen:[e.clientX,e.clientY],originPan:pan};return;}
+  if(tool==='zoom'){gesture.current={kind:'zoom',start:p,screen:[e.clientX,e.clientY],originPan:pan,mode:e.altKey?'out':'in'};setZoomRegion(null);return;}
+  if(tool==='rotate-view'){gesture.current={kind:'rotate',start:p,screen:[e.clientX,e.clientY],originPan:pan,rotation};return;}
+  if(tool==='camera')return;
+  if(tool==='picker'){const c=canvas.current!,ctx=c.getContext('2d')!;const x=Math.max(0,Math.min(c.width-1,Math.floor((p[0]+project.width*drawingMargin)/extendedWidth*c.width)));const y=Math.max(0,Math.min(c.height-1,Math.floor((p[1]+project.height*drawingMargin)/extendedHeight*c.height)));const data=ctx.getImageData(x,y,1,1).data;onColor('#'+[...data.slice(0,3)].map(n=>n.toString(16).padStart(2,'0')).join(''));return;}
+  if(mode==='point'||mode==='insert-point'){const s=selectedArtwork();if(!s)return;const index=Number(target.dataset.index),path=Number(target.dataset.path||0);const original=structuredClone(working());if(mode==='insert-point'){insertedPoint.current={time:e.timeStamp,x:e.clientX,y:e.clientY};editSelected(original,selectionRef.current,stroke=>{const a=stroke.points[index-1],b=stroke.points[index];stroke.points.splice(index,0,[p[0],p[1],(a[2]+b[2])/2]);return stroke;});draft.current=original;redraw();}selectedPoint.current={path,index};gesture.current={kind:'point',start:p,screen:[e.clientX,e.clientY],originPan:pan,original,pointIndex:index,pathIndex:path};return;}
+  if(!e.shiftKey&&(mode==='move'||mode==='resize'||mode==='rotate')){const b=selectionBounds(working(),selectionRef.current);if(b){gesture.current={kind:'transform',start:p,screen:[e.clientX,e.clientY],originPan:pan,mode:mode==='resize'?`resize:${target.dataset.corner||'se'}`:mode,original:structuredClone(working()),box:b};return;}}
+  if(['select','select-color','contour','pencil-editor'].includes(tool)){
+   if(tool==='select-color'){const all=eligibleLayers(panel,layerId,options.selectionScope).flatMap(l=>l.kind==='bitmap'?[]:l.strokes.filter(s=>hitStroke(s,p[0],p[1])).map(s=>({l,s})));const hit=all.at(-1);if(hit)select(eligibleLayers(panel,layerId,options.selectionScope).flatMap(l=>l.strokes.filter(s=>s.color===hit.s.color).map(s=>({layerId:l.id,id:s.id}))));else {select([]);if(layer?.kind==='bitmap')onError('Select by Color edits vector objects. Use Individual or Lasso selection for Bitmap pixels.');}return;}
+   if(tool==='contour'||tool==='pencil-editor'){const hits=eligibleLayers(panel,layerId,options.selectionScope).flatMap(l=>l.kind==='bitmap'?[]:l.strokes.filter(s=>tool==='contour'?['brush','fill'].includes(s.tool):s.tool==='pencil').filter(s=>hitStroke(s,p[0],p[1])).map(s=>({layerId:l.id,id:s.id})));select(hits.slice(-1));const s=hits.at(-1);if(!s){const layers=eligibleLayers(panel,layerId,options.selectionScope);if(layers.some(l=>l.kind==='bitmap'))onError('Bitmap artwork is flattened and has no editable vector points. Use Select to edit pixels.');else if(tool==='pencil-editor'&&layers.some(l=>l.strokes.some(stroke=>stroke.tool==='brush'&&hitStroke(stroke,p[0],p[1]))))onError('This is a Brush contour. Use Contour Editor; Pencil Editor reshapes Pencil centerlines.');}if(s){const stroke=panel.layers.find(l=>l.id===s.layerId)!.strokes.find(x=>x.id===s.id)!;onColor(stroke.color);onSize(stroke.size);onOptions({opacity:stroke.opacity??1,texture:stroke.texture||'solid',capStart:stroke.capStart||stroke.cap||'round',capEnd:stroke.capEnd||stroke.cap||'round',join:stroke.join||'round'});}if(s&&tool==='contour'){const next=structuredClone(panel),stroke=next.layers.find(l=>l.id===s.layerId)!.strokes.find(x=>x.id===s.id)!;stroke.contours||=[contourFromPoints(stroke.points,stroke.size)];draft.current=next;}redraw();return;}
+   if(options.selectionMode==='individual'){void finishSelection([],p,e.shiftKey);return;}gesture.current={kind:'region',start:p,screen:[e.clientX,e.clientY],originPan:pan,mode:options.selectionMode};setRegion([p]);return;
+  }
+  if(!editable){onError('Select a visible, unlocked layer to draw.');return;}
+  if(tool==='bucket'){void fill(p);return;}
+  if(tool==='text'){const hit=eligibleLayers(panel,layerId,options.selectionScope).flatMap(l=>l.kind==='bitmap'?[]:l.strokes.filter(s=>s.tool==='text'&&hitStroke(s,p[0],p[1])).map(s=>({l,s}))).at(-1);if(hit){select([{layerId:hit.l.id,id:hit.s.id}]);const s=hit.s;onColor(s.color);onOptions({text:s.text,font:s.font,fontSize:s.fontSize,bold:s.bold,italic:s.italic,align:s.align,tracking:s.tracking,lineSpacing:s.lineSpacing,indent:s.indent||0,autoKern:s.autoKern!==false});redraw();return;}const next=structuredClone(working()),l=next.layers.find(l=>l.id===layerId)!,stroke:Stroke={id:uid(),tool:'text',color,size:1,opacity:options.opacity,points:[p,[Math.min(16384,p[0]+Math.max(150,options.text.length*options.fontSize*.6)),Math.min(16384,p[1]+options.fontSize*options.lineSpacing*options.text.split('\n').length),1]],text:options.text,font:options.font,fontSize:options.fontSize,bold:options.bold,italic:options.italic,align:options.align,tracking:options.tracking,lineSpacing:options.lineSpacing,indent:options.indent,autoKern:options.autoKern};l.strokes.push(stroke);if(l.kind==='bitmap')void commit(next);else{latestPanel.current=next;onLayers(next.layers);select([{layerId,id:stroke.id}]);}return;}
+  live.current={id:uid(),tool:tool==='shape'?'shape':tool==='eraser'?'eraser':tool==='pencil'?'pencil':'brush',color,size,opacity:options.opacity,texture:options.texture,cap:options.cap,capStart:options.capStart,capEnd:options.capEnd,join:options.join,points:[p],...(tool==='shape'?{shape:options.shape,fill:options.filled&&options.shape!=='line'?options.fillColor:undefined}:{})};if(tool==='shape')live.current.points.push(p);gesture.current={kind:tool==='shape'?'shape':'stroke',start:p,screen:[e.clientX,e.clientY],originPan:pan};if(tool!=='shape'){strokeStarted.current=performance.now();strokeFrames.current=0;strokeSamples.current=0;}redraw();
+ };
+ const move=(e:PointerEvent<SVGSVGElement>)=>{const g=gesture.current;if(!g)return;let p=point(e);
+  if(g.kind==='zoom'){const dx=e.clientX-g.screen[0],dy=e.clientY-g.screen[1];if(Math.hypot(dx,dy)>6&&g.mode!=='out'){const a=g.start,b=p;setZoomRegion({x:Math.min(a[0],b[0]),y:Math.min(a[1],b[1]),width:Math.abs(a[0]-b[0]),height:Math.abs(a[1]-b[1])});}return;}
+  if(g.kind==='pan'){setPan({x:g.originPan.x+e.clientX-g.screen[0],y:g.originPan.y+e.clientY-g.screen[1]});return;}
+  if(g.kind==='rotate'){onRotation(Math.max(-180,Math.min(180,(g.rotation||0)+(e.clientX-g.screen[0])*.5)));return;}
+  if(g.kind==='region'){if(g.mode==='lasso')setRegion(old=>[...old.slice(-9999),p]);else setRegion([g.start,[p[0],g.start[1],1],p,[g.start[0],p[1],1]]);return;}
+  if(g.kind==='transform'){const b=g.box!,next=structuredClone(g.original!);let sx=1,sy=1,dx=0,dy=0,a=0;if(g.mode==='move'){dx=p[0]-g.start[0];dy=p[1]-g.start[1];}let anchorX=b.x+b.width/2,anchorY=b.y+b.height/2;if(g.mode?.startsWith('resize')){const corner=g.mode.split(':')[1];anchorX=corner.includes('w')?b.x+b.width:b.x;anchorY=corner.includes('n')?b.y+b.height:b.y;sx=Math.max(.05,(corner.includes('w')?anchorX-p[0]:p[0]-anchorX)/Math.max(1,b.width));sy=Math.max(.05,(corner.includes('n')?anchorY-p[1]:p[1]-anchorY)/Math.max(1,b.height));if(e.shiftKey)sx=sy=Math.max(sx,sy);}if(g.mode==='rotate')a=Math.atan2(p[1]-b.y-b.height/2,p[0]-b.x-b.width/2)-Math.atan2(g.start[1]-b.y-b.height/2,g.start[0]-b.x-b.width/2);editSelected(next,selectionRef.current,s=>transformStroke(s,anchorX,anchorY,sx,sy,dx,dy,a));draft.current=next;schedule();return;}
+  if(g.kind==='point'){const next=structuredClone(g.original!);editSelected(next,selectionRef.current,s=>{if(tool==='contour'){const path=s.contours?.[g.pathIndex||0];if(path)path[g.pointIndex!]=p;}else s.points[g.pointIndex!]=[p[0],p[1],s.points[g.pointIndex!][2]];return s;});draft.current=next;schedule();return;}
+  if(!live.current)return;
+  if(g.kind==='shape'){if(e.shiftKey){let dx=p[0]-g.start[0],dy=p[1]-g.start[1];if(options.shape==='line'){const angle=Math.round(Math.atan2(dy,dx)/(Math.PI/4))*Math.PI/4,r=Math.hypot(dx,dy);p=[g.start[0]+Math.cos(angle)*r,g.start[1]+Math.sin(angle)*r,1];}else{const d=Math.max(Math.abs(dx),Math.abs(dy));p=[g.start[0]+Math.sign(dx||1)*d,g.start[1]+Math.sign(dy||1)*d,1];}}live.current.points[1]=p;}else appendPointerSamples(e);schedule();
+ };
+ // A cancelled pointer stream can occur after a valid gesture (e.g. macOS loses capture).
+ // Preserve the last sampled geometry rather than silently reverting visible artwork.
+ const finish=(e:PointerEvent<SVGSVGElement>)=>{const g=gesture.current;if(g&&e.type==='pointerup'&&(g.kind==='point'||g.kind==='transform'))move(e);gesture.current=null;cancelAnimationFrame(frame.current);frame.current=0;if(!g)return;if(g.kind==='zoom'){setZoomRegion(null);if(e.type!=='pointerup')return;const rect=canvas.current!.getBoundingClientRect(),dx=e.clientX-g.screen[0],dy=e.clientY-g.screen[1],drag=Math.hypot(dx,dy)>8&&g.mode!=='out';const factor=drag?Math.min(rect.width/Math.max(Math.abs(dx),1),rect.height/Math.max(Math.abs(dy),1)):g.mode==='out'?0.8:1.25;const next=Math.max(.25,Math.min(3,zoom*factor));const anchor=drag?{x:(g.screen[0]+e.clientX)/2,y:(g.screen[1]+e.clientY)/2}:{x:e.clientX,y:e.clientY};const centerX=rect.left+rect.width/2,centerY=rect.top+rect.height/2;const ratio=next/zoom;setPan(old=>({x:old.x+(centerX-anchor.x)*(ratio-1)+(drag?centerX-anchor.x:0),y:old.y+(centerY-anchor.y)*(ratio-1)+(drag?centerY-anchor.y:0)}));onZoom(next);return;}if(g.kind==='region'){const path=region;setRegion([]);if(e.type==='pointerup')void finishSelection(path,undefined,e.shiftKey);return;}if(g.kind==='transform'||g.kind==='point'){const next=draft.current;if(next)void commit(next);return;}if(g.kind==='pan'||g.kind==='rotate')return;const stroke=live.current;if(stroke){if(['brush','pencil','eraser'].includes(stroke.tool)){if(e.type==='pointerup'){appendPointerSamples(e);const endpoint=point(e);if(e.pointerType==='pen'&&e.pressure===0)endpoint[2]=stroke.points.at(-1)![2];appendStrokePoint(endpoint);}if(strokeStarted.current){recordPerformance(firstStroke.current?'First stroke: gesture duration':'Stroke: gesture duration',performance.now()-strokeStarted.current);recordPerformance('Stroke: accepted movement samples',strokeSamples.current);firstStroke.current=false;strokeStarted.current=0;}stroke.points=simplifyStroke(stroke.points,.5+options.smoothing/20,stroke.size);}if(stroke.tool==='brush')stroke.contours=[contourFromPoints(stroke.points,stroke.size)];live.current=null;const next=structuredClone(working());next.layers.find(l=>l.id===layerId)!.strokes.push(stroke);void commit(next);}};
+ const inlineStroke=inline?working().layers.find(l=>l.id===inline.layerId)?.strokes.find(s=>s.id===inline.id):undefined;
+ const b=selectionBounds(working(),selected),picked=selectedArtwork(),handle=project.width/100,points=tool==='contour'?picked?.contours:tool==='pencil-editor'?picked?[picked.points]:undefined:undefined;
+ return <div className="stage-area" aria-busy={busy}><div className="stage-paper" style={{aspectRatio:`${project.width}/${project.height}`,'--aspect':project.width/project.height,transform:`translate(${pan.x}px,${pan.y}px) scale(${zoom}) rotate(${rotation}deg)`} as CSSProperties}>
+  {onion.enabled&&<OnionSkin panel={panel} project={project} settings={onion}/>}
+  <canvas ref={canvas} className={`drawing-surface tool-${effective}`} aria-label="Drawing canvas"/>
+  <svg ref={svg} className={`art-interaction tool-${effective}`} viewBox={`${-project.width*drawingMargin} ${-project.height*drawingMargin} ${extendedWidth} ${extendedHeight}`} preserveAspectRatio="none" onPointerDown={begin} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={e=>{if(gesture.current)finish(e);}} tabIndex={0} aria-label="Drawing tools surface" onDoubleClick={e=>{const inserted=insertedPoint.current;if(tool==='pencil-editor'&&inserted&&e.timeStamp-inserted.time<600&&Math.hypot(e.clientX-inserted.x,e.clientY-inserted.y)<5){insertedPoint.current=null;return;}const mode=(e.target as SVGElement).dataset.mode;if(mode==='point'||mode==='insert-point')return;if(tool==='text'){const p=localPoint(e.clientX,e.clientY),hit=eligibleLayers(panel,layerId,options.selectionScope).flatMap(l=>l.kind==='bitmap'?[]:l.strokes.filter(s=>s.tool==='text'&&hitStroke(s,p.x,p.y)).map(s=>({l,s}))).at(-1);if(hit){gesture.current=null;const edit={id:hit.s.id,layerId:hit.l.id,value:hit.s.text||''};select([{id:edit.id,layerId:edit.layerId}]);inlineRef.current=edit;setInline(edit);draft.current=null;redraw();}return;}if(!points?.length||!picked)return;const p=localPoint(e.clientX,e.clientY),next=structuredClone(working());editSelected(next,selected,s=>{const path=tool==='contour'?s.contours![0]:s.points;let best=0,distance=Infinity;path.forEach((a,i)=>{if(tool==='pencil-editor'&&i===path.length-1)return;const b=path[(i+1)%path.length],d=Math.hypot((a[0]+b[0])/2-p.x,(a[1]+b[1])/2-p.y);if(d<distance){distance=d;best=i;}});path.splice(best+1,0,[p.x,p.y,1]);return s;});void commit(next);}}>
+
+   {region.length>1&&<polygon points={region.map(p=>`${p[0]},${p[1]}`).join(' ')} fill="#ff922c22" stroke="#ff922c" strokeWidth={handle/8} strokeDasharray={`${handle/2}`}/>}
+   {b&&!points&&!inline&&<g><rect data-mode="move" x={b.x} y={b.y} width={b.width} height={b.height} fill="#ff922c08" stroke="#ff922c" strokeWidth={handle/8}/>{(['nw','ne','sw','se'] as const).map(c=><rect key={c} data-mode="resize" data-corner={c} x={b.x+(c.includes('e')?b.width:0)-handle/2} y={b.y+(c.includes('s')?b.height:0)-handle/2} width={handle} height={handle} fill="#ff922c"/>)}<line x1={b.x+b.width/2} y1={b.y} x2={b.x+b.width/2} y2={b.y-handle*2} stroke="#ff922c" strokeWidth={handle/8}/><circle data-mode="rotate" cx={b.x+b.width/2} cy={b.y-handle*2} r={handle/2} fill="#ff922c"/></g>}
+   {tool==='zoom'&&zoomRegion&&<rect x={zoomRegion.x} y={zoomRegion.y} width={zoomRegion.width} height={zoomRegion.height} fill="#4b9bd0" fillOpacity=".12" stroke="#1683c1" strokeWidth={Math.max(2,project.width/900)} strokeDasharray="10 7" pointerEvents="none"/>}
+   {points?.map((path,pathIndex)=><g key={pathIndex}><polyline points={path.map(p=>`${p[0]},${p[1]}`).join(' ')} fill="none" stroke="#29c9dd" strokeWidth={handle/10}/>{tool==='pencil-editor'&&path.slice(1).map((p,i)=><circle key={`mid-${i}`} data-mode="insert-point" data-index={i+1} data-path={pathIndex} cx={(p[0]+path[i][0])/2} cy={(p[1]+path[i][1])/2} r={handle/3} fill="#182430" stroke="#29c9dd" strokeWidth={handle/8}><title>Drag to add a Pencil control point</title></circle>)}{path.map((p,i)=><rect key={i} data-mode="point" data-path={pathIndex} data-index={i} x={p[0]-handle/3} y={p[1]-handle/3} width={handle*2/3} height={handle*2/3} fill={selectedPoint.current?.index===i?'#ff922c':'#29c9dd'}/>)}</g>)}
+   {inline&&inlineStroke&&<g transform={`translate(${inlineStroke.points[0][0]} ${inlineStroke.points[0][1]}) rotate(${inlineStroke.rotation||0}) scale(${inlineStroke.textScaleX||1} 1)`}><foreignObject x={Math.min(0,textLocalBounds(inlineStroke).x/(inlineStroke.textScaleX||1))} y={0} width={Math.max(250,textLocalBounds(inlineStroke).width/(inlineStroke.textScaleX||1)+30)} height={Math.max((inlineStroke.fontSize||48)*1.5,textLocalBounds(inlineStroke).height+30)}><textarea ref={textInput} className="inline-art-text" aria-label="Edit drawing text on canvas" value={inline.value} maxLength={10000} style={{fontFamily:inlineStroke.font||'Arial',fontSize:inlineStroke.fontSize||48,fontWeight:inlineStroke.bold?'bold':'normal',fontStyle:inlineStroke.italic?'italic':'normal',lineHeight:inlineStroke.lineSpacing||1.2,letterSpacing:inlineStroke.tracking||0,textAlign:inlineStroke.align||'left',color:inlineStroke.color}} onPointerDown={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()} onChange={e=>{const edit={...inline,value:e.target.value};inlineRef.current=edit;setInline(edit);const next=structuredClone(panel),stroke=next.layers.find(l=>l.id===edit.layerId)?.strokes.find(s=>s.id===edit.id);if(stroke)stroke.text=edit.value;draft.current=next;redraw();}} onBlur={()=>finishInline()} onKeyDown={e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();finishInline(false);}else if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();finishInline();}}}/></foreignObject></g>}
+  </svg>
+  {maskOutsideCamera&&<svg className="camera-outside-mask" viewBox={`${-project.width*drawingMargin} ${-project.height*drawingMargin} ${extendedWidth} ${extendedHeight}`} preserveAspectRatio="none" aria-label="Camera outside masking" aria-hidden="true" style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none'}}><path fill="#182430" fillRule="evenodd" d={`M ${-project.width*drawingMargin} ${-project.height*drawingMargin} H ${project.width*(1+drawingMargin)} V ${project.height*(1+drawingMargin)} H ${-project.width*drawingMargin} Z M ${cameraCorners(maskPose,project).map(([x,y])=>`${x} ${y}`).join(' L ')} Z`}/></svg>}
+  {!sequentialEnabled&&findPanel(project,panel.id)!.scene.camera.length===0&&tool!=='camera'&&!panel.staticCamera&&<svg className="camera-default-outline" viewBox={`${-project.width*drawingMargin} ${-project.height*drawingMargin} ${extendedWidth} ${extendedHeight}`} preserveAspectRatio="none" aria-label="Default camera frame" style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none',overflow:'visible'}}><rect x="0" y="0" width={project.width} height={project.height} fill="none" stroke="#344150" strokeWidth={Math.max(2,project.width/960)}/></svg>}
+  {sequentialEnabled&&sequentialResult&&<svg className="camera-sequential-outline" viewBox={`${-project.width*drawingMargin} ${-project.height*drawingMargin} ${extendedWidth} ${extendedHeight}`} preserveAspectRatio="none" aria-label="Sequential camera frame" style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none',overflow:'visible'}}><polygon points={cameraCorners(sequentialResult.pose,project).map(p=>p.join(',')).join(' ')} fill="none" stroke={sequentialResult.mode==='animated'?'#ef4d50':'#222222'} strokeWidth={Math.max(2,project.width/960)}/></svg>}
+  {sequentialEnabled&&sequentialResult&&tool==='camera'&&!temporaryHand&&<SequentialCameraOutOverlay project={project} inPose={sequentialResult.inPose} endpointOutPose={sequentialResult.outPose} intermediateOutlines={intermediateOutlines} onSelectIntermediate={frame=>onCameraSelect('intermediate',localPanelStart(cameraScene,panel)+frame)} outPose={cameraScene.panels[0]?.id===panel.id&&cameraTarget?.endpoint==='in'&&sequentialResult.mode==='animated'?sequentialResult.inPose:intermediateSelected?sequentialResult.pose:sequentialResult.outPose} editingIn={cameraScene.panels[0]?.id===panel.id&&cameraTarget?.endpoint==='in'&&sequentialResult.mode==='animated'} inLocked={cameraScene.panels[0]?.id!==panel.id} intermediateMode={!!intermediateSelected} staticMode={sequentialResult.mode!=='animated'} editable={true} drawingMargin={drawingMargin} onChange={pose=>onCameraChange(cameraScene.panels[0]?.id===panel.id&&cameraTarget?.endpoint==='in'&&sequentialResult.mode==='animated'?localPanelStart(cameraScene,panel):cameraFrame,pose)}/>}
+  {sequentialEnabled&&sequentialResult?.mode==='animated'&&tool==='camera'&&!temporaryHand&&<div role="group" aria-label="Drawing area sequential camera endpoints" style={{position:'absolute',top:8,left:8,display:'flex',gap:6,zIndex:12,pointerEvents:'auto'}} onPointerDown={e=>e.stopPropagation()}>
+    <button type="button" aria-label={cameraScene.panels[0]?.id===panel.id?'Select drawing camera IN':'Drawing camera IN locked'} aria-pressed={cameraTarget?.endpoint==='in'} disabled={cameraScene.panels[0]?.id!==panel.id} onClick={()=>onCameraSelect('in',localPanelStart(cameraScene,panel))} style={{padding:'5px 10px',borderRadius:5,border:cameraTarget?.endpoint==='in'?'2px solid #ffffff':'1px solid #32c85b',background:cameraTarget?.endpoint==='in'?'#176a38':'#172b20',color:'#eaffef',fontWeight:700,cursor:cameraScene.panels[0]?.id===panel.id?'pointer':'not-allowed',opacity:cameraScene.panels[0]?.id===panel.id?1:.65}}>IN {cameraScene.panels[0]?.id!==panel.id?'· Locked':''}</button>
+    {sequentialState?.mode==='animated'&&sequentialState.keys.filter(k=>k.frame>0&&k.frame<panel.duration-1).sort((a,b)=>a.frame-b.frame).map(k=><button key={k.frame} type="button" aria-label={`Select drawing intermediate keyframe ${k.frame}`} aria-pressed={cameraTarget?.endpoint==='intermediate'&&cameraTarget.frame===localPanelStart(cameraScene,panel)+k.frame} onClick={()=>onCameraSelect('intermediate',localPanelStart(cameraScene,panel)+k.frame)} style={{padding:'5px 8px',borderRadius:5,border:cameraTarget?.endpoint==='intermediate'&&cameraTarget.frame===localPanelStart(cameraScene,panel)+k.frame?'2px solid #ffffff':'1px solid #3889e8',background:'#193c68',color:'#eef6ff',cursor:'pointer'}}>◆ {k.frame}</button>)}
+    <button type="button" aria-label="Select drawing camera OUT" aria-pressed={cameraTarget?.endpoint==='out'} onClick={()=>onCameraSelect('out',localPanelStart(cameraScene,panel)+panel.duration-1)} style={{padding:'5px 10px',borderRadius:5,border:cameraTarget?.endpoint==='out'?'2px solid #ffffff':'1px solid #ef4d50',background:cameraTarget?.endpoint==='out'?'#8b292e':'#3a2023',color:'#fff0f0',fontWeight:700,cursor:'pointer'}}>OUT</button>
+  </div>}
+  {!sequentialEnabled&&(findPanel(project,panel.id)!.scene.camera.length>0||tool==='camera'||!!panel.staticCamera)&&<CameraOverlay scene={findPanel(project,panel.id)!.scene} panel={panel} project={project} frame={cameraFrame} drawingMargin={drawingMargin} editable={tool==='camera'&&!temporaryHand} selectedEndpoint={cameraTarget?.endpoint==='out'?'out':'in'} onSelectEndpoint={onCameraSelect} onChange={onCameraChange}/>}
+  {guides&&<div className="safe-guide" aria-hidden="true"><span>Action safe · 10%</span></div>}
+ </div><span className="stage-hint">{busy?'Updating artwork…':effective==='hand'?'Hand · Drag to pan':`${effective} · ${layer?.kind||'vector'} · ${layer?.name} · Hold Space to pan`}</span></div>;
+}
+const oDefault=defaultToolOptions;

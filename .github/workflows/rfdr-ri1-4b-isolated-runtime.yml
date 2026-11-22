@@ -1,0 +1,41 @@
+name: RFDR RI1.4-B Isolated Runtime Regression
+on:
+  push:
+    branches: [RFDR-RI1-Controlled-Integration]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-runtime:
+    runs-on: macos-15
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install chromium
+      - run: brew install ffmpeg opus-tools
+      - run: npm run build
+      - name: Prepare isolated packaged-encoder fixture
+        run: |
+          set -euo pipefail
+          RESOURCES="$(mktemp -d "${RUNNER_TEMP}/rfdr-packaged-resources.XXXXXX")"
+          cp "$(command -v ffmpeg)" "$RESOURCES/ffmpeg"
+          chmod 755 "$RESOURCES/ffmpeg"
+          echo "RFDR_PACKAGED_RESOURCES=$RESOURCES" >> "$GITHUB_ENV"
+          "$RESOURCES/ffmpeg" -hide_banner -version | head -n 1
+      - name: Isolated runtime, IPC and security tests
+        run: |
+          set -euo pipefail
+          for f in tests/rfdr-n3-16-security-regression.mjs tests/rfdr-n3-16c-resource-limits.mjs tests/rfdr-n3-17{a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,r,r2,s}-*.mjs; do
+            if [ -f "$f" ]; then node "$f"; fi
+          done
+      - name: Isolated FFmpeg sink and packaged encoder contracts
+        run: |
+          set -euo pipefail
+          node tests/rfdr-n3-15-packaged-encoder.mjs
+          node tests/rfdr-n3-15b-ffmpeg-sink.mjs
+          node tests/rfdr-n3-15c-packaged-export.mjs

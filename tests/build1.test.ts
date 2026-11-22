@@ -7,7 +7,7 @@ test('display and package build metadata remain synchronized without a version b
   const info = JSON.parse(readFileSync(new URL('../src/build-info.json', import.meta.url), 'utf8'));
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   const lock = JSON.parse(readFileSync(new URL('../package-lock.json', import.meta.url), 'utf8'));
-  assert.equal(info.name, 'Innovent Professional Storyboard');
+  assert.equal(info.name, 'IInnovent Professional Storyboard');
   assert.match(info.build, /^\d{8}\.\d{4}$/); assert.equal(info.buildFormat, 'MMDDYYYY.HH24MI');
   assert.equal(pkg.issb.build, info.build); assert.equal(pkg.issb.version, info.version);
   assert.equal(pkg.version, `${info.version}.0.0`); assert.equal(lock.version, pkg.version);
@@ -37,11 +37,11 @@ test('insertion anchors avoid the old off-by-one downward-reorder behavior', () 
   const moved = movePanels(p, [{ panelId: s.panels[0].id, sceneId: s.id, beforePanelId: s.panels[2].id }]);
   assert.deepEqual(moved.scenes[0].panels.map(p => p.id), [s.panels[1].id, s.panels[0].id, s.panels[2].id]);
 });
-test('moves do not silently retime scene camera keys; whole-scene reordering preserves them', () => {
+test('camera-bearing panel moves are supported; whole-scene reordering preserves original keys', () => {
   const p = fixture(), [a, b] = p.scenes;
   a.camera = [{ id: uid(), frame: 0, x: 960, y: 540, zoom: 1, rotation: 0, interpolation: 'linear' }];
-  assert.throws(() => movePanels(p, [{ panelId: a.panels[0].id, sceneId: b.id, beforePanelId: null }]), /camera-keyed/);
-  assert.throws(() => movePanels(p, [{ panelId: b.panels[0].id, sceneId: a.id, beforePanelId: null }]), /camera-keyed/);
+  assert.equal(movePanels(p, [{ panelId: a.panels[0].id, sceneId: b.id, beforePanelId: null }]).scenes[1].panels.at(-1)!.id,a.panels[0].id);
+  assert.equal(movePanels(p, [{ panelId: b.panels[0].id, sceneId: a.id, beforePanelId: null }]).scenes[0].panels.at(-1)!.id,b.panels[0].id);
   const moved = moveScene(p, a.id, null); assert.deepEqual(moved.scenes.at(-1), a);
 });
 test('invalid and ambiguous move plans reject atomically', () => {

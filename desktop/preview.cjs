@@ -20,6 +20,7 @@ const server = http.createServer(async (request, response) => {
 server.on('error', (error) => { console.error(`Preview could not start: ${error.message}. Close the previous preview and try again.`); process.exitCode = 1; });
 server.listen(4317, '127.0.0.1', () => {
   const url = `http://127.0.0.1:${server.address().port}`;
-  console.log(`Innovent Professional Storyboard preview: ${url}\nLeave this terminal open. Press Ctrl+C to stop.`);
-  if (process.platform === 'darwin') spawn('open', [url], { stdio: 'ignore' });
+  console.log(`IInnovent Professional Storyboard preview: ${url}\nLeave this terminal open. Press Ctrl+C to stop.`);
+  // UI tests launch this preview with stdio ignored. Only open Safari for an interactive launch.
+  if (process.platform === 'darwin' && process.stdout.isTTY && process.env.IINNOVENT_NO_BROWSER !== '1') spawn('open', [url], { stdio: 'ignore' });
 });

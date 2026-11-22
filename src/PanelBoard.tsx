@@ -1,3 +1,4 @@
+import TransitionMarker from './TransitionMarker';
 import { useRef, useState } from 'react';
 import type { DragEvent, ReactNode } from 'react';
 import type { Panel, Project, Scene } from './model';
@@ -5,8 +6,8 @@ import { allPanels, sceneFrames, timecode } from './model';
 import { Thumbnail } from './Canvas';
 type DragPayload = { kind: 'panels'; ids: string[] } | { kind: 'scene'; id: string };
 type Cue = { kind: 'panels'; sceneId: string; beforeId: string | null } | { kind: 'scene'; beforeId: string | null };
-type Props = { project: Project; view: 'drawing' | 'panel'; activeId: string; selectedIds: string[]; onSelect: (id: string) => void; onSelection: (ids: string[]) => void; renderLayers: (panel: Panel) => ReactNode; onMove: (ids: string[], sceneId: string, beforeId: string | null) => void; onMoveScene: (id: string, beforeId: string | null) => void };
-export default function PanelBoard({ project, view, activeId, selectedIds, onSelect, onSelection, renderLayers, onMove, onMoveScene }: Props) {
+type Props = { transitionId:string; onTransition:(id:string)=>void; project: Project; view: 'drawing' | 'panel'; activeId: string; selectedIds: string[]; onSelect: (id: string) => void; onSelection: (ids: string[]) => void; renderLayers: (panel: Panel) => ReactNode; onMove: (ids: string[], sceneId: string, beforeId: string | null) => void; onMoveScene: (id: string, beforeId: string | null) => void };
+export default function PanelBoard({ transitionId,onTransition,project, view, activeId, selectedIds, onSelect, onSelection, renderLayers, onMove, onMoveScene }: Props) {
   const [dragging, setDragging] = useState<DragPayload | null>(null), dragRef = useRef<DragPayload | null>(null), [cue, setCue] = useState<Cue | null>(null);
   const grid = view === 'panel';
   const begin = (e: DragEvent, payload: DragPayload) => { dragRef.current = payload; setDragging(payload); setCue(null); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('application/x-issb-move', JSON.stringify(payload)); e.dataTransfer.setData('text/plain', payload.kind === 'scene' ? payload.id : payload.ids.join(',')); };
@@ -41,6 +42,7 @@ export default function PanelBoard({ project, view, activeId, selectedIds, onSel
       <div className={grid ? 'panel-grid reorder-grid' : 'film-scene-panels'}>
         {s.panels.map((p, index) => <div className="panel-position" key={p.id}>
           {grid && index === 0 && sceneHeading(s, sceneIndex)}
+          {project.transitions.filter(t=>t.toId===p.id).map(t=><TransitionMarker key={t.id} transition={t} selected={transitionId===t.id} onSelect={()=>onTransition(t.id)}/>)}
           {slot(s, p.id)}
           <article data-panel-id={p.id} title={`${s.name} / ${p.name} · Position ${index + 1}`} className={`panel-card ${activeId === p.id ? 'selected' : ''} ${grid ? 'grid-card' : ''} ${grid && selectedIds.includes(p.id) ? 'batch-selected' : ''} ${dragging?.kind === 'panels' && dragging.ids.includes(p.id) ? 'being-dragged' : ''}`} draggable onDragStart={e => { if ((e.target as HTMLElement).closest('.mini-layers, input')) { e.preventDefault(); return; } begin(e, { kind: 'panels', ids: grid && selectedIds.includes(p.id) ? allPanels(project).map(p => p.panel.id).filter(id => selectedIds.includes(id)) : [p.id] }); }} onDragEnd={end} onDragOver={e => { const rect = e.currentTarget.getBoundingClientRect(); panelCue(e, s, e.clientX < rect.left + rect.width / 2 ? p.id : s.panels[index + 1]?.id || null); }} onDrop={drop}>
             {grid && <label className="panel-batch-checkbox"><input type="checkbox" aria-label={`Select ${s.name} / ${p.name} for move`} checked={selectedIds.includes(p.id)} onChange={e => toggle(p.id, e.target.checked)} /></label>}

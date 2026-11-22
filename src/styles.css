@@ -40,3 +40,173 @@
 .continuous-panels .empty-scene .scene-title{top:-34px}
 .continuous-panels.dragging-scenes .scene-grid>.scene-drop-marker{display:block;position:static;grid-column:1/-1;height:14px}
 .continuous-panels.dragging-scenes .scene-grid>.scene-drop-marker.active{background:var(--orange)}
+
+/* Shared scene camera controls and non-destructive framing. */
+.thumbnail{position:relative;width:100%;height:100%;min-height:0}
+.thumbnail canvas{display:block}
+.camera-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.camera-overlay.editable{pointer-events:auto;touch-action:none}
+.camera-overlay.editable .camera-frame{cursor:move;pointer-events:stroke}
+.camera-overlay.editable .camera-handle{cursor:nesw-resize}
+.camera-overlay text{pointer-events:none}
+.camera-current{pointer-events:none}
+.camera-controls{border-bottom:1px solid var(--line);background:#192a39}
+.camera-controls>summary{cursor:pointer;padding:12px 17px;font-size:12px;color:#bdd3e5;font-weight:600}
+.camera-help,.camera-inspector small{font-size:10px;color:#9eb5c9;line-height:1.6;display:block}
+.camera-inspector h3{color:#d9e9f7}
+.camera-buttons{display:flex;flex-wrap:wrap;gap:5px;margin:9px 0}
+.camera-buttons button{font-size:10px;padding:5px 7px}
+.camera-numbers{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+.camera-key-list{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px;max-height:100px;overflow:auto}
+.camera-key-list button{font-size:10px;padding:4px 6px}
+.camera-key-list .active{border-color:var(--orange);background:#354350}
+.timeline-camera-lane{position:relative;height:54px;border-top:1px solid #334b61;background:#162637;min-width:100%}
+.camera-scene-track{position:absolute;top:0;height:100%;border-right:1px solid #3a536b}
+.camera-scene-track>span{font-size:9px;color:#829db5;display:block;padding:19px 9px;overflow:hidden;white-space:nowrap}
+.camera-scene-track>button{position:absolute;top:9px;transform:translateX(-50%);border:0;background:transparent;font-size:20px;padding:3px 5px;z-index:3}
+.camera-preview{display:flex;align-items:center;justify-content:center}
+.camera-preview canvas{max-height:100%;max-width:100%;object-fit:contain}
+.panel-image-button .thumbnail{height:auto}
+.panel-image-button .camera-overlay{overflow:hidden}
+
+/* Drawing tool rail, selection overlays and properties. */
+.tool-rail{overflow-y:auto;gap:5px;padding:8px 0}
+.tool-rail button{flex-shrink:0;height:32px;width:36px;display:flex;align-items:center;justify-content:center}
+.art-interaction{position:absolute;inset:0;width:100%;height:100%;touch-action:none;outline:none;overflow:visible;cursor:crosshair}
+.art-interaction.tool-select,.art-interaction.tool-contour,.art-interaction.tool-pencil-editor{cursor:default}
+.art-interaction.tool-hand{cursor:grab}
+.art-interaction [data-mode=move]{cursor:move}
+.art-interaction [data-mode=resize]{cursor:nwse-resize}
+.art-interaction [data-mode=rotate]{cursor:grab}
+.art-interaction [data-mode=point]{cursor:move}
+.tool-actions{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0}
+.tool-actions button,.saved-preset button,.drawing-properties>button{font-size:10px;padding:5px 7px}
+.drawing-properties .field{margin-bottom:9px}
+.drawing-properties small,.layer-kind{font-size:10px;color:#91abc3;line-height:1.5;display:block}
+.tool-presets{display:flex;gap:5px;margin:12px 0}
+.tool-presets button{display:flex;flex-direction:column;align-items:center;justify-content:end;gap:5px;flex:1;height:54px;padding:5px;font-size:10px}
+.tool-presets span{background:currentColor;border-radius:50%;display:block}
+.saved-preset{display:flex;gap:5px;margin:4px 0}
+.saved-preset button:first-child{flex:1;text-align:left}
+.drawing-properties input[type=color]{width:100%;height:30px;padding:2px}
+
+/* Text editing and shared playback controls in the stage toolbar. */
+.stage-toolbar.playback-toolbar{display:grid;grid-template-columns:minmax(70px,1fr) auto minmax(0,1fr);gap:10px}
+.stage-toolbar .stage-playback{padding:0;margin:0;gap:4px;min-width:0}
+.stage-toolbar .stage-playback button{padding:3px 7px;font-size:11px}
+.stage-toolbar .stage-playback>span{font-size:9px;margin-left:4px}
+.playback-toolbar .view-controls,.playback-toolbar>.muted{justify-self:end}
+.playback-toolbar>.muted{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.inline-art-text{width:100%;height:100%;box-sizing:border-box;border:1px solid #ff922c;background:#fffffffa;padding:0;resize:none;outline:none;white-space:pre-wrap;border-radius:0}
+.drawing-playback-preview .thumbnail{height:100%;width:100%}
+@media(max-width:1050px){.stage-toolbar .stage-playback>span{display:none}.playback-toolbar .view-controls{gap:3px}.playback-toolbar .view-controls label{margin-left:3px}}
+
+/* Drawing-only onion guides sit below artwork and never receive input. */
+.onion-skin-surface{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.drawing-surface{position:relative}
+.stage-toolbar.onion-toolbar{grid-template-columns:minmax(0,1fr) auto auto auto;gap:8px}
+.onion-controls{display:flex;align-items:center;gap:8px;white-space:nowrap;font-size:10px}
+.onion-controls label{display:flex;align-items:center;gap:4px}
+.onion-controls select{padding:3px 4px;font-size:10px;width:37px}
+.onion-controls .backward{color:#ff8790}.onion-controls .forward{color:#6de28e}
+@media(max-width:1250px){.onion-toolbar .breadcrumbs{display:none}.stage-toolbar.onion-toolbar{grid-template-columns:auto auto auto;justify-content:space-between}.onion-toolbar .view-controls label{margin-left:0}.onion-controls{gap:4px}}
+@media(max-width:1050px){.onion-controls{font-size:9px}.onion-toolbar .view-controls button{padding:3px 5px}.stage-toolbar.onion-toolbar{padding:0 8px;gap:4px}}
+
+/* Boundary markers preserve continuous panel flow and existing drag slots. */
+.transition-toolbar{display:flex;gap:5px;align-items:center}
+.transition-toolbar button{font-size:10px;padding:4px 8px}
+.panel-position{position:relative}
+.transition-marker{position:absolute;left:-17px;top:80px;z-index:4;padding:2px;border:1px solid #597b95;background:#172a3c;color:#75baf0;border-radius:5px;width:28px;height:30px}
+.transition-marker.selected{color:#ff922c;border-color:#ff922c;background:#3c3025}
+.continuous-panels .transition-marker{left:-15px;top:95px}
+.timeline-clip>.transition-marker{left:-14px;top:70px;z-index:7}
+.transition-properties p{font-size:11px;overflow-wrap:anywhere}
+.transition-actions{display:flex;flex-wrap:wrap;gap:6px}.transition-actions button{font-size:11px;padding:5px 8px}
+.timeline-transition-toolbar{padding:6px 18px;background:#182430;border-bottom:1px solid #253240}
+
+/* Icon appearance only; button size and drawing behavior remain unchanged. */
+.tool-rail .tool-icon{display:block;flex-shrink:0}
+.color-button{position:relative}
+.color-button .tool-icon{position:absolute;left:6px;top:6px;width:23px;height:23px;pointer-events:none;color:#fff;filter:drop-shadow(0 1px 1px #000)}
+/* Multi-track audio shares the existing ruler, playhead and panel timebase. */
+.timeline-transition-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.audio-toolbar{display:flex;align-items:center;gap:5px}.audio-toolbar button{font-size:10px;padding:4px 8px}
+.timeline-layout{max-height:360px;overflow:hidden}.timeline-labels{width:190px;overflow:hidden}
+.timeline-layout .timeline-scroll{overflow:auto}
+.timeline-layout .timeline-labels>.audio-track-label{height:72px;padding:5px 9px;border-bottom:1px solid #334b61;letter-spacing:0}
+.audio-track-label.selected{background:#263f52}
+.audio-track-name{width:100%;padding:2px 0;border:0;background:transparent;text-align:left;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.audio-track-label>div{display:flex;align-items:center;gap:4px}.audio-track-label button:not(.audio-track-name){padding:2px 6px;font-size:10px}
+.audio-track-label button.active{color:#ff922c;border-color:#ff922c}.audio-track-label input[type=range]{width:100px;height:19px}
+.audio-track-lane{position:relative;height:72px;border-top:1px solid #334b61;background:#14222e}
+.audio-track-lane.muted-track .audio-clip{opacity:.4}
+.audio-clip{position:absolute;height:60px;border:1px solid #3e9fba;background:#234c60;color:#bbefef;min-width:8px;padding:2px 8px;border-radius:5px;text-align:left;touch-action:none;z-index:2;overflow:hidden;cursor:grab}
+.audio-clip.selected{border-color:#ff922c;background:#4c4938;color:#ffe6bd}.audio-clip.dragging{z-index:10;opacity:.85}
+.audio-clip-name{display:block;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.audio-clip svg{display:block;width:100%;height:32px;fill:currentColor;pointer-events:none}
+.audio-trim-handle{position:absolute;top:0;bottom:0;width:7px;background:#ffffff22;cursor:ew-resize}.audio-trim-handle.left{left:0}.audio-trim-handle.right{right:0}
+.audio-properties p{font-size:11px;overflow-wrap:anywhere}.audio-properties-switches{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;margin:12px 0}
+.audio-property-actions{display:flex;gap:5px;flex-wrap:wrap;margin:12px 0}.audio-property-actions button{padding:5px 7px;font-size:11px}
+
+.timeline-layout.with-audio{flex-shrink:1;min-height:254px;max-height:414px}
+.timing-summary{display:flex;align-items:center;gap:10px}.timing-summary>span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.timeline-zoom{display:flex;gap:3px;flex-shrink:0}.timeline-zoom button{padding:2px 6px;font-size:10px}
+@media(max-height:820px){.timeline-layout.with-audio{max-height:310px;min-height:234px}}
+progress{width:100%;height:18px;accent-color:#ff922c}
+
+.audio-tail-note{color:#ffbc78;font-size:10px}.audio-toolbar{flex-wrap:wrap}
+
+/* PDF export is isolated from the drawing and timeline layouts. */
+.pdf-dialog { width: min(1120px, 96vw); max-width: 96vw; padding: 22px; }
+.pdf-dialog-body { display: grid; grid-template-columns: minmax(280px, 380px) minmax(300px, 1fr); gap: 24px; height: min(68vh, 780px); }
+.pdf-options { overflow-y: auto; padding-right: 12px; }
+.pdf-options fieldset { border: 1px solid var(--border, #344353); border-radius: 10px; margin: 0 0 16px; padding: 14px; min-width: 0; }
+.pdf-options legend { padding: 0 6px; font-weight: 600; }
+.pdf-options .field { margin-bottom: 12px; }
+.pdf-options select { width: 100%; }
+.pdf-options .checkbox-field { margin: 10px 0; }
+.pdf-field-row { display: flex; gap: 10px; }
+.pdf-field-row > * { flex: 1; min-width: 0; }
+.pdf-profile-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.pdf-logo-swatch { width: 110px; height: 55px; object-fit: contain; background: white; border-radius: 5px; }
+.pdf-preview { display: flex; flex-direction: column; min-width: 0; overflow: auto; }
+.pdf-preview p { color: var(--muted, #a7b7c8); font-size: 13px; line-height: 1.5; }
+.pdf-preview iframe { width: 100%; flex: 1; min-height: 260px; border: 1px solid #526477; background: white; border-radius: 6px; }
+.pdf-preview a { color: #90c9ff; margin-top: 8px; }
+.pdf-error { color: #ffaaa2; padding: 8px; }
+.pdf-progress { display: flex; gap: 14px; align-items: center; padding: 10px 0; }
+.pdf-progress progress { flex: 1; }
+@media(max-width:760px) { .pdf-dialog-body { grid-template-columns: 1fr; overflow: auto; } .pdf-options { overflow: visible; } .pdf-preview { overflow: visible; } }
+
+.pdf-preview-fallback { padding: 28px; border: 1px dashed #526477; border-radius: 8px; line-height: 1.6; color: #b9ccdf; }
+
+.pdf-preview .pdf-preview-stale { color: #ff7777; font-weight: 600; }
+
+.preferences-dialog { width: min(780px, 94vw); }
+.preferences-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
+.preferences-tabs button[aria-pressed="true"] { background: #34516a; border-color: #86b4da; }
+.preferences-content { max-height: 57vh; overflow-y: auto; padding: 0 10px 0 0; }
+.preferences-content section[hidden] { display: none; }
+.preferences-content p,.preferences-content dd { font-size: 12px; color: #abc0d3; line-height: 1.7; }
+.preferences-content h3 { margin-top: 12px; }
+.preferences-content .field { margin-bottom: 14px; }
+.preferences-content dt { font-weight: 600; margin-top: 14px; }
+.pitch-view:fullscreen { width: 100vw; height: 100vh; padding: 20px; background: #0a1119; display: flex; flex-direction: column; box-sizing: border-box; }
+.pitch-view:fullscreen .pitch-screen { flex: 1; min-height: 0; }
+
+.pitch-view:fullscreen .pitch-screen { width: 100%; max-height: calc(100% - 70px); }
+
+/* Round 6.3: dedicated zoom tool */
+.art-interaction.tool-zoom{cursor:zoom-in}
+
+/* Round 6.4 — Help/About and nonblocking branded startup */
+.help-about{width:600px}.help-about p{font-size:12px;line-height:1.7;color:#b9cadb}.help-about h3{margin:20px 0 8px;color:#ffae6c}.help-identity{display:flex;align-items:center;gap:18px;padding:18px;background:linear-gradient(125deg,#234a6e,#172b3e);border-radius:10px}.help-identity img{width:76px;height:76px;object-fit:contain}.help-identity strong{display:block;font-size:17px}.help-identity span{display:block;margin-top:7px;color:#bbd2e5;font-size:11px}.help-shortcuts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;font-size:12px;color:#d7e5ef}.help-tip{padding:10px 12px;background:#263b50;border-left:3px solid #ff922c;border-radius:4px}
+.startup-splash{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:67vw;height:67vh;max-width:900px;max-height:600px;min-width:min(340px,94vw);min-height:240px;z-index:2000;pointer-events:none;display:grid;place-items:center;border:1px solid #50718e;border-radius:18px;overflow:hidden;box-shadow:0 24px 90px #000b;background:radial-gradient(circle at 25% 25%,#245b86,#142638 58%,#0c1722);animation:startup-dismiss 3.9s ease forwards}.startup-splash-card{text-align:center;padding:40px;animation:startup-appear .65s ease both}.startup-splash-card img{width:112px;height:112px;object-fit:contain;filter:drop-shadow(0 10px 25px #0007)}.startup-splash-name{font-size:24px;font-weight:750;letter-spacing:.025em;color:white;margin-top:18px}.startup-splash-tagline{font-size:13px;color:#b6d5eb;margin-top:10px}.startup-splash-version{font-size:11px;color:#ffc08a;margin-top:26px;letter-spacing:.04em}@keyframes startup-dismiss{0%,89.74%{opacity:1;visibility:visible}100%{opacity:0;visibility:hidden}}@keyframes startup-appear{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}@media(prefers-reduced-motion:reduce){.startup-splash{animation-duration:3.5s;animation-timing-function:steps(1,end)}.startup-splash-card{animation:none}}
+
+/* Round 6 usability — discoverable general Preferences control */
+.header-actions .preferences-trigger{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:39px;padding:7px 13px;background:#263d52;border:1px solid #f0a15b;color:#fff0df;font-weight:700;letter-spacing:.01em}
+.header-actions .preferences-trigger:hover{background:#34536c;border-color:#ffc184}
+.header-actions .preferences-trigger-icon{font-size:23px;line-height:1;color:#ffad61}
+.header-actions .preferences-trigger:focus-visible{outline:2px solid #ffbd75;outline-offset:3px}
+@media(max-width:1000px){.header-actions .preferences-trigger{gap:5px;padding:7px 9px;font-size:11px}.header-actions .preferences-trigger-icon{font-size:21px}}
+
+.recovery-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.recovery-actions button:not(.primary){border-color:#b88b5a;background:#312a25;color:#ffddb8}.recovery-actions button:not(.primary):hover{background:#493629;border-color:#ffc08a}

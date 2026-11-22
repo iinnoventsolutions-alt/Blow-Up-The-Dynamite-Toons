@@ -2,7 +2,7 @@
   "name": "innovent-storyboard",
   "version": "1.0.0",
   "private": true,
-  "description": "Innovent Professional Storyboard",
+  "description": "IInnovent Professional Storyboard",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
@@ -10,15 +10,17 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "desktop": "npm run build && electron .",
-    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "test": "node --experimental-strip-types --test tests/*.test.ts tests/persistence-round6.test.mjs tests/electron-ipc-security.test.cjs tests/electron-ipc-contract.test.cjs tests/electron-pdf-security.test.cjs",
     "package:mac": "npm run build && electron-builder --mac dmg --arm64 --x64",
     "preview:built": "node desktop/preview.cjs",
-    "test:ui": "npm run build && node tests/ui-smoke.mjs && node --experimental-strip-types tests/ui-build1.mjs",
-    "set-build": "node scripts/set-build.mjs"
+    "test:ui": "npm run build && node tests/ui-smoke.mjs && node tests/ui-help.mjs && node --experimental-strip-types tests/ui-build1.mjs && node --experimental-strip-types tests/ui-camera.mjs && node --experimental-strip-types tests/ui-drawing-tools.mjs && node --experimental-strip-types tests/ui-adjustments.mjs && node --experimental-strip-types tests/ui-text-playback.mjs && node --experimental-strip-types tests/ui-onion.mjs && node --experimental-strip-types tests/ui-onion-alignment.mjs && node --experimental-strip-types tests/ui-transitions.mjs && node --experimental-strip-types tests/ui-drawing-regressions.mjs && node --experimental-strip-types tests/ui-zoom-editor.mjs && node --experimental-strip-types tests/ui-icons.mjs && node --experimental-strip-types tests/ui-layer-delete.mjs && node --experimental-strip-types tests/ui-audio.mjs && node --experimental-strip-types tests/ui-pdf.mjs && node --experimental-strip-types tests/ui-workflow.mjs",
+    "set-build": "node scripts/set-build.mjs",
+    "package:mac:arm64": "npm run build && electron-builder --mac dmg --arm64",
+    "package:mac:intel": "npm run build && electron-builder --mac dmg --x64"
   },
   "build": {
     "appId": "com.innoventsolutions.storyboard",
-    "productName": "Innovent Professional Storyboard",
+    "productName": "IInnovent Professional Storyboard",
     "files": [
       "dist/**/*",
       "desktop/**/*",
@@ -31,17 +33,20 @@
     },
     "mac": {
       "category": "public.app-category.graphics-design",
-      "icon": "public/innovent-icon.icns"
+      "icon": "public/innovent-icon.icns",
+      "identity": "-"
     },
     "fileAssociations": [
       {
         "ext": "issb",
-        "name": "Innovent Professional Storyboard Project",
+        "name": "IInnovent Professional Storyboard Project",
         "role": "Editor"
       }
-    ]
+    ],
+    "afterPack": "./scripts/production-ffmpeg-afterpack.cjs"
   },
   "dependencies": {
+    "jspdf": "^4.2.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
@@ -49,7 +54,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "electron": "^44.7.0",
-    "electron-builder": "^26.15.3",
+    "electron-builder": "26.17.0",
     "playwright": "^1.64.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.4"
@@ -59,8 +64,12 @@
   },
   "issb": {
     "version": 1,
-    "build": "10132026.1234",
+    "build": "10152026.1310",
     "buildFormat": "MMDDYYYY.HH24MI",
     "buildTimezone": "America/New_York"
+  },
+  "overrides": {
+    "@electron/get": "5.1.0",
+    "minimatch": "11.0.1"
   }
 }

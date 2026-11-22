@@ -1,0 +1,337 @@
+name: Electron Builder Security Trial
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - Working
+  push:
+    branches:
+      - Security-Audit-W
+      - Working
+      - Release-Defect-Resolution
+permissions:
+  contents: read
+jobs:
+  builder-trial:
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Record baseline
+        run: |
+          node -v
+          npm -v
+          node -p "require('./package-lock.json').packages['node_modules/electron-builder'].version"
+          npm ci
+          npm audit --json > baseline-audit.json || true
+      - name: Install candidate in isolated CI checkout
+        run: |
+          npm install --save-dev --save-exact electron-builder@26.17.0
+          npm ls electron-builder
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const file = 'package.json';
+          const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+          manifest.overrides = {
+            ...manifest.overrides,
+            '@electron/get': '5.1.0'
+          };
+          fs.writeFileSync(file, JSON.stringify(manifest, null, 2) + '\n');
+          NODE
+          npm install --package-lock-only --ignore-scripts
+          npm ci
+          npm ls '@electron/get' || true
+          npm ls sprintf-js roarr global-agent || true
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          const offenders = Object.entries(lock.packages)
+            .filter(([name]) => /node_modules\/(sprintf-js|roarr|global-agent)$/.test(name))
+            .map(([name, pkg]) => name + '@' + pkg.version);
+          console.log('Remaining vulnerable-chain packages:', offenders);
+          if (offenders.length) process.exitCode = 1;
+          NODE
+          npm audit --json > candidate-audit.json || true
+          npm audit --omit=dev
+          node -p "'Trial builder: ' + require('electron-builder/package.json').version"
+      - name: Verify committed dependency configuration (no CI override)
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const manifest = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          if (manifest.overrides?.minimatch !== '11.0.1') throw new Error('Committed minimatch override missing');
+          if (manifest.devDependencies?.['electron-builder'] !== '26.17.0') throw new Error('Electron Builder manifest version changed');
+          if (lock.packages?.['node_modules/electron-builder']?.version !== '26.17.0') throw new Error('Electron Builder lockfile version changed');
+          NODE
+          npm ci
+          npm audit --audit-level=low
+          npm audit --omit=dev
+          npm ls minimatch --all > minimatch-compatibility-tree.txt 2>&1 || true
+          npm audit --json > minimatch-compatibility-audit.json || true
+      - name: Compare dependency vulnerabilities
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const baseline = JSON.parse(fs.readFileSync('baseline-audit.json', 'utf8'));
+          const candidate = JSON.parse(fs.readFileSync('candidate-audit.json', 'utf8'));
+          const count = (audit) => audit.metadata?.vulnerabilities ?? {};
+          const ids = (audit) => Object.entries(audit.vulnerabilities ?? {})
+            .filter(([, details]) => JSON.stringify(details.via).includes('GHSA-hp3w-g68c-fv3c'))
+            .map(([name]) => name).sort();
+          const base = count(baseline);
+          const next = count(candidate);
+          const text = [
+            '## Electron Builder vulnerability comparison',
+            '',
+            '| Severity | Baseline | Trial |',
+            '| --- | ---: | ---: |',
+            ...['info', 'low', 'moderate', 'high', 'critical', 'total'].map(k => `| ${k} | ${base[k] ?? 0} | ${next[k] ?? 0} |`),
+            '',
+            'Advisory: GHSA-hp3w-g68c-fv3c (sprintf-js; no published patched version as of 2026-10-16)',
+            '',
+            `Baseline affected package names: ${ids(baseline).join(', ') || 'none'}`,
+            `Trial affected package names: ${ids(candidate).join(', ') || 'none'}`,
+            '',
+            'Audit counts alone do not establish exploitability or whether a bundled application ships an affected package.'
+          ].join('\n');
+          fs.writeFileSync('security-audit-comparison.md', text + '\n');
+          if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, text + '\n');
+          console.log(text);
+          NODE
+      - name: Model tests and production build
+        run: |
+          npm test
+          node --test tests/electron-lifecycle.test.cjs tests/electron-persistence.test.cjs
+          npm run build
+      - name: Prepare browser regression dependencies
+        run: |
+          npx playwright install chromium
+          missing=()
+          if ! command -v pdftotext >/dev/null || ! command -v pdfinfo >/dev/null; then
+            missing+=(poppler)
+          fi
+          if ! command -v ffprobe >/dev/null || ! command -v ffmpeg >/dev/null; then
+            missing+=(ffmpeg)
+          fi
+          if [ "${#missing[@]}" -gt 0 ]; then
+            brew install "${missing[@]}"
+          fi
+          command -v ffprobe
+          command -v ffmpeg
+          command -v pdftotext
+          command -v pdfinfo
+          python3 -m venv .pdf-test-venv
+          .pdf-test-venv/bin/python -m pip install pypdf fonttools
+          echo "$PWD/.pdf-test-venv/bin" >> "$GITHUB_PATH"
+      - name: Full browser regression suite
+        id: browser_regression
+        continue-on-error: true
+        run: npm run test:ui
+      - name: RFU-A0 diagnostic browser reproduction (non-gating)
+        id: rfu_a0_diagnostic
+        continue-on-error: true
+        run: node --experimental-strip-types tests/ui-rfu-a0-diagnostics.mjs
+      - name: Upload RFU-A0 browser evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: rfu-a0-browser-evidence-${{ github.run_id }}
+          path: |
+            test-results/rfu-a0-*.json
+            test-results/rfu-a0-*.png
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Round 1 drawing reliability regression
+        id: drawing_reliability
+        continue-on-error: true
+        run: node --experimental-strip-types tests/ui-round1-reliability.mjs
+      - name: Require all browser regressions to pass
+        if: steps.browser_regression.outcome == 'failure' || steps.drawing_reliability.outcome == 'failure'
+        run: |
+          echo "Browser suite: ${{ steps.browser_regression.outcome }}"
+          echo "Round 1 drawing reliability: ${{ steps.drawing_reliability.outcome }}"
+          exit 1
+      - name: Upload browser regression diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: browser-regression-diagnostics
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Reject untrusted fork PR packaging
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        run: |
+          echo 'Refusing installer packaging/signing for a fork pull request.'
+          exit 1
+      - name: Package both Mac architectures without signing
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          # Only same-repository PRs may override electron-builder's PR signing skip.
+          # No Developer ID certificates or secrets are provided; signing remains ad-hoc.
+          CSC_FOR_PULL_REQUEST: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && 'true' || 'false' }}
+        run: npm run build && npx electron-builder --mac dmg --arm64 --x64 --publish never
+      - name: Verify native macOS app bundle signatures
+        run: |
+          apps=()
+          while IFS= read -r -d '' app; do
+            apps+=("$app")
+          done < <(find release -name '*.app' -type d -prune -print0)
+          if [ "${#apps[@]}" -lt 2 ]; then
+            echo "Expected both ARM64 and Intel unpacked macOS application bundles."
+            exit 1
+          fi
+          for app in "${apps[@]}"; do
+            echo "Verifying: $app"
+            codesign --verify --deep --strict --verbose=2 "$app"
+            details="$(codesign -dv --verbose=4 "$app" 2>&1)"
+            echo "$details"
+            if echo "$details" | grep -q 'Sealed Resources=none'; then
+              echo "Application bundle lacks a resource seal: $app"
+              exit 1
+            fi
+            file "$app/Contents/MacOS/IInnovent Professional Storyboard"
+          done
+      - name: Verify locked dependencies without repository writes
+        run: |
+          npm ci
+          # Preserve full advisory evidence even when the strict audit gate fails.
+          npm audit --json > locked-dependency-audit.json || true
+          npm audit --omit=dev --json > locked-production-audit.json || true
+          npm audit --audit-level=low
+          npm audit --omit=dev
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const manifest = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          if (manifest.devDependencies['electron-builder'] !== '26.17.0'
+              || manifest.overrides?.['@electron/get'] !== '5.1.0'
+              || lock.packages['node_modules/electron-builder']?.version !== '26.17.0'
+              || lock.packages['node_modules/@electron/get']?.version !== '5.1.0') {
+            throw new Error('Locked dependency versions differ from the audited configuration.');
+          }
+          const bad = Object.keys(lock.packages).filter(p => ['sprintf-js', 'roarr', 'global-agent'].some(name => p.endsWith('/' + name)));
+          if (bad.length) throw new Error('Vulnerable dependency chain remains: ' + bad.join(', '));
+          NODE
+      - name: Verify disk images and record installer checksums
+        run: |
+          set -euo pipefail
+          test -f "release/IInnovent Professional Storyboard-1.0.0-arm64.dmg"
+          test -f "release/IInnovent Professional Storyboard-1.0.0.dmg"
+          for dmg in release/*.dmg; do
+            hdiutil verify "$dmg"
+          done
+          (cd release && shasum -a 256 -- *.dmg > SHA256SUMS.txt)
+          (cd release && shasum -a 256 -c SHA256SUMS.txt)
+          cat release/SHA256SUMS.txt
+          printf 'GitHub commit: %s\nWorkflow run: %s\nSigning: ad-hoc (not Developer ID)\nNotarization: not performed\nChrome Safe Browsing clearance: not established\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > release/BUILD-TRUST-STATUS.txt
+      - name: Stage exact mounted installer contents for independent Linux scan
+        run: |
+          set -euo pipefail
+          mkdir -p release/scan-input
+          for arch in arm64 x64; do
+            if [ "$arch" = arm64 ]; then dmg="release/IInnovent Professional Storyboard-1.0.0-arm64.dmg"; else dmg="release/IInnovent Professional Storyboard-1.0.0.dmg"; fi
+            mountpoint="$(mktemp -d)"
+            hdiutil attach -readonly -nobrowse -mountpoint "$mountpoint" "$dmg" >/dev/null
+            test -d "$mountpoint/IInnovent Professional Storyboard.app"
+            ditto -c -k --keepParent "$mountpoint/IInnovent Professional Storyboard.app" "release/scan-input/${arch}.zip"
+            hdiutil detach "$mountpoint" -quiet
+            rmdir "$mountpoint"
+          done
+      - name: Upload installers for independent Linux security gate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mac-installer-scan-input
+          path: |
+            release/*.dmg
+            release/SHA256SUMS.txt
+            release/BUILD-TRUST-STATUS.txt
+            release/scan-input/*.zip
+          if-no-files-found: error
+          retention-days: 7
+      - name: Show package output
+        if: always()
+        run: ls -lah release/ || true
+      - name: Generate unique artifact identifier
+        if: always()
+        id: artifact_label
+        run: |
+          echo "stamp=$(TZ=America/New_York date +%Y%m%d-%H%M%S)" >> "$GITHUB_OUTPUT"
+          echo "Source commit: $GITHUB_SHA"
+          echo "Run ID: $GITHUB_RUN_ID | Attempt: $GITHUB_RUN_ATTEMPT"
+      - name: Upload security audit reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: IInnovent-security-reports-${{ steps.artifact_label.outputs.stamp }}-run${{ github.run_id }}-a${{ github.run_attempt }}
+          path: |
+            baseline-audit.json
+            candidate-audit.json
+            security-audit-comparison.md
+            locked-dependency-audit.json
+            locked-production-audit.json
+            minimatch-compatibility-audit.json
+            minimatch-compatibility-tree.txt
+            package.json
+            package-lock.json
+            release/CLAMAV-SCAN.txt
+            release/clamav-*.log
+          if-no-files-found: warn
+          retention-days: 7
+
+  linux-installer-malware-scan:
+    needs: builder-trial
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: mac-installer-scan-input
+          path: release
+      - name: Verify installer checksums and scan mounted DMG app contents
+        run: |
+          set -euo pipefail
+          cd release
+          sha256sum -c SHA256SUMS.txt
+          sudo apt-get update
+          sudo apt-get install -y clamav clamav-freshclam unzip
+          sudo systemctl stop clamav-freshclam || true
+          mkdir -p scanned/arm64 scanned/x64
+          unzip -q scan-input/arm64.zip -d scanned/arm64
+          unzip -q scan-input/x64.zip -d scanned/x64
+          test -d "scanned/arm64/IInnovent Professional Storyboard.app"
+          test -d "scanned/x64/IInnovent Professional Storyboard.app"
+          sudo freshclam
+          clamscan --version | tee CLAMAV-SCAN.txt
+          for arch in arm64 x64; do
+            echo "Scanning mounted DMG app contents: $arch" | tee -a CLAMAV-SCAN.txt
+            clamscan --recursive --infected --official-db-only --log="clamav-$arch.log" "scanned/$arch/IInnovent Professional Storyboard.app" 2>&1 | tee -a CLAMAV-SCAN.txt
+          done
+          sha256sum -c SHA256SUMS.txt
+          printf 'Both mounted DMG app contents scanned with zero detections; not a guarantee of safety.\\n' | tee -a CLAMAV-SCAN.txt
+      - name: Upload scanner evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: linux-clamav-scan-evidence-${{ github.run_id }}
+          path: |
+            release/CLAMAV-SCAN.txt
+            release/clamav-*.log
+          if-no-files-found: warn
+      - name: Upload verified Mac installers
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: IInnovent-Mac-unnotarized-verified-run${{ github.run_id }}
+          path: |
+            release/*.dmg
+            release/SHA256SUMS.txt
+            release/BUILD-TRUST-STATUS.txt
+            release/CLAMAV-SCAN.txt
+          if-no-files-found: error
+          retention-days: 7
