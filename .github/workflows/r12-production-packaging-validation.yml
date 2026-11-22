@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - RFDR-RI2-Production-Packaging
+      - R1.3-Controlled-Release-Candidate
   workflow_dispatch:
 permissions:
   contents: read
