@@ -6,9 +6,7 @@ on:
       - Working
   push:
     branches:
-      - Security-Audit-W
       - Working
-      - Release-Defect-Resolution
 permissions:
   contents: read
 jobs:
