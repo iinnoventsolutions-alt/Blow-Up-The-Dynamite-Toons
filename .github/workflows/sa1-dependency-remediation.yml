@@ -2,7 +2,7 @@ name: SA-1 Dependency Remediation
 on:
   workflow_dispatch:
   push:
-    branches: [Working, Security-Audit-W]
+    branches: [Working]
     paths:
       - '.github/workflows/sa1-dependency-remediation.yml'
 permissions:

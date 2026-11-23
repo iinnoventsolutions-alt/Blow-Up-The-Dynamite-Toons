@@ -2,8 +2,6 @@ name: RFDR C1.4 Controlled Integration Validation
 on:
   push:
     branches:
-      - RFDR-Integration-Testing
-      - RFDR-C3.5-Onion-Skin-Resolution
       - Working
   pull_request:
     branches:
