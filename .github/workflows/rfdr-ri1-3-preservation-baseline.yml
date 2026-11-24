@@ -1,12 +1,5 @@
 name: RFDR RI1.3 Preservation Baseline
 on:
-  push:
-    branches:
-      - RFDR-RI1-Controlled-Integration
-      - Working
-  pull_request:
-    branches:
-      - Working
   workflow_dispatch:
 
 permissions:
