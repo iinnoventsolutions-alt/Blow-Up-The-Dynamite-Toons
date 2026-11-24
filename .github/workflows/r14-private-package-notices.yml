@@ -3,6 +3,16 @@ on:
   push:
     branches:
       - R1.4-Private-Distribution-Readiness
+      - Working
+    paths:
+      - scripts/production-ffmpeg-afterpack.cjs
+      - scripts/r14-verify-private-dmg.mjs
+      - tests/r14-packaging-notices.test.cjs
+      - release-audit/licenses/**
+      - .github/workflows/r14-private-package-notices.yml
+  pull_request:
+    branches:
+      - Working
     paths:
       - scripts/production-ffmpeg-afterpack.cjs
       - scripts/r14-verify-private-dmg.mjs

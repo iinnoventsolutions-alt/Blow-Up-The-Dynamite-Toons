@@ -6,6 +6,8 @@ on:
   pull_request:
     branches:
       - Working
+      - Release
+      - main
   workflow_dispatch:
 
 permissions:
