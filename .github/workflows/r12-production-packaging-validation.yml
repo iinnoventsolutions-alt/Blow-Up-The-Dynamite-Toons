@@ -4,6 +4,10 @@ on:
     branches:
       - RFDR-RI2-Production-Packaging
       - R1.3-Controlled-Release-Candidate
+      - Working
+  pull_request:
+    branches:
+      - Working
   workflow_dispatch:
 permissions:
   contents: read
