@@ -9,6 +9,7 @@ const { assertTrustedSender } = require('./ipc-security.cjs');
 const { createIsolatedExportRuntime } = require('./isolated-export-runtime.cjs');
 const { createTrustedProjectRegistry } = require('./isolated-export-project-registry.cjs');
 const { createIsolatedElectronExportHarness } = require('./isolated-electron-export-harness.cjs');
+const { packagedEncoder } = require('./isolated-ffmpeg.cjs');
 const metadata = require('../src/build-info.json');
 const previousDataDirectory = app.getPath('userData');
 // Preserve packaged recovery/preferences across the display-name correction.
@@ -83,9 +84,16 @@ app.whenReady().then(async () => {
     win.webContents.on('will-navigate', (event) => event.preventDefault());
     win.loadFile(pagePath);
     const thisWindow = win;
-    // Developer-only opt-in. Packaged builds additionally require an explicit test marker.
-    const exportOptIn = process.env.RFDR_ENABLE_PRODUCTION_EXPORT === '1' &&
+    // Production exports activate only with a verified, bundled macOS encoder.
+    // Developer test mode remains opt-in and cannot bypass packaged runtime validation.
+    const testExportOptIn = process.env.RFDR_ENABLE_PRODUCTION_EXPORT === '1' &&
       (!app.isPackaged || (require('node:fs').existsSync(path.join(process.resourcesPath, 'rfdr-test-export.marker')) && process.env.RFDR_TEST_EXPORT === '1'));
+    let productionExportReady = false;
+    if (app.isPackaged && process.platform === 'darwin') {
+      try { packagedEncoder(process.resourcesPath); productionExportReady = true; }
+      catch (error) { console.error('[R1.2] Bundled FFmpeg unavailable:', error.message); }
+    }
+    const exportOptIn = app.isPackaged ? productionExportReady : testExportOptIn;
     const isolatedExportRuntime = exportOptIn
       ? createIsolatedElectronExportHarness({ipcMain, window: thisWindow, pageURL, windowIsUsable, registry: exportProjects, resourcesPath: process.resourcesPath, dialog, enabled: true})
       : createIsolatedExportRuntime({ipcMain, window: thisWindow, pageURL, windowIsUsable});

@@ -1,0 +1,54 @@
+name: R1.2 Production Packaging Validation
+on:
+  push:
+    branches:
+      - RFDR-RI2-Production-Packaging
+      - R1.3-Controlled-Release-Candidate
+      - Working
+  pull_request:
+    branches:
+      - Working
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Install Playwright Chromium for browser regressions
+        run: npx playwright install chromium
+      - name: Install media and PDF test prerequisites
+        run: |
+          command -v ffprobe >/dev/null && command -v ffmpeg >/dev/null || brew install ffmpeg
+          command -v python3 >/dev/null || brew install python
+          command -v pdftotext >/dev/null || brew install poppler
+          pdftotext -v
+          ffprobe -version
+          python3 --version
+          python3 -m pip install --user --break-system-packages 'pypdf>=5,<7' 'fonttools>=4,<5'
+          python3 -c 'from pypdf import PdfReader; from fontTools.ttLib import TTFont; print("PDF test dependencies ready")'
+      - name: Validate production integration syntax
+        run: |
+          node --check desktop/main.cjs
+          node --check scripts/production-ffmpeg-afterpack.cjs
+          node -e "const fs=require('fs'); const hook=fs.readFileSync('scripts/production-ffmpeg-afterpack.cjs','utf8'); if(!hook.includes(\"context.arch === 1\") || !hook.includes(\"context.arch === 3\")) process.exit(1)"
+          node -e "const p=require('./package.json'); if(!p.build.afterPack || !p.scripts['package:mac:arm64'] || !p.scripts['package:mac:intel']) process.exit(1)"
+      - run: npm test
+      - run: npm run test:ui
+  packaging-inputs:
+    runs-on: macos-15
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Confirm packaging requires validated architecture-specific inputs
+        run: |
+          node --check scripts/production-ffmpeg-afterpack.cjs
+          node -e "const p=require('./package.json'); if(p.build.afterPack!=='./scripts/production-ffmpeg-afterpack.cjs') process.exit(1)"
+          echo "FFmpeg bundle packaging and native DMG tests require validated ARM64 and Intel runtime directories."

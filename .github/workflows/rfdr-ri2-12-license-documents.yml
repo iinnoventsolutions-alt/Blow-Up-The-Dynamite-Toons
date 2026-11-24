@@ -1,0 +1,88 @@
+name: RFDR RI2.12 Upstream License Documentation
+on:
+  workflow_dispatch:
+  push:
+    branches: [RFDR-RI2-Production-Readiness]
+    paths:
+      - '.github/workflows/rfdr-ri2-12-license-documents.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download RI2.10 evidence from both architectures
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/arm64 evidence/x64
+          gh run download 44647305509 -R "${{ github.repository }}" -n RFDR-RI2-10-arm64-44647305509 -D evidence/arm64
+          gh run download 44647305509 -R "${{ github.repository }}" -n RFDR-RI2-10-x64-44647305509 -D evidence/x64
+      - name: Collect upstream codec licenses and source references
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p notices
+          python3 - <<'PY'
+          import json,pathlib,urllib.request,hashlib
+          root=pathlib.Path('evidence')
+          out=pathlib.Path('notices')
+          for arch in ('arm64','x64'):
+              for name in ('libvpx','opus'):
+                  meta=json.loads((root/arch/f'ri2-10-{name}-brew-info.json').read_text())['formulae'][0]
+                  version=meta['versions']['stable']
+                  license_id=meta.get('license','NOT RECORDED')
+                  (out/f'{arch}-{name}-metadata.json').write_text(json.dumps({'component':name,'architecture':arch,'version':version,'formula_license':license_id,'upstream_license_text_collected':False},indent=2)+'\\n')
+          PY
+          curl -fL --retry 3 https://raw.githubusercontent.com/webmproject/libvpx/main/LICENSE -o notices/libvpx-upstream-LICENSE.txt
+          curl -fL --retry 3 https://raw.githubusercontent.com/xiph/opus/main/COPYING -o notices/opus-upstream-COPYING.txt
+          shasum -a 256 notices/* > notices/sha256.txt
+          echo 'Upstream default-branch license texts are reference copies, not proven exact-version licenses.' > notices/REVIEW-REQUIRED.txt
+      - name: Analyze collected licensing evidence without granting clearance
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,pathlib,re
+          root=pathlib.Path('evidence')
+          lines=['# RI2.12 — Evidence review (not legal clearance)','']
+          for arch in ('arm64','x64'):
+              d=root/arch
+              lines.extend([f'## {arch}',''])
+              required=['ri2-10-ffmpeg-license.txt','ri2-10-buildconf.txt','ri2-10-version.txt','ri2-10-ffmpeg-source-commit.txt','ri2-10-libvpx-brew-info.json','ri2-10-opus-brew-info.json','ri2-10-component-sha256.txt']
+              missing=[x for x in required if not (d/x).is_file()]
+              lines.append('Required evidence files: '+('PRESENT' if not missing else 'MISSING '+', '.join(missing)))
+              if missing: raise SystemExit(f'{arch} evidence missing: {missing}')
+              license_text=(d/'ri2-10-ffmpeg-license.txt').read_text(errors='replace')
+              conf=(d/'ri2-10-buildconf.txt').read_text(errors='replace')
+              lines.append('FFmpeg license output first line: '+license_text.splitlines()[0][:180] if license_text.splitlines() else 'FFmpeg license output: EMPTY')
+              lines.append('Forbidden GPL/nonfree configure flags: '+('PRESENT — INVESTIGATE' if any(x in conf for x in ('--enable-gpl','--enable-nonfree')) else 'NOT OBSERVED'))
+              for name in ('libvpx','opus'):
+                  data=json.loads((d/f'ri2-10-{name}-brew-info.json').read_text())
+                  formulas=data.get('formulae',[])
+                  formula=next((x for x in formulas if x.get('name')==name),formulas[0] if formulas else {})
+                  lines.append(f'{name}: version={formula.get("versions",{}).get("stable","unknown")}; license metadata={formula.get("license","NOT RECORDED")}')
+              ffmpeg_license_files=sorted(p.name for p in d.glob('ri2-10-ffmpeg-COPYING*'))
+              lines.append('Bundled FFmpeg license texts: '+(', '.join(ffmpeg_license_files) or 'NONE'))
+              lines.append('libvpx and Opus upstream license texts: NOT COLLECTED by RI2.10')
+              lines.append('Component source tarball/checksum and modification notices: NOT VERIFIED by RI2.10')
+              lines.append('')
+          lines+=['## RI2.12 upstream reference notices','libvpx upstream reference: '+('COLLECTED' if pathlib.Path('notices/libvpx-upstream-LICENSE.txt').is_file() else 'MISSING'),'Opus upstream reference: '+('COLLECTED' if pathlib.Path('notices/opus-upstream-COPYING.txt').is_file() else 'MISSING'),'These default-branch copies are not verified against exact compiled versions.','## Decision','Upstream reference notices collected; exact-version source provenance, modification notices, FFmpeg LGPL obligations and qualified legal review remain outstanding. No production redistribution authorized.']
+          report='\n'.join(lines)+'\n'
+          pathlib.Path('RI2-12-REVIEW.md').write_text(report)
+          print(report)
+          with open(__import__('os').environ['GITHUB_STEP_SUMMARY'],'a') as f:f.write(report)
+          PY
+      - name: Upload review only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: RFDR-RI2-12-review-${{ github.run_id }}
+          path: |
+            RI2-12-REVIEW.md
+            notices/
+          if-no-files-found: warn
+          retention-days: 14

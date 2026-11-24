@@ -1,0 +1,13 @@
+import fs from 'node:fs';
+const file = 'release-audit/ri2-4-minimal-ffmpeg-candidate.json';
+const cfg = JSON.parse(fs.readFileSync(file, 'utf8'));
+const flags = cfg.requiredConfigureFlags;
+const forbidden = cfg.forbiddenConfigureFlags;
+const requireFlag = flag => { if (!flags.includes(flag)) throw Error('Missing candidate flag: ' + flag); };
+if (cfg.status !== 'proposed-only-not-built') throw Error('Candidate must remain non-production');
+if (new Set(flags).size !== flags.length) throw Error('Duplicate candidate configure flag');
+for (const flag of ['--disable-everything','--disable-xlib','--enable-ffmpeg','--enable-libvpx','--enable-libopus','--enable-encoder=libvpx_vp8','--enable-encoder=libopus','--enable-muxer=webm','--enable-filter=scale','--enable-demuxer=rawvideo','--enable-decoder=rawvideo','--enable-decoder=pcm_f32le','--enable-demuxer=pcm_f32le','--enable-protocol=pipe']) requireFlag(flag);
+for (const flag of forbidden) if (flags.includes(flag)) throw Error('Forbidden configure flag: ' + flag);
+for (const flag of flags) if (!/^--(?:enable|disable)-[a-z0-9_-]+(?:=[a-z0-9_-]+)?$/.test(flag)) throw Error('Invalid configure flag format: ' + flag);
+console.log('RI2.4 proposed-only candidate configuration gate: PASS');
+console.log('NOTE: This static gate does not validate configure option support, build success, runtime dependencies, or licenses.');

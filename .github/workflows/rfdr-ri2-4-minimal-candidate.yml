@@ -1,0 +1,28 @@
+name: RFDR RI2.4 Minimal FFmpeg Candidate Gate
+on:
+  push:
+    branches: [RFDR-RI2-Production-Readiness]
+    paths:
+      - '.github/workflows/rfdr-ri2-4-minimal-candidate.yml'
+      - 'release-audit/ri2-4-minimal-ffmpeg-candidate.json'
+      - 'scripts/ri2-4-validate-candidate.mjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  candidate-policy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Validate proposed-only minimal WebM configuration
+        run: node scripts/ri2-4-validate-candidate.mjs
+      - name: Assert no production release output
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -d release
+          echo 'RI2.4 does not build, bundle, sign or publish FFmpeg.'
