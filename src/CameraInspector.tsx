@@ -85,7 +85,7 @@ export default function CameraInspector(props:Props) {
   <div className="camera-buttons" role="toolbar" aria-label="Camera transfer and reset">
    <button type="button" aria-label="Copy camera from selected panel" onClick={onCopy}>Copy</button>
    <button type="button" aria-label="Paste camera on selected panel" disabled={!canPaste} onClick={onPaste}>Paste</button>
-   <ResetActions onResetScope={onResetScope} canResetKey={canResetKey}/>
+   <button type="button" aria-label="Reset camera for selected panel" onClick={()=>onResetScope('panel')}>Reset Panel</button><ResetActions onResetScope={onResetScope} canResetKey={canResetKey}/>
   </div>
   <div className="camera-key-section" aria-label="Panel camera keyframes">
    <h4>Panel keyframes</h4>
@@ -109,7 +109,7 @@ export default function CameraInspector(props:Props) {
      <div role="group" aria-label="Camera editing target" className="camera-buttons">
        <button type="button" aria-pressed={selectedEndpoint==='in'} onClick={()=>onSelectEndpoint?.('in',start)}>Edit IN</button>
        <button type="button" aria-pressed={selectedEndpoint==='out'} onClick={()=>onSelectEndpoint?.('out',end)}>Edit OUT</button>
-       <span>Editing {selectedEndpoint?.toUpperCase()||'playhead'} · {timecode(editFrame,project.fps)}</span>
+       <span aria-label="Active camera editing frame">Editing {selectedEndpoint?.toUpperCase()||'playhead'} · {timecode(editFrame,project.fps)}</span>
      </div>
      <div className="camera-buttons" role="toolbar" aria-label="Add panel camera keys">
        <button type="button" aria-label="Add keyframe at beginning of current panel" onClick={()=>{onSeek(start);onAddBoundary('start');}}>+ IN key</button>
@@ -117,7 +117,7 @@ export default function CameraInspector(props:Props) {
        <button type="button" aria-label="Add keyframe at end of current panel" onClick={()=>{onSeek(end);onAddBoundary('end');}}>+ OUT key</button>
      </div>
      <div className="camera-key-list" aria-label="Camera keyframes">{legacyKeys.map((k,i)=><button key={k.id} type="button" className={k.frame===editFrame?'active':''} onClick={()=>onSeek(k.frame)} aria-label={'Camera key at '+timecode(k.frame,project.fps)}><span style={{color:i===0?'#32c85b':i===legacyKeys.length-1?'#ef4d50':'#3889e8'}}>◆</span> {timecode(k.frame,project.fps)}</button>)}</div>
-     <div className="camera-buttons"><button type="button" disabled={!canDeleteKey} onClick={onDeleteSelected}>Delete selected key</button></div>
+     <div className="camera-buttons"><button type="button" disabled={!canDeleteKey} onClick={onDeleteSelected}>Delete key</button><button type="button" disabled={!legacyKeys.length} onClick={onClear}>Clear scene camera</button></div>
    </>}
   </div>
   <div className="camera-transform-section" aria-label="Selected camera transform">
@@ -131,7 +131,7 @@ export default function CameraInspector(props:Props) {
   <details className="camera-advanced">
    <summary>Additional camera tools</summary>
    {!isSequential&&<>
-    <div className="camera-buttons"><button type="button" onClick={onCopyOut}>Copy OUT</button><button type="button" disabled={!canPasteStart} onClick={onPasteStart}>Paste as START</button></div>
+    <div className="camera-buttons"><button type="button" aria-label="Copy camera OUT from selected panel" onClick={onCopyOut}>Copy OUT</button><button type="button" aria-label="Paste copied camera OUT as selected panel START" disabled={!canPasteStart} onClick={onPasteStart}>Paste as START</button></div>
     <div className="camera-buttons"><button type="button" disabled={!legacyKeys.length} onClick={onClear}>Clear scene camera</button><button type="button" onClick={()=>onEdit({x:project.width/2,y:project.height/2,zoom:1,rotation:0})}>Reset current pose</button></div>
    </>}
    <div className="camera-buttons"><button type="button" onClick={()=>onExport('camera')}>Export camera PNG</button><button type="button" onClick={()=>onExport('overlay')}>Export overlay PNG</button></div>
