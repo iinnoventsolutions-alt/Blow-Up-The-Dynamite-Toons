@@ -12,7 +12,7 @@ export async function browserRecent():Promise<Recent[]>{
  let records:Recent[]|undefined;
  try{records=await read<Recent[]>('recent');}catch{}
  const hidden=new Set(await hiddenRecentIds());
- return (records??JSON.parse(localStorage.getItem('innovent.recent')||'[]')).filter(r=>!hidden.has(r.id));
+ return (records??(JSON.parse(localStorage.getItem('innovent.recent')||'[]') as Recent[])).filter((r:Recent)=>!hidden.has(r.id));
 }
 // Hide recent references without deleting cached project data or downloaded project files.
 export async function clearBrowserRecent():Promise<void>{
