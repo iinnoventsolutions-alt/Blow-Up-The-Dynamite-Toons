@@ -128,7 +128,7 @@ export default function CameraInspector(props:Props) {
     <label className="field"><span>Move to next key</span><select aria-label="Camera interpolation" value={scene.camera.find(k=>k.frame===editFrame)?.interpolation||legacyKeys.filter(k=>k.frame<=editFrame).at(-1)?.interpolation||'linear'} onChange={e=>onEdit({interpolation:e.target.value as CameraKey['interpolation']})}><option value="linear">Linear</option><option value="ease">Ease in / out</option><option value="hold">Hold</option></select></label>
    </>}
   </div>
-  <details className="camera-advanced">
+  <details className="camera-advanced" open={!isSequential}>
    <summary>Additional camera tools</summary>
    {!isSequential&&<>
     <div className="camera-buttons"><button type="button" aria-label="Copy camera OUT from selected panel" onClick={onCopyOut}>Copy OUT</button><button type="button" aria-label="Paste copied camera OUT as selected panel START" disabled={!canPasteStart} onClick={onPasteStart}>Paste as START</button></div>
