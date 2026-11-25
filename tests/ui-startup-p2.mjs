@@ -18,7 +18,7 @@ try{
  });
  await page.reload();
  assert.equal(await page.locator('.startup-splash').count(),0,'splash does not repeat on reload in the same window');
- await page.getByRole('button',{name:'Original storyboard.issb Open storyboard'}).waitFor();
+ await page.locator('.recent-card').first().waitFor();
  const clear=page.getByRole('button',{name:'Clear recent projects'});
  await clear.click();
  await page.getByRole('button',{name:'Cancel',exact:true}).click();
@@ -34,7 +34,7 @@ try{
   const tx=db.transaction('records','readonly');const data=await new Promise((resolve,reject)=>{const req=tx.objectStore('records').get('recent');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});db.close();return data;
  });
  assert.equal(raw[0].text,'cached original','clear keeps underlying cached project data');
- await page.reload();assert.equal(await page.locator('.recent-card').count(),0,'clear persists after reload');
+ await page.reload();await page.getByText('A fresh canvas awaits').waitFor();assert.equal(await page.locator('.recent-card').count(),0,'clear persists after reload');
  assert.equal(await page.locator('.startup-splash').count(),0,'splash remains one-time');
  const second=await browser.newContext();const fresh=await second.newPage();await fresh.goto(url);
  assert.equal(await fresh.locator('.startup-splash').count(),1,'new application window session shows splash');
