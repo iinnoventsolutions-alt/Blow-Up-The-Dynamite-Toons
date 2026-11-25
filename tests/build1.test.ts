@@ -10,7 +10,7 @@ test('display and package build metadata remain synchronized without a version b
   assert.equal(info.name, 'IInnovent Professional Storyboard');
   assert.match(info.build, /^\d{8}\.\d{4}$/); assert.equal(info.buildFormat, 'MMDDYYYY.HH24MI');
   assert.equal(pkg.issb.build, info.build); assert.equal(pkg.issb.version, info.version);
-  assert.equal(pkg.version, `${info.version}.0.0`); assert.equal(lock.version, pkg.version);
+  assert.equal(pkg.version, typeof info.version === 'number' ? `${info.version}.0.0` : info.version); assert.equal(lock.version, pkg.version);
 });
 function fixture() {
   const p = makeProject('Three scenes'); p.scenes = [1, 2, 3].map(n => { const s = makeScene(`Scene ${n}`); s.panels = [1, 2, 3].map(k => makePanel(`Panel ${k}`)); return s; });
