@@ -16,6 +16,7 @@ declare global {
       save(text: string, saveAs: boolean): Promise<Result<{ name: string } | null>>;
       open(): Promise<Result<{ text: string; name: string } | null>>;
       recent(): Promise<Result<{ id: string; name: string }[]>>;
+      clearRecent(): Promise<Result<void>>;
       openRecent(id: string): Promise<Result<{ text: string; name: string }>>;
       newProject(): Promise<Result<void>>;
       snapshot(text: string): Promise<Result<void>>;

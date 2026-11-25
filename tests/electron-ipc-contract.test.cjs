@@ -12,7 +12,7 @@ test('SA-2 preload exposes only fixed, named IPC channels', () => {
   const expected = [
     'isolated-export:start', 'isolated-export:progress', 'isolated-export:cancel',
     'isolated-export:browser-reply',
-    'export:pdf', 'project:save', 'project:open', 'project:recent',
+    'export:pdf', 'project:save', 'project:open', 'project:recent', 'project:clear-recent',
     'project:open-recent', 'project:new', 'project:recovery',
     'project:recover', 'project:discard-recovery', 'project:snapshot',
     'project:dirty', 'project:close-after-save', 'project:cancel-close',
@@ -49,4 +49,12 @@ test('SA-2 project save and snapshot validate project format before writing', ()
   const persistence = desktop('persistence.cjs');
   assert.match(persistence, /fs\.open\(temp, 'wx', 0o600\)/);
   assert.match(persistence, /parseProject\(text\)/);
+});
+
+
+test('V1124-P2 clear recent only updates the persisted index through trusted IPC', () => {
+ const source=desktop('main.cjs');
+ assert.match(source,/handle\('project:clear-recent',\s*\(\) => queued\(async \(\) => \{/);
+ assert.match(source,/atomicWrite\(dataPath\('recent.json'\), '\[\]'\)/);
+ assert.doesNotMatch(source,/handle\('project:clear-recent',[\s\S]*?fs\.rm\(dataPath\('recent.json'\)/);
 });

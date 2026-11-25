@@ -39,6 +39,11 @@ async function openPath(filePath) { const text = await readProject(filePath); co
 app.whenReady().then(async () => {
   try { const list = JSON.parse(await fs.readFile(dataPath('recent.json'), 'utf8')); if (Array.isArray(list)) recentFiles = list.filter(f => typeof f.id === 'string' && typeof f.path === 'string' && typeof f.name === 'string').slice(0, 12); } catch {}
   handle('project:recent', () => recentFiles.map(({ id, name }) => ({ id, name })));
+  // Only clear the recent-file index; never unlink user project files or recovery.
+  handle('project:clear-recent', () => queued(async () => {
+    await atomicWrite(dataPath('recent.json'), '[]');
+    recentFiles = [];
+  }));
   handle('project:open-recent', async (id) => { const entry = recentFiles.find(f => f.id === id); if (!entry) throw new Error('Recent project is unavailable.'); return queued(() => openPath(entry.path)); });
   handle('project:open', async () => {
     const result = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: metadata.name, extensions: ['issb', 'innovent'] }] });

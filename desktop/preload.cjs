@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('desktop', {
   save: (text, saveAs) => ipcRenderer.invoke('project:save', text, saveAs),
   open: () => ipcRenderer.invoke('project:open'),
   recent: () => ipcRenderer.invoke('project:recent'),
+  clearRecent: () => ipcRenderer.invoke('project:clear-recent'),
   openRecent: (id) => ipcRenderer.invoke('project:open-recent', id),
   newProject: () => ipcRenderer.invoke('project:new'),
   recovery: () => ipcRenderer.invoke('project:recovery'),
