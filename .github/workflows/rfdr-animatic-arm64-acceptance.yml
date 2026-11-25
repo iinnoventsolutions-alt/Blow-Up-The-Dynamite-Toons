@@ -1,0 +1,58 @@
+name: RFDR Animatic A1.4 ARM64 Acceptance Installer
+on:
+  push:
+    branches:
+      - RFDR-Animatic
+    paths:
+      - '.github/workflows/rfdr-animatic-arm64-acceptance.yml'
+      - 'src/animatic-export.ts'
+      - 'tests/animatic-electron-handshake.test.mjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  arm64-animatic-acceptance:
+    if: github.ref == 'refs/heads/RFDR-Animatic'
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Validate production build
+        run: npm run build
+      - name: Verify Electron recording contract
+        run: node --test tests/animatic-electron-handshake.test.mjs
+      - name: Build ARM64 acceptance DMG (ad-hoc, not notarized)
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder --mac dmg --arm64 --publish never
+      - name: Verify installer architecture signature and checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg="release/IInnovent Professional Storyboard-1.0.0-arm64.dmg"
+          app="release/mac-arm64/IInnovent Professional Storyboard.app"
+          test -f "$dmg"
+          test -d "$app"
+          hdiutil verify "$dmg"
+          file "$app/Contents/MacOS/IInnovent Professional Storyboard" | tee release/ARM64-ARCHITECTURE.txt
+          grep -q arm64 release/ARM64-ARCHITECTURE.txt
+          codesign --verify --deep --strict --verbose=2 "$app"
+          (cd release && shasum -a 256 "IInnovent Professional Storyboard-1.0.0-arm64.dmg" > SHA256SUMS.txt)
+          printf 'Branch: %s\nCommit: %s\nRun: %s\nPurpose: RFDR-A1.4 manual animatic export acceptance\nSigning: ad-hoc; not notarized\n' "$GITHUB_REF_NAME" "$GITHUB_SHA" "$GITHUB_RUN_ID" > release/BUILD-PROVENANCE.txt
+      - name: Upload ARM64 installer and provenance
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: RFDR-Animatic-A1-4-ARM64-${{ github.run_id }}
+          path: |
+            release/IInnovent Professional Storyboard-1.0.0-arm64.dmg
+            release/SHA256SUMS.txt
+            release/ARM64-ARCHITECTURE.txt
+            release/BUILD-PROVENANCE.txt
+          if-no-files-found: error
+          retention-days: 14
