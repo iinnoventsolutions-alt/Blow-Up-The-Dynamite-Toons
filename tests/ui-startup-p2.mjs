@@ -12,6 +12,11 @@ try{
  await page.goto(url);
  assert.equal(await page.locator('.startup-splash').count(),1,'splash shows on fresh window');
  assert.equal(await page.locator('.startup-splash-version').count(),1,'splash retains build branding');
+ const hf1=await page.locator('.startup-splash').evaluate(el=>{const rect=el.getBoundingClientRect();const content=el.querySelector('.startup-splash-card').getBoundingClientRect();const background=getComputedStyle(el);return {width:rect.width,height:rect.height,centerX:rect.x+rect.width/2,centerY:rect.y+rect.height/2,content:{left:content.left,right:content.right,top:content.top,bottom:content.bottom},surface:{left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom},overflow:background.overflow};});
+ assert(Math.abs(hf1.width-560)<2&&Math.abs(hf1.height-370)<2,'HF1 splash has compact 560×370 reference footprint');
+ assert(Math.abs(hf1.centerX-750)<2&&Math.abs(hf1.centerY-500)<2,'HF1 compact splash remains centered');
+ assert(hf1.content.left>=hf1.surface.left&&hf1.content.right<=hf1.surface.right&&hf1.content.top>=hf1.surface.top&&hf1.content.bottom<=hf1.surface.bottom,'HF1 brand content is contained inside cropped splash');
+ assert.equal(hf1.overflow,'hidden','HF1 crops any overflow outside splash card');
  await page.evaluate(async()=>{
   const db=await new Promise((resolve,reject)=>{const req=indexedDB.open('innovent-project-storage',1);req.onupgradeneeded=()=>req.result.createObjectStore('records');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});
   await new Promise((resolve,reject)=>{const tx=db.transaction('records','readwrite');tx.objectStore('records').put([{id:'p2-one',name:'Original storyboard.issb',text:'cached original'}],'recent');tx.oncomplete=resolve;tx.onerror=reject;});db.close();
