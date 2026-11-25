@@ -132,7 +132,7 @@ export default function CameraInspector(props:Props) {
    <summary>Additional camera tools</summary>
    {!isSequential&&<>
     <div className="camera-buttons"><button type="button" aria-label="Copy camera OUT from selected panel" onClick={onCopyOut}>Copy OUT</button><button type="button" aria-label="Paste copied camera OUT as selected panel START" disabled={!canPasteStart} onClick={onPasteStart}>Paste as START</button></div>
-    <div className="camera-buttons"><button type="button" disabled={!legacyKeys.length} onClick={onClear}>Clear scene camera</button><button type="button" onClick={()=>onEdit({x:project.width/2,y:project.height/2,zoom:1,rotation:0})}>Reset current pose</button></div>
+    <div className="camera-buttons"><button type="button" onClick={()=>onEdit({x:project.width/2,y:project.height/2,zoom:1,rotation:0})}>Reset current pose</button></div>
    </>}
    <div className="camera-buttons"><button type="button" onClick={()=>onExport('camera')}>Export camera PNG</button><button type="button" onClick={()=>onExport('overlay')}>Export overlay PNG</button></div>
   </details>
