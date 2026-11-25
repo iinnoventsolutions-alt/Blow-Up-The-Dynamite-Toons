@@ -84,7 +84,7 @@ export default function CameraInspector(props:Props) {
   <header><h3>Camera · {scene.name}</h3><p className="camera-help">{isSequential?'Panel-owned keys; subsequent IN inherits the preceding OUT.':'Legacy scene-owned keys are preserved without conversion.'}</p></header>
   <div className="camera-buttons" role="toolbar" aria-label="Camera transfer and reset">
    <button type="button" aria-label="Copy camera from selected panel" onClick={onCopy}>Copy</button>
-   <button type="button" aria-label="Paste camera on selected panel" disabled={!canPaste} onClick={onPaste}>Paste</button>
+   <button type="button" aria-label="Paste and fit camera on selected panel" disabled={!canPaste} onClick={onPaste}>Paste</button>
    <button type="button" aria-label="Reset camera for selected panel" onClick={()=>onResetScope('panel')}>Reset Panel</button><ResetActions onResetScope={onResetScope} canResetKey={canResetKey}/>
   </div>
   <div className="camera-key-section" aria-label="Panel camera keyframes">
