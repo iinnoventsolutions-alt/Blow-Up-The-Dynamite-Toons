@@ -1,3 +1,9 @@
+## Version 1.1.24 — P0 Development Foundation · Build 11252026.0155
+
+The display version and semantic package version are now **1.1.24**, with initial development build **11252026.0155**. This foundation milestone changes version/build metadata and tooling only. Camera, playback, export and other enhancements belong to later phases. The project schema and file compatibility are unchanged.
+
+Builds use **MMDDYYYY.HH24MI** in America/New_York. The build script accepts `npm run set-build -- 11252026.0155 --version 1.1.24` and preserves the semantic version on later build-only updates. Prior reports remain historical; earlier feature descriptions may be superseded by accepted changes.
+
 ## Preferences and Workflow Completion · Build 10152026.1310
 
 **Preferences** now groups General, Drawing, Naming, Import / Export, Pitch and Shortcuts. Existing device preferences migrate automatically. **Done** keeps changes; **Cancel**, Escape or the close button restores the preferences present when the dialog opened. **Restore defaults** remains reversible until Done.
@@ -209,11 +215,11 @@ Panels retain their IDs, drawings, layers, notes, and durations. Names remain ed
 
 ## Build numbering
 
-Builds use **MMDDYYYY.HH24MI** in America/New_York. Versions change only for a major release. The supplied timestamp is preserved exactly in this build.
+Builds use **MMDDYYYY.HH24MI** in America/New_York. The display and package version are synchronized to semantic version **X.Y.Z**, while the build identifier is independent.
 
-`src/build-info.json` supplies the UI and desktop About information. Package tooling uses `1.0.0` as its required semantic version, while the user-facing version remains 1 and its build stamp is separate.
+`src/build-info.json` supplies the UI and desktop About version and build information.
 
-For a later build at the current local time:
+To set the build from the current local time without changing the version:
 
 ```bash
 npm run set-build
@@ -222,16 +228,16 @@ npm run set-build
 To set an explicit build:
 
 ```bash
-npm run set-build -- 10132026.0920
+npm run set-build -- 11252026.0155
 ```
 
-For a major release only:
+To set both an explicit build and version:
 
 ```bash
-npm run set-build -- 11152026.1430 --version 2
+npm run set-build -- 11252026.0155 --version 1.1.24
 ```
 
-This updates display metadata, package metadata, and the lockfile together. Ordinary build updates do not increment the major version.
+The build tool rejects backward versions and synchronizes display metadata, package metadata, and the lockfile. Ordinary build changes do not change the version.
 
 ## Conflicts and safeguards
 
