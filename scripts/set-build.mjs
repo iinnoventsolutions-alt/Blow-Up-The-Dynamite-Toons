@@ -45,7 +45,7 @@ if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 ||
 }
 const currentVersion = normalizeVersion(metadata.version);
 const nextVersion = version === undefined ? currentVersion : normalizeVersion(version);
-if (compareVersions(currentVersion, nextVersion) < 0) throw new Error('Version cannot go backwards.');
+if (compareVersions(currentVersion, nextVersion) > 0) throw new Error('Version cannot go backwards.');
 metadata.version = nextVersion;
 metadata.build = build;
 const packagePath = path.join(root, 'package.json');
