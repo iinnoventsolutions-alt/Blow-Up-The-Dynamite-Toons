@@ -47,7 +47,7 @@ try{
   await page.waitForTimeout(1200);
   console.log('P4-D1 immediate state:',JSON.stringify({label,state:await page.evaluate(()=>({message:document.querySelector('.toast')?.textContent||'',dialogs:[...document.querySelectorAll('dialog')].map(d=>({open:d.open,title:d.querySelector('h2')?.textContent,content:d.textContent?.slice(0,260)})),progress:[...document.querySelectorAll('progress')].map(p=>({value:p.value,max:p.max})),timelineVisible:!![...document.querySelectorAll('button')].find(b=>b.textContent?.trim()==='Export animatic')})),errors,consoleErrors}));
   const download=await pending.catch(async error=>{const diagnostic=await page.evaluate(()=>({message:document.querySelector('.toast')?.textContent||'',dialogs:[...document.querySelectorAll('dialog')].map(d=>({open:d.open,title:d.querySelector('h2')?.textContent,content:d.textContent?.slice(0,500)})),visible:document.visibilityState,mediaSupported:typeof MediaRecorder==='function',audioState:typeof AudioContext==='function',url:location.href}));console.error('P4-D1 export diagnostic:',JSON.stringify({label,diagnostic,errors,consoleErrors,events:await page.evaluate(()=>window.__p4D1?.events||[])}));throw error;});
-  assert.match(download.suggestedFilename(),/\\.webm$/i,label+' should download a WebM file');
+  assert.match(download.suggestedFilename(),/\.webm$/i,label+' should download a WebM file');
   const saved=await download.path();
   assert(saved,'Download should complete rather than merely open an export dialog');
   const {stat}=await import('node:fs/promises');
