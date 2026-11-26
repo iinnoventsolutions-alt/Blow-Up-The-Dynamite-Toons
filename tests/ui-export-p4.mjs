@@ -34,13 +34,13 @@ try{
  const dialog=page.locator('dialog').filter({has:page.getByRole('heading',{name:'Export animatic',exact:true})});
  await dialog.waitFor();
  const content=await dialog.innerText();
- assert.match(content,/WebM \(\.webm\).*Available/);
+ assert.match(content,/WebM \(\.webm\).*Available/i);
  assert.equal(await page.getByRole('button',{name:'Formats & limits',exact:true}).count(),0,'Only one export entry point should be visible');
  assert(await dialog.locator('input[type=radio][value=webm]').isChecked(),'WebM selected by default');
  assert(await dialog.locator('input[type=radio][value=mp4]').isDisabled(),'MP4 remains unavailable');
  assert(await dialog.locator('input[type=radio][value=mov]').isDisabled(),'MOV remains unavailable');
- assert.match(content,/MP4 \(\.mp4\).*Not yet available/);
- assert.match(content,/MOV \(\.mov\).*Not yet available/);
+ assert.match(content,/MP4 \(\.mp4\).*Not yet available/i);
+ assert.match(content,/MOV \(\.mov\).*Not yet available/i);
  assert.match(content,/640 × 360/);
  assert.match(content,/96 frames \(4\.0 seconds\)/);
  assert.match(content,/512 MB/);
