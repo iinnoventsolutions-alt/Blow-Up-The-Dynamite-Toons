@@ -9,7 +9,7 @@ const portrait=makeProject('Portrait profile');portrait.width=1080;portrait.heig
 const profile=exportProfile(portrait);assert.equal(profile.outputWidth,1080);assert.equal(profile.outputHeight,1920);assert.equal(profile.frames,48);assert.equal(profile.seconds,2);
 const landscape=makeProject('Large landscape profile');landscape.width=3840;landscape.height=2160;assert.deepEqual([exportProfile(landscape).outputWidth,exportProfile(landscape).outputHeight],[1920,1080]);
 // D1 isolation: use a low-resolution, visibly changing two-panel project for actual download tests.
-const recordingProject=makeProject('D1 video encoder isolation');recordingProject.width=640;recordingProject.height=360;recordingProject.scenes[0].panels[0].duration=48;
+const recordingProject=makeProject('D1 video encoder isolation');recordingProject.width=640;recordingProject.height=360;recordingProject.scenes[0].panels[0].duration=96; // D1 isolate MediaRecorder short-clip behavior against known passing 3s audio regression
 recordingProject.scenes[0].panels[0].layers[0].strokes.push({id:'d1-visible',tool:'shape',color:'#ff0000',size:8,points:[[40,40,1],[320,180,1]],shape:'rectangle',fill:'#ff0000'});
 const server=process.env.APP_URL?null:spawn(process.execPath,['desktop/preview.cjs'],{stdio:'ignore'});
 const url=process.env.APP_URL||'http://127.0.0.1:4317';
