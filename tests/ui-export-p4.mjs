@@ -19,7 +19,7 @@ try{
  await page.locator('input[type=file]').first().setInputFiles({name:'p4.issb',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(portrait))});
  await page.getByRole('button',{name:'Timeline',exact:true}).click();
  await page.getByRole('button',{name:'Formats & limits',exact:true}).click();
- const dialog=page.getByRole('dialog',{name:'Video formats & limits'});
+ const dialog=page.locator('dialog').filter({has:page.getByRole('heading',{name:'Video formats & limits',exact:true})});
  await dialog.waitFor();
  const content=await dialog.innerText();
  assert.match(content,/WebM \(\.webm\).*Available/);
