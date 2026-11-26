@@ -17,6 +17,15 @@ const errors=[],consoleErrors=[];page.on('pageerror',e=>errors.push(e.message));
 try{
  await page.goto(url);
  await page.locator('input[type=file]').first().setInputFiles({name:'p4.issb',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(portrait))});
+ await page.evaluate(()=>{
+  window.__p4D1={events:[]};
+  const record=(type,detail)=>window.__p4D1.events.push({type,detail,time:performance.now()});
+  new MutationObserver(()=>{const text=document.querySelector('.toast')?.textContent;if(text&&text!==window.__p4D1.lastToast){window.__p4D1.lastToast=text;record('toast',text)}}).observe(document.body,{childList:true,subtree:true,characterData:true});
+  const click=HTMLAnchorElement.prototype.click;
+  HTMLAnchorElement.prototype.click=function(...args){record('anchor-click',{download:this.download,href:this.href.slice(0,120)});return click.apply(this,args)};
+  const create=URL.createObjectURL.bind(URL);
+  URL.createObjectURL=function(blob){record('create-object-url',{size:blob.size,type:blob.type});return create(blob)};
+ });
  await page.getByRole('button',{name:'Timeline',exact:true}).click();
  await page.getByRole('button',{name:'Formats & limits',exact:true}).click();
  const dialog=page.locator('dialog').filter({has:page.getByRole('heading',{name:'Video formats & limits',exact:true})});
@@ -34,7 +43,7 @@ try{
   await action();
   await page.waitForTimeout(1200);
   console.log('P4-D1 immediate state:',JSON.stringify({label,state:await page.evaluate(()=>({message:document.querySelector('.toast')?.textContent||'',dialogs:[...document.querySelectorAll('dialog')].map(d=>({open:d.open,title:d.querySelector('h2')?.textContent,content:d.textContent?.slice(0,260)})),progress:[...document.querySelectorAll('progress')].map(p=>({value:p.value,max:p.max})),timelineVisible:!![...document.querySelectorAll('button')].find(b=>b.textContent?.trim()==='Export animatic')})),errors,consoleErrors}));
-  const download=await pending.catch(async error=>{const diagnostic=await page.evaluate(()=>({message:document.querySelector('.toast')?.textContent||'',dialogs:[...document.querySelectorAll('dialog')].map(d=>({open:d.open,title:d.querySelector('h2')?.textContent,content:d.textContent?.slice(0,500)})),visible:document.visibilityState,mediaSupported:typeof MediaRecorder==='function',audioState:typeof AudioContext==='function',url:location.href}));console.error('P4-D1 export diagnostic:',JSON.stringify({label,diagnostic,errors,consoleErrors}));throw error;});
+  const download=await pending.catch(async error=>{const diagnostic=await page.evaluate(()=>({message:document.querySelector('.toast')?.textContent||'',dialogs:[...document.querySelectorAll('dialog')].map(d=>({open:d.open,title:d.querySelector('h2')?.textContent,content:d.textContent?.slice(0,500)})),visible:document.visibilityState,mediaSupported:typeof MediaRecorder==='function',audioState:typeof AudioContext==='function',url:location.href}));console.error('P4-D1 export diagnostic:',JSON.stringify({label,diagnostic,errors,consoleErrors,events:await page.evaluate(()=>window.__p4D1?.events||[])}));throw error;});
   assert.match(download.suggestedFilename(),/\\.webm$/i,label+' should download a WebM file');
   const saved=await download.path();
   assert(saved,'Download should complete rather than merely open an export dialog');
