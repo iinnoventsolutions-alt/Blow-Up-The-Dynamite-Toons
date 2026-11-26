@@ -8,6 +8,9 @@ assert.equal(DESKTOP_ENCODED_OUTPUT_MAX_BYTES,512*1024*1024);
 const portrait=makeProject('Portrait profile');portrait.width=1080;portrait.height=1920;portrait.scenes[0].panels[0].duration=48;
 const profile=exportProfile(portrait);assert.equal(profile.outputWidth,1080);assert.equal(profile.outputHeight,1920);assert.equal(profile.frames,48);assert.equal(profile.seconds,2);
 const landscape=makeProject('Large landscape profile');landscape.width=3840;landscape.height=2160;assert.deepEqual([exportProfile(landscape).outputWidth,exportProfile(landscape).outputHeight],[1920,1080]);
+// D1 isolation: use a low-resolution, visibly changing two-panel project for actual download tests.
+const recordingProject=makeProject('D1 video encoder isolation');recordingProject.width=640;recordingProject.height=360;recordingProject.scenes[0].panels[0].duration=48;
+recordingProject.scenes[0].panels[0].layers[0].strokes.push({id:'d1-visible',tool:'shape',color:'#ff0000',size:8,points:[[40,40,1],[320,180,1]],shape:'rectangle',fill:'#ff0000'});
 const server=process.env.APP_URL?null:spawn(process.execPath,['desktop/preview.cjs'],{stdio:'ignore'});
 const url=process.env.APP_URL||'http://127.0.0.1:4317';
 for(let i=0;i<100;i++){try{if((await fetch(url)).ok)break;}catch{}await new Promise(r=>setTimeout(r,100));}
@@ -16,7 +19,7 @@ const page=await browser.newPage({viewport:{width:1500,height:1000},acceptDownlo
 const errors=[],consoleErrors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text())});
 try{
  await page.goto(url);
- await page.locator('input[type=file]').first().setInputFiles({name:'p4.issb',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(portrait))});
+ await page.locator('input[type=file]').first().setInputFiles({name:'p4.issb',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(recordingProject))});
  await page.evaluate(()=>{
   window.__p4D1={events:[]};
   const record=(type,detail)=>window.__p4D1.events.push({type,detail,time:performance.now()});
@@ -34,7 +37,7 @@ try{
  assert.match(content,/WebM \(\.webm\).*Available/);
  assert.match(content,/MP4 \(\.mp4\).*Not yet available/);
  assert.match(content,/MOV \(\.mov\).*Not yet available/);
- assert.match(content,/1080 × 1920/);
+ assert.match(content,/640 × 360/);
  assert.match(content,/48 frames \(2\.0 seconds\)/);
  assert.match(content,/512 MB/);
  // D1: Exercise both end-to-end download paths. Checking only button enabled state missed real failures.
