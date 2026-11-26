@@ -1,4 +1,4 @@
-import {projectFrames,type Project} from './model';
+import {projectFrames,type Project} from './model.ts';
 /** Capabilities declared by the current production export pipelines, not by filename alone. */
 export const exportFormats = Object.freeze([
   {extension:'webm',name:'WebM',available:true,detail:'Chromium MediaRecorder; VP8/VP9 and Opus when supported'},
