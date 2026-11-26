@@ -13,7 +13,7 @@ const url=process.env.APP_URL||'http://127.0.0.1:4317';
 for(let i=0;i<100;i++){try{if((await fetch(url)).ok)break;}catch{}await new Promise(r=>setTimeout(r,100));}
 const browser=await chromium.launch({headless:true,...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{})});
 const page=await browser.newPage({viewport:{width:1500,height:1000},acceptDownloads:true});page.setDefaultTimeout(10000);
-const errors=[];page.on('pageerror',e=>errors.push(e.message));
+const errors=[],consoleErrors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text())});
 try{
  await page.goto(url);
  await page.locator('input[type=file]').first().setInputFiles({name:'p4.issb',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(portrait))});
@@ -32,7 +32,7 @@ try{
  const exportDownload=async(action,label)=>{
   const pending=page.waitForEvent('download',{timeout:30000});
   await action();
-  const download=await pending;
+  const download=await pending.catch(async error=>{const diagnostic=await page.evaluate(()=>({message:document.querySelector('.toast')?.textContent||'',dialogs:[...document.querySelectorAll('dialog')].map(d=>({open:d.open,title:d.querySelector('h2')?.textContent,content:d.textContent?.slice(0,500)})),visible:document.visibilityState,mediaSupported:typeof MediaRecorder==='function',audioState:typeof AudioContext==='function',url:location.href}));console.error('P4-D1 export diagnostic:',JSON.stringify({label,diagnostic,errors,consoleErrors}));throw error;});
   assert.match(download.suggestedFilename(),/\\.webm$/i,label+' should download a WebM file');
   const saved=await download.path();
   assert(saved,'Download should complete rather than merely open an export dialog');
