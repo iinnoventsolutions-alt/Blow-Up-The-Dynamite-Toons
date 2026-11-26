@@ -38,7 +38,7 @@ try{
  assert.match(content,/MP4 \(\.mp4\).*Not yet available/);
  assert.match(content,/MOV \(\.mov\).*Not yet available/);
  assert.match(content,/640 × 360/);
- assert.match(content,/48 frames \(2\.0 seconds\)/);
+ assert.match(content,/96 frames \(4\.0 seconds\)/);
  assert.match(content,/512 MB/);
  // D1: Exercise both end-to-end download paths. Checking only button enabled state missed real failures.
  const exportDownload=async(action,label)=>{
