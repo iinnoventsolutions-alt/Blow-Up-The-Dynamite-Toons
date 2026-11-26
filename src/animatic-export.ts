@@ -3,7 +3,7 @@ import { audioBuffers,scheduleAudio } from './audio-engine';
 import { allPanels,projectFrames,type Project } from './model';
 import { preloadImages } from './render';
 import { paintPlayback } from './playback-render';
-export const webmType=()=>['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'].find(type=>typeof MediaRecorder!=='undefined'&&MediaRecorder.isTypeSupported(type));
+export const webmType=()=>['video/webm;codecs=vp8,opus','video/webm;codecs=vp9,opus','video/webm'].find(type=>typeof MediaRecorder!=='undefined'&&MediaRecorder.isTypeSupported(type));
 export async function exportAnimatic(project:Project,signal:AbortSignal,onProgress:(n:number)=>void):Promise<Blob>{
  const type=webmType();if(!type)throw new Error('WebM recording is unavailable in this browser. Use the desktop app or a supported Chromium browser.');
  const ctx=new AudioContext();let stop=()=>{},recorder:MediaRecorder|undefined,raf=0,stream:MediaStream|undefined;
