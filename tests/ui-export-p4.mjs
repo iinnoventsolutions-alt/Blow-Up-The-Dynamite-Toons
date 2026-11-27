@@ -39,6 +39,16 @@ try{
  assert(await dialog.locator('input[type=radio][value=webm]').isChecked(),'WebM selected by default');
  assert(await dialog.locator('input[type=radio][value=mp4]').isDisabled(),'MP4 remains unavailable');
  assert(await dialog.locator('input[type=radio][value=mov]').isDisabled(),'MOV remains unavailable');
+ // The radio must share a row with its format title instead of floating above it.
+ for(const extension of ['webm','mp4','mov']){
+  const option=dialog.locator('.format-option').filter({has:dialog.locator('input[type=radio][value='+extension+']')});
+  const radio=await option.locator('input[type=radio]').boundingBox();
+  const title=await option.locator('.format-option-title').boundingBox();
+  assert(radio&&title,'Export format radio and title must both be laid out');
+  assert(radio.x+radio.width<=title.x,'Radio must appear to the left of the format title: '+extension);
+  assert(Math.abs((radio.y+radio.height/2)-(title.y+title.height/2))<10,'Radio and title must align vertically: '+extension);
+ }
+
  assert.match(content,/MP4 \(\.mp4\).*Not yet available/i);
  assert.match(content,/MOV \(\.mov\).*Not yet available/i);
  assert.match(content,/640 × 360/);
