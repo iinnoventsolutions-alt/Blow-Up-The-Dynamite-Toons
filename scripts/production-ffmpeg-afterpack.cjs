@@ -65,6 +65,7 @@ async function afterPack(context) {
   // Runtime execution is validated during architecture-specific acceptance.
   await fs.chmod(binary, 0o755);
   await copyNotices(resources);
+  await require('./mp4-mov-afterpack.cjs').stageMp4Mov(resources, architecture);
 }
 module.exports = afterPack;
 module.exports.copyNotices = copyNotices;
