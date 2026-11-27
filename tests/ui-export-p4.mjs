@@ -30,13 +30,27 @@ try{
   URL.createObjectURL=function(blob){record('create-object-url',{size:blob.size,type:blob.type});return create(blob)};
  });
  await page.getByRole('button',{name:'Timeline',exact:true}).click();
- await page.getByRole('button',{name:'Formats & limits',exact:true}).click();
- const dialog=page.locator('dialog').filter({has:page.getByRole('heading',{name:'Video formats & limits',exact:true})});
+ await page.getByRole('button',{name:'Export animatic',exact:true}).click();
+ const dialog=page.locator('dialog').filter({has:page.getByRole('heading',{name:'Export animatic',exact:true})});
  await dialog.waitFor();
  const content=await dialog.innerText();
- assert.match(content,/WebM \(\.webm\).*Available/);
- assert.match(content,/MP4 \(\.mp4\).*Not yet available/);
- assert.match(content,/MOV \(\.mov\).*Not yet available/);
+ assert.match(content,/WebM \(\.webm\).*Available/i);
+ assert.equal(await page.getByRole('button',{name:'Formats & limits',exact:true}).count(),0,'Only one export entry point should be visible');
+ assert(await dialog.locator('input[type=radio][value=webm]').isChecked(),'WebM selected by default');
+ assert(await dialog.locator('input[type=radio][value=mp4]').isDisabled(),'MP4 remains unavailable');
+ assert(await dialog.locator('input[type=radio][value=mov]').isDisabled(),'MOV remains unavailable');
+ // The radio must share a row with its format title instead of floating above it.
+ for(const extension of ['webm','mp4','mov']){
+  const option=dialog.locator('.format-option:has(input[type="radio"][value="'+extension+'"])');
+  const radio=await option.locator('input[type=radio]').boundingBox();
+  const title=await option.locator('.format-option-title').boundingBox();
+  assert(radio&&title,'Export format radio and title must both be laid out');
+  assert(radio.x+radio.width<=title.x,'Radio must appear to the left of the format title: '+extension);
+  assert(Math.abs((radio.y+radio.height/2)-(title.y+title.height/2))<10,'Radio and title must align vertically: '+extension);
+ }
+
+ assert.match(content,/MP4 \(\.mp4\).*Not yet available/i);
+ assert.match(content,/MOV \(\.mov\).*Not yet available/i);
  assert.match(content,/640 × 360/);
  assert.match(content,/96 frames \(4\.0 seconds\)/);
  assert.match(content,/512 MB/);
@@ -55,12 +69,12 @@ try{
   await page.getByRole('dialog').filter({has:page.getByRole('heading',{name:'Exporting animatic'})}).waitFor({state:'hidden',timeout:10000});
  };
  await exportDownload(()=>dialog.getByRole('button',{name:'Export WebM',exact:true}).click(),'Formats-dialog WebM');
- await page.getByRole('button',{name:'Formats & limits',exact:true}).click();
+ await page.getByRole('button',{name:'Export animatic',exact:true}).click();
  await dialog.waitFor();
- await dialog.getByRole('button',{name:'Close',exact:true}).click();
+ await dialog.getByRole('button',{name:'Cancel',exact:true}).click();
  assert.equal(await dialog.count(),0);
  assert(await page.getByRole('button',{name:'Export animatic',exact:true}).isEnabled(),'Existing WebM export remains available');
- await exportDownload(()=>page.getByRole('button',{name:'Export animatic',exact:true}).click(),'Original animatic export');
+ await exportDownload(async()=>{await page.getByRole('button',{name:'Export animatic',exact:true}).click();await dialog.getByRole('button',{name:'Export WebM',exact:true}).click();},'Unified animatic export repeat');
  assert.deepEqual(errors,[]);
- console.log('PASS V1124-P4-A-D1: both export actions produce completed WebM downloads; formats, dimensions, duration and output cap correct.');
+ console.log('PASS V1124-P4B: one Export animatic entry point, format availability, cancel/reopen, repeat WebM downloads, dimensions, duration and output cap correct.');
 }finally{await browser.close();server?.kill();}

@@ -216,3 +216,14 @@ progress{width:100%;height:18px;accent-color:#ff922c}
 .recent-heading h2{margin:0}
 .clear-recent-button{font-size:11px;padding:5px 8px;color:#c8d6e4;background:transparent;border-color:#456177}
 .clear-recent-button:hover{background:#273e51;color:#fff}
+
+/* P4-B: keep each export radio aligned with its label and description. */
+.format-capabilities{min-width:0;margin:0;padding:12px 16px;border:1px solid #42566a;border-radius:6px}
+.format-capabilities .format-option{display:grid;grid-template-columns:20px minmax(0,1fr);column-gap:12px;align-items:start;padding:12px 0;cursor:pointer}
+.format-capabilities .format-option + .format-option{border-top:1px solid #344759}
+.format-capabilities .format-option input[type="radio"]{width:16px;height:16px;min-width:16px;margin:2px 0 0;justify-self:center;accent-color:#88bbec}
+.format-capabilities .format-option-copy{display:flex;flex-direction:column;gap:6px;min-width:0;text-transform:none}
+.format-capabilities .format-option-title{font-size:12px;font-weight:500;color:#dce5ee;text-transform:none}
+.format-capabilities .format-option small{font-size:11px;line-height:1.55;color:#b7c9d9}
+.format-capabilities .format-option:has(input:disabled){cursor:not-allowed}
+.format-capabilities .format-option:has(input:disabled) .format-option-title{color:#96a8b9}
