@@ -13,7 +13,6 @@ const materials = [
   'licenses/FFmpeg-7.1.5-COPYING.LGPLv2.1',
   'THIRD-PARTY-NOTICE.txt',
   'source/ffmpeg-7.1.5.tar.xz',
-  'build/rebuild-intel.sh',
   'BUILD-INSTRUCTIONS.txt'
 ];
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -26,7 +25,7 @@ async function stageMp4Mov(resources, architecture, {env=process.env, inspect=ex
   const root = await fs.realpath(source);
   const candidate = candidates[architecture];
   const entries = [];
-  for (const relative of ['bin/ffmpeg',...materials]) {
+  for (const relative of ['bin/ffmpeg',...materials,architecture === 'arm64' ? 'build/rebuild-arm64.sh' : 'build/rebuild-intel.sh']) {
     let current = root;
     const parts = relative.split('/');
     for (let i=0;i<parts.length;i++) {
