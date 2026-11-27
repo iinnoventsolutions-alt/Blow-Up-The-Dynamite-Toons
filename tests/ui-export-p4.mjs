@@ -41,7 +41,7 @@ try{
  assert(await dialog.locator('input[type=radio][value=mov]').isDisabled(),'MOV remains unavailable');
  // The radio must share a row with its format title instead of floating above it.
  for(const extension of ['webm','mp4','mov']){
-  const option=dialog.locator('.format-option').filter({has:dialog.locator('input[type=radio][value='+extension+']')});
+  const option=dialog.locator('.format-option:has(input[type="radio"][value="'+extension+'"])');
   const radio=await option.locator('input[type=radio]').boundingBox();
   const title=await option.locator('.format-option-title').boundingBox();
   assert(radio&&title,'Export format radio and title must both be laid out');
