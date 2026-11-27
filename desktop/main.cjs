@@ -103,7 +103,8 @@ app.whenReady().then(async () => {
       ? createIsolatedElectronExportHarness({ipcMain, window: thisWindow, pageURL, windowIsUsable, registry: exportProjects, resourcesPath: process.resourcesPath, dialog, enabled: true})
       : createIsolatedExportRuntime({ipcMain, window: thisWindow, pageURL, windowIsUsable});
     thisWindow.webContents.on('did-finish-load', () => {
-      if (exportOptIn && windowIsUsable(thisWindow)) thisWindow.webContents.send('isolated-export:available', true);
+      // Legacy developer control visibility is separate from production runtime readiness.
+      if (windowIsUsable(thisWindow)) thisWindow.webContents.send('isolated-export:available', exportOptIn && testExportOptIn);
     });
     thisWindow.on('closed', () => { void isolatedExportRuntime.dispose().catch(() => {}); });
     thisWindow.on('closed', () => {
