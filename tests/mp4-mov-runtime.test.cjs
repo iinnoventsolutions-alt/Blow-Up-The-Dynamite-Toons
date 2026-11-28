@@ -516,3 +516,36 @@ test('D6-D fresh stereo sessions reject stale replies and recover after cancella
  }finally{broker.close()}
  assert.equal(ipcMain.listenerCount(REPLY_CHANNEL),0);
 });
+
+test('D6-E2 trusted backend routes formats and reconciles geometry before encoding',async()=>{
+ const {createTrustedExportBackend}=require('../desktop/isolated-export-backend.cjs');
+ const {createExportFormatPolicy}=require('../desktop/isolated-export-format-policy.cjs');
+ const formatPolicy=await createExportFormatPolicy({enableMp4Mov:true,probe:async()=>({version:'7.1.5',formats:['mp4','mov']})});
+ const project={id:'p',width:1921,height:1081,fps:24,frameCount:1};
+ const calls=[];let disposed=0,closed=0;
+ const backend=createTrustedExportBackend({formatPolicy,resolveProject:async()=>project,
+  renderAudio:async()=>{calls.push('mono');return null},
+  createStereoTransport:()=>({close(){closed++}}),
+  renderFrame:async(p,index,s,geometry)=>{calls.push(geometry);const g=geometry??p;return {index,timestampUs:0,pixels:new Uint8Array(g.width*g.height*4)}},
+  sinkFactory:async opts=>({writeAudio:async()=>calls.push('legacy'),writeStereo:async()=>calls.push('stereo'),writeFrame:async()=>{},finish:async()=>Uint8Array.of(1),dispose:async()=>{disposed++}})
+ });
+ const context={signal:new AbortController().signal,report(){}};
+ for(const format of ['mp4','mov']){
+  const request={projectId:'p',width:1920,height:1080,fps:24,format,outputName:'p.'+format};
+  assert.deepEqual([...await backend(request,context)],[1]);
+  await assert.rejects(backend({...request,width:1918},context),/mismatch/);
+ }
+ await backend({projectId:'p',width:1921,height:1081,fps:24,outputName:'p.webm'},context);
+ assert.deepEqual(calls,['stereo',{width:1920,height:1080},'stereo',{width:1920,height:1080},'mono','legacy',undefined]);
+ assert.equal(disposed,3);assert.equal(closed,2);
+});
+test('D6-E2 single active export rejects overlap and recovers after cancellation',async()=>{
+ const {createIsolatedExportSessions}=require('../desktop/isolated-export-sessions.cjs');
+ const owner={},request={projectId:'p',width:854,height:480,fps:24,outputName:'p.webm'};
+ const sessions=createIsolatedExportSessions({singleActive:true,startExport:async(_,ctx)=>{ctx.signal.throwIfAborted();return 'done'}});
+ const first=sessions.start(owner,request);
+ assert.throws(()=>sessions.start(owner,request),/already running/);
+ sessions.cancel(owner,first.id);await assert.rejects(first.done,{name:'AbortError'});
+ assert.equal(sessions.activeCount(),0);
+ assert.equal(await sessions.start(owner,request).done,'done');
+});
