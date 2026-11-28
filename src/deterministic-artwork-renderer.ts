@@ -18,7 +18,7 @@ export interface N36RenderedFrame {
 export async function renderIsolatedProjectFrame(
   project:Project,
   index:number,
-  options:{width?:number;signal?:AbortSignal}={},
+  options:{width?:number;height?:number;signal?:AbortSignal}={},
 ):Promise<N36RenderedFrame>{
   const {signal}=options;
   signal?.throwIfAborted();
@@ -39,8 +39,13 @@ export async function renderIsolatedProjectFrame(
   const canvas=document.createElement('canvas');
   paintPlayback(canvas,project,index,width,[]);
   signal?.throwIfAborted();
-  const pixels=canvas.getContext('2d',{willReadFrequently:true})?.getImageData(0,0,canvas.width,canvas.height);
+  let output=canvas;
+  if(options.height!==undefined){
+    if(!Number.isSafeInteger(options.height)||options.height<2||options.height>1920)throw new RangeError('Invalid isolated render height.');
+    if(canvas.height!==options.height){output=document.createElement('canvas');output.width=width;output.height=options.height;output.getContext('2d')!.drawImage(canvas,0,0,width,options.height);}
+  }
+  const pixels=output.getContext('2d',{willReadFrequently:true})?.getImageData(0,0,output.width,output.height);
   if(!pixels)throw new Error('Canvas pixels unavailable.');
   signal?.throwIfAborted();
-  return {index,timestampUs:frame.timestampUs,width:canvas.width,height:canvas.height,pixels:new Uint8ClampedArray(pixels.data)};
+  return {index,timestampUs:frame.timestampUs,width:output.width,height:output.height,pixels:new Uint8ClampedArray(pixels.data)};
 }
