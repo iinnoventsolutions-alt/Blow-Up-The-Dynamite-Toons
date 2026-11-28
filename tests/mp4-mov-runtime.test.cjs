@@ -364,3 +364,32 @@ test('D3.3-D3.2-C authenticated IPC rejects foreign sender, frame and token; fre
  }finally{second.close()}
  assert.equal(ipcMain.listenerCount(REPLY_CHANNEL),0);
 });
+
+for(const format of ['mp4','mov']){
+ test('D3.3-D3.3 '+format+' stereo pipeline stages distinct channels and requests AAC 320k',async t=>{
+  const {root}=fixture(t),calls=[];let audioPath,closed=false;
+  const pipeline=createIsolatedExportPipeline({resourcesPath:root,frameCount:2,
+   sinkFactory:opts=>createIsolatedFfmpegSink({...opts,encoderOptions:{...options,run:runner({})},spawnProcess:(binary,args,opts)=>{
+    audioPath=args[args.indexOf('-ac')+3];
+    assert.equal(args[args.indexOf('-ac')+1],'2');assert.equal(args[args.indexOf('-ar')+1],'48000');
+    assert.equal(args[args.indexOf('-b:a')+1],'320k');assert.equal(args[args.indexOf('-c:a')+1],'aac');
+    const pcm=fs.readFileSync(audioPath);assert.equal(pcm.length,12000*8);assert.equal(pcm.readFloatLE(0),.5);assert.equal(pcm.readFloatLE(4),-.25);
+    return streamingFake(calls)(binary,args,opts);
+   }}),
+   createStereoTransport:async()=>({begin:async totalFrames=>({sampleRate:48000,channels:2,totalFrames}),read:async startFrame=>{
+    const samples=new Float32Array(24000);samples[0]=.5;samples[1]=-.25;
+    return {sampleRate:48000,channels:2,startFrame,frameCount:12000,samples};
+   },close(){closed=true}}),
+   renderAudio:async()=>assert.fail('legacy audio called'),
+   renderFrame:async(_,index)=>({index,timestampUs:index*125000,pixels:new Uint8Array(16)})});
+  assert.deepEqual([...(await pipeline({format,width:2,height:2,fps:8},{signal:new AbortController().signal,report(){}}))],[1,2,3]);
+  assert.equal(closed,true);assert.equal(fs.existsSync(audioPath),false);
+ });
+}
+test('D3.3-D3.3 stereo option cannot change WebM profile',()=>{
+ assert.throws(()=>profileFor('webm',{audioChannels:2}),/channels/);
+ for(const format of ['mp4','mov']){
+  const args=profileFor(format,{audioChannels:2,hasAudio:false});
+  assert.ok(args.includes('-an'));assert.ok(!args.includes('-ac'));assert.ok(!args.includes('-b:a'));
+ }
+});
