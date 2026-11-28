@@ -6,10 +6,12 @@ function createIsolatedExportPipeline({resourcesPath,renderFrame,renderAudio,fra
  return async function startExport(request,{signal,report}){
   if(!signal||typeof signal.throwIfAborted!=='function'||typeof report!=='function')throw new TypeError('Invalid export context');
   signal.throwIfAborted();
-  const {width,height,fps}=request;
+  const {width,height,fps,format='webm'}=request;
+  if(!['webm','mp4','mov'].includes(format))throw new TypeError('Invalid export format');
+  if(format!=='webm'&&(width%2||height%2))throw new RangeError('MP4/MOV requires even dimensions');
   const frameBytes=width*height*4;
   if(!Number.isSafeInteger(frameBytes)||frameBytes<1||frameBytes>64*1024*1024)throw new RangeError('Invalid dimensions');
-  const sink=await sinkFactory({resourcesPath,width,height,fps,signal,maxRawBytes});
+  const sink=await sinkFactory({resourcesPath,width,height,fps,signal,maxRawBytes,...(format==='webm'?{}:{format})});
   try{
    signal.throwIfAborted();report(0);
    const audio=await renderAudio(request,signal);
