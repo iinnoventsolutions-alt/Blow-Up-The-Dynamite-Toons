@@ -199,3 +199,55 @@ test('D3.3-A odd dimensions rejected for MP4/MOV without changing WebM',()=>{
    assert.throws(()=>profileFor(format,patch),/even dimensions/);
  assert.ok(profileFor('webm',{width:641}).includes('641x360'));
 });
+
+const {createIsolatedFfmpegSink}=require('../desktop/isolated-ffmpeg-sink.cjs');
+const {createIsolatedExportPipeline}=require('../desktop/isolated-export-pipeline.cjs');
+const {EventEmitter}=require('node:events');
+function streamingFake(calls,{fail=false}={}){
+ return (binary,args,opts)=>{
+  const child=new EventEmitter();child.stdin=new EventEmitter();child.stderr=new EventEmitter();child.exitCode=null;
+  const output=args.at(-1);const call={binary,args,opts,output,frames:[]};calls.push(call);
+  child.stdin.write=(bytes,cb)=>queueMicrotask(()=>{call.frames.push(Buffer.from(bytes));cb()});
+  child.stdin.end=()=>queueMicrotask(()=>{if(!fail)fs.writeFileSync(output,Buffer.from([1,2,3]));child.exitCode=fail?1:0;child.emit('close',child.exitCode)});
+  child.kill=()=>{child.exitCode=1;queueMicrotask(()=>{child.stdin.emit('error',new Error('EPIPE'));child.emit('close',1)})};
+  return child;
+ };
+}
+for(const format of ['webm','mp4','mov']){
+ test('D3.3-B '+format+' pipeline streams frames and cleans temporary output',async t=>{
+  const {root,binary}=fixture(t);const expected=format==='webm'?webmFixture(root):fs.realpathSync(binary);
+  const calls=[],progress=[],signal=new AbortController().signal;
+  const pipeline=createIsolatedExportPipeline({resourcesPath:root,frameCount:2,
+   sinkFactory:opts=>createIsolatedFfmpegSink({...opts,encoderOptions:{...options,run:runner({})},spawnProcess:streamingFake(calls)}),
+   renderAudio:async()=>format==='mov'?null:{sampleRate:48000,samples:new Float32Array([0,.5])},
+   renderFrame:async(_,index)=>({index,timestampUs:index*125000,pixels:new Uint8Array(16).fill(index)})});
+  const output=await pipeline({width:2,height:2,fps:8,...(format==='webm'?{}:{format})},{signal,report:v=>progress.push(v)});
+  assert.deepEqual([...output],[1,2,3]);assert.equal(calls.length,1);
+  const call=calls[0];assert.equal(call.binary,expected);assert.equal(call.opts.shell,false);
+  assert.equal(path.extname(call.output),'.'+format);
+  assert.deepEqual(call.args,buildEncodingArgs({format,width:2,height:2,fps:8,hasAudio:format!=='mov',audioFile:path.join(path.dirname(call.output),'audio.f32'),output:call.output}));
+  assert.deepEqual(call.frames.map(b=>[...b]),[Array(16).fill(0),Array(16).fill(1)]);
+  assert.equal(progress.at(-1),1);assert.equal(fs.existsSync(path.dirname(call.output)),false);
+ });
+}
+test('D3.3-B failure and cancellation clean temporary files',async t=>{
+ const {root}=fixture(t);
+ for(const cancel of [false,true]){
+  const controller=new AbortController(),calls=[];
+  const sink=await createIsolatedFfmpegSink({resourcesPath:root,width:2,height:2,fps:8,format:'mp4',signal:controller.signal,encoderOptions:{...options,run:runner({})},spawnProcess:streamingFake(calls,{fail:true})});
+  try{
+   await sink.writeAudio(null,controller.signal);
+   await sink.writeFrame({index:0,pixels:new Uint8Array(16)},controller.signal);
+   if(cancel)controller.abort();
+   await assert.rejects(sink.finish(controller.signal),/abort|FFmpeg export failed/i);
+  }finally{await sink.dispose();await sink.dispose()}
+  assert.equal(fs.existsSync(path.dirname(calls[0].output)),false);
+ }
+});
+test('D3.3-B rejects invalid format, odd dimensions and missing runtime before spawning',async t=>{
+ const {root,binary}=fixture(t);webmFixture(root);fs.unlinkSync(binary);
+ const opts={resourcesPath:root,width:2,height:2,fps:8,encoderOptions:{...options,run:runner({})},spawnProcess:()=>assert.fail('unexpected spawn')};
+ await assert.rejects(createIsolatedFfmpegSink({...opts,format:'avi'}),/format/);
+ await assert.rejects(createIsolatedFfmpegSink({...opts,format:'mov',width:3}),/even dimensions/);
+ await assert.rejects(createIsolatedFfmpegSink({...opts,format:'mp4'}),/ENOENT/);
+});
