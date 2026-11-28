@@ -2,12 +2,19 @@ import assert from 'node:assert/strict';
 import {chromium} from 'playwright';
 import {spawn} from 'node:child_process';
 import {makeProject} from '../src/model.ts';
-import {exportFormats,exportProfile,DESKTOP_ENCODED_OUTPUT_MAX_BYTES} from '../src/export-capabilities.ts';
+import {exportFormats,exportProfile,extendedExportProfile,DESKTOP_ENCODED_OUTPUT_MAX_BYTES} from '../src/export-capabilities.ts';
 assert.deepEqual(exportFormats.map(f=>[f.extension,f.available]),[['webm',true],['mp4',false],['mov',false]]);
 assert.equal(DESKTOP_ENCODED_OUTPUT_MAX_BYTES,512*1024*1024);
 const portrait=makeProject('Portrait profile');portrait.width=1080;portrait.height=1920;portrait.scenes[0].panels[0].duration=48;
 const profile=exportProfile(portrait);assert.equal(profile.outputWidth,1080);assert.equal(profile.outputHeight,1920);assert.equal(profile.frames,48);assert.equal(profile.seconds,2);
 const landscape=makeProject('Large landscape profile');landscape.width=3840;landscape.height=2160;assert.deepEqual([exportProfile(landscape).outputWidth,exportProfile(landscape).outputHeight],[1920,1080]);
+const odd=makeProject('Odd geometry');odd.width=1921;odd.height=1081;
+assert.deepEqual([extendedExportProfile(odd).outputWidth,extendedExportProfile(odd).outputHeight],[1920,1080]);
+assert.equal(extendedExportProfile(odd).eligible,true);
+odd.scenes[0].panels[0].duration=odd.fps*600+1;
+assert.equal(extendedExportProfile(odd).eligible,false);
+odd.scenes[0].panels[0].duration=odd.fps*600;
+assert.equal(extendedExportProfile(odd).eligible,true);
 // D1 isolation: use a low-resolution, visibly changing two-panel project for actual download tests.
 const recordingProject=makeProject('D1 video encoder isolation');recordingProject.width=640;recordingProject.height=360;recordingProject.scenes[0].panels[0].duration=96; // D1 isolate MediaRecorder short-clip behavior against known passing 3s audio regression
 recordingProject.scenes[0].panels[0].layers[0].strokes.push({id:'d1-visible',tool:'shape',color:'#ff0000',size:8,points:[[40,40,1],[320,180,1]],shape:'rectangle',fill:'#ff0000'});
@@ -54,6 +61,8 @@ try{
  assert.match(content,/640 × 360/);
  assert.match(content,/96 frames \(4\.0 seconds\)/);
  assert.match(content,/512 MB/);
+ assert.match(content,/desktop FFmpeg exports only/);
+ assert.match(content,/no guaranteed fixed browser size ceiling/);
  // D1: Exercise both end-to-end download paths. Checking only button enabled state missed real failures.
  const exportDownload=async(action,label)=>{
   const pending=page.waitForEvent('download',{timeout:30000});
