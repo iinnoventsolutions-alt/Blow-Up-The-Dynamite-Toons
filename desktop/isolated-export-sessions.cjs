@@ -1,13 +1,14 @@
 /** N3.17-B isolated session coordinator; no production IPC registration. */
 const {randomUUID}=require('node:crypto');
 const {validateExportRequest}=require('./isolated-export-ipc-contract.cjs');
-function createIsolatedExportSessions({startExport,createId=randomUUID,formatPolicy}={}){
+function createIsolatedExportSessions({startExport,createId=randomUUID,formatPolicy,singleActive=false}={}){
  if(typeof startExport!=='function')throw new TypeError('startExport required');
  const sessions=new Map();
  function ownerKey(owner){if(!owner||typeof owner!=='object')throw new TypeError('Trusted owner required');return owner}
  function start(owner,request){
   ownerKey(owner);
   const input=formatPolicy?formatPolicy.validate(request):validateExportRequest(request);
+  if(singleActive&&sessions.size)throw new Error('Export already running');
   const id=createId();
   if(typeof id!=='string'||!id||sessions.has(id))throw new Error('Invalid or duplicate session ID');
   const controller=new AbortController();
