@@ -158,3 +158,44 @@ test('D3.2 abort propagates before and during routing',async t=>{
  await assert.rejects(selectExportEncoder(root,'mp4',{...options,signal:during.signal,run:async()=>{calls++;during.abort();return {stdout:responses['-version']}}}),{name:'AbortError'});
  assert.equal(calls,1);
 });
+
+const {buildEncodingArgs}=require('../desktop/isolated-export-encoding-profile.cjs');
+const profileInput={width:640,height:360,fps:24,hasAudio:true,audioFile:'/tmp/fixture/audio.f32',output:'/tmp/fixture/export.webm'};
+const profileFor=(format,patch={})=>buildEncodingArgs({...profileInput,format,output:'/tmp/fixture/export.'+format,...patch});
+const commonArgs=['-hide_banner','-loglevel','error','-nostdin','-y','-f','rawvideo','-pixel_format','rgba','-video_size','640x360','-framerate','24','-i','pipe:0'];
+const audioArgs=['-f','f32le','-ar','48000','-ac','1','-i',profileInput.audioFile];
+test('D3.3-A WebM profile preserves exact existing arguments with and without audio',()=>{
+ for(const hasAudio of [true,false]){
+  const expected=[...commonArgs,...(hasAudio?audioArgs:[]),'-map','0:v:0',...(hasAudio?['-map','1:a:0']:[]),'-c:v','libvpx','-pix_fmt','yuv420p','-auto-alt-ref','0','-b:v','1M',...(hasAudio?['-c:a','libopus']:['-an']),'-f','webm',profileInput.output];
+  assert.deepEqual(buildEncodingArgs({...profileInput,hasAudio}),expected);
+ }
+});
+for(const format of ['mp4','mov']){
+ test('D3.3-A '+format+' fixed integration profile',()=>{
+  const args=profileFor(format);
+  assert.deepEqual(args,[...commonArgs,...audioArgs,'-map','0:v:0','-map','1:a:0','-c:v','h264_videotoolbox','-pix_fmt','yuv420p','-b:v','2000k','-c:a','aac','-b:a','128k','-movflags','+faststart','-f',format,'/tmp/fixture/export.'+format]);
+  assert.ok(Object.isFrozen(args));
+ });
+}
+test('D3.3-A MP4/MOV video-only profiles omit audio inputs and codecs',()=>{
+ for(const format of ['mp4','mov'])
+  assert.deepEqual(profileFor(format,{hasAudio:false,audioFile:undefined}),[...commonArgs,'-map','0:v:0','-c:v','h264_videotoolbox','-pix_fmt','yuv420p','-b:v','2000k','-an','-movflags','+faststart','-f',format,'/tmp/fixture/export.'+format]);
+});
+test('D3.3-A unsupported format rejected',()=>{
+ for(const format of ['avi','MP4','',null,{},1])
+  assert.throws(()=>buildEncodingArgs({...profileInput,format}),/Invalid export format/);
+});
+test('D3.3-A invalid dimensions, frame rate and audio availability rejected',()=>{
+ for(const patch of [{width:1},{height:0},{width:2.5},{width:8192,height:8192},{fps:0},{fps:241},{fps:NaN},{hasAudio:'true'}])
+  assert.throws(()=>profileFor('mp4',patch));
+});
+test('D3.3-A mismatched or unsafe paths rejected',()=>{
+ for(const patch of [{output:'/tmp/export.mov'},{output:'relative.mp4'},{output:'/tmp/a\0.mp4'},{audioFile:'pipe:1'},{audioFile:'/tmp/a\0.f32'},{audioFile:'/tmp/fixture/export.mp4'}])
+  assert.throws(()=>profileFor('mp4',patch),/Invalid .* path/);
+});
+test('D3.3-A odd dimensions rejected for MP4/MOV without changing WebM',()=>{
+ for(const format of ['mp4','mov'])
+  for(const patch of [{width:641},{height:361}])
+   assert.throws(()=>profileFor(format,patch),/even dimensions/);
+ assert.ok(profileFor('webm',{width:641}).includes('641x360'));
+});
