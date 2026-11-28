@@ -271,3 +271,39 @@ test('D3.3-D2 WebM bitrate remains unchanged at every resolution',()=>{
   assert.equal(args[args.indexOf('-c:a')+1],'libopus');
  }
 });
+
+test('D3.3-D3.2-B stereo transport enforces sequential bounded chunks',async()=>{
+ const {createStereoChunkTransport}=require('../desktop/isolated-stereo-chunk-transport.cjs');
+ const calls=[];
+ const transport=createStereoChunkTransport(async(kind,data)=>{
+  calls.push(kind);
+  if(kind==='stereo-begin')return {sampleRate:48000,channels:2,totalFrames:data.totalFrames};
+  const frameCount=Math.min(48000,48001-data.startFrame);
+  return {sampleRate:48000,channels:2,startFrame:data.startFrame,frameCount,samples:new Float32Array(frameCount*2)};
+ });
+ await transport.begin(48001);
+ await assert.rejects(transport.read(48000),/sequence/);
+ assert.equal((await transport.read(0)).samples.byteLength,384000);
+ assert.equal((await transport.read(48000)).samples.length,2);
+ await assert.rejects(transport.read(48001),/sequence/);
+ assert.deepEqual(calls,['stereo-begin','stereo-chunk','stereo-chunk']);
+});
+test('D3.3-D3.2-B malformed stereo responses fail closed',async()=>{
+ const {createStereoChunkTransport}=require('../desktop/isolated-stereo-chunk-transport.cjs');
+ for(const patch of [{channels:1},{sampleRate:44100},{startFrame:1},{frameCount:2},{samples:new Float32Array(4)},{samples:new Float32Array([NaN,0])}]){
+  const t=createStereoChunkTransport(async kind=>kind==='stereo-begin'?{sampleRate:48000,channels:2,totalFrames:1}:{sampleRate:48000,channels:2,startFrame:0,frameCount:1,samples:new Float32Array(2),...patch});
+  await t.begin(1);await assert.rejects(t.read(0),/Invalid stereo/);await assert.rejects(t.read(0),/unavailable/);
+ }
+ const t=createStereoChunkTransport(async()=>null);
+ assert.equal(await t.begin(1),null);await assert.rejects(t.read(0),/sequence/);
+});
+test('D3.3-D3.2-B concurrent requests and cancellation rejected',async()=>{
+ const {createStereoChunkTransport}=require('../desktop/isolated-stereo-chunk-transport.cjs');
+ let release;
+ const t=createStereoChunkTransport(()=>new Promise(resolve=>{release=resolve}));
+ const controller=new AbortController();
+ const pending=t.begin(1,controller.signal);
+ await assert.rejects(t.begin(1),/unavailable/);
+ controller.abort();release({sampleRate:48000,channels:2,totalFrames:1});
+ await assert.rejects(pending,{name:'AbortError'});
+});
