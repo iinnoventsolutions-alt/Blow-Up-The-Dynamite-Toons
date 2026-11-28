@@ -18,7 +18,7 @@ function createIsolatedExportRuntime({ipcMain,window,pageURL,windowIsUsable,enab
  if(typeof startExport!=='function')throw new Error('Isolated export backend unavailable; refusing IPC activation');
  if(!window?.webContents)throw new TypeError('Trusted Electron window required');
  if(saveOutput!==undefined&&typeof saveOutput!=='function')throw new TypeError('Invalid output delivery callback');
- const sessions=createIsolatedExportSessions({formatPolicy,startExport:async(request,context)=>{
+ const sessions=createIsolatedExportSessions({formatPolicy,singleActive:formatPolicy?.capabilities?.mp4===true,startExport:async(request,context)=>{
   try{
    const bytes=await startExport(request,context);
    context.signal.throwIfAborted();
