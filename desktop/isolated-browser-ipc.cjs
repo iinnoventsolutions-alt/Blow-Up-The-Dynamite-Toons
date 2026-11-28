@@ -55,7 +55,7 @@ function createIsolatedBrowserIpc({ipcMain,window,pageURL,windowIsUsable,enabled
   });
  }
  const transport=createIsolatedBrowserTransport({
-  requestFrame:(index,signal)=>request('frame',index,signal),
+  requestFrame:(index,signal,geometry)=>request('frame',index,signal,geometry?{geometry}:{}),
   requestAudio:signal=>request('audio',undefined,signal),
   frameTimeoutMs,audioTimeoutMs
  });
