@@ -483,3 +483,36 @@ test('D6-C cancellation, mismatched destination and staging cleanup',async t=>{
  assert.equal(fs.existsSync(destination),false);
  assert.equal(fs.readdirSync(root).some(n=>n.endsWith('.tmp')),false);
 });
+
+test('D6-D fresh stereo sessions reject stale replies and recover after cancellation',async()=>{
+ const {createIsolatedBrowserIpc,REPLY_CHANNEL}=require('../desktop/isolated-browser-ipc.cjs');
+ const ipcMain=new EventEmitter(),pageURL='file:///test/index.html',mainFrame={url:pageURL};
+ const sent=[],webContents={mainFrame,send:(_,message)=>sent.push(message)},window={webContents};
+ const trusted={sender:webContents,senderFrame:mainFrame};
+ const broker=createIsolatedBrowserIpc({ipcMain,window,pageURL,windowIsUsable:()=>true,enabled:true,enableStereo:true,audioTimeoutMs:1000});
+ const reply=(request,data,patch={})=>ipcMain.emit(REPLY_CHANNEL,trusted,{token:request.token,kind:request.kind,sessionId:request.sessionId,data,...patch});
+ const meta={sampleRate:48000,channels:2,totalFrames:1};
+ try{
+  const first=broker.createStereoSession(),controller=new AbortController();
+  assert.throws(()=>broker.createStereoSession(),/unavailable/);
+  const pending=first.begin(1,controller.signal),old=sent.at(-1);
+  controller.abort();await assert.rejects(pending,{name:'AbortError'});
+  assert.equal(sent.at(-1).kind,'stereo-cancel');assert.equal(sent.at(-1).sessionId,old.sessionId);
+  for(let i=0;i<2;i++){
+   const session=broker.createStereoSession(),begin=session.begin(1),request=sent.at(-1);
+   assert.notEqual(request.sessionId,old.sessionId);
+   reply(old,meta);reply(request,{...meta,channels:1},{sessionId:old.sessionId});
+   reply(request,meta);assert.equal((await begin).totalFrames,1);
+   const chunk=session.read(0),read=sent.at(-1);
+   reply(read,{sampleRate:48000,channels:2,startFrame:0,frameCount:1,samples:new Float32Array([.5,-.5])});
+   assert.deepEqual([...(await chunk).samples],[.5,-.5]);
+   session.close();session.close();
+   assert.equal(sent.at(-1).sessionId,request.sessionId);
+  }
+  const last=broker.createStereoSession(),begin=last.begin(1);
+  reply(sent.at(-1),meta);await begin;
+  const chunk=last.read(0);last.close();await assert.rejects(chunk,/closed/);
+  const recovered=broker.createStereoSession();recovered.close();
+ }finally{broker.close()}
+ assert.equal(ipcMain.listenerCount(REPLY_CHANNEL),0);
+});
