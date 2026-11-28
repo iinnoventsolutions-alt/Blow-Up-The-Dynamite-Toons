@@ -96,3 +96,65 @@ test('packaging rejects symlinked staging component',async t=>{
   fs.symlinkSync(binary,path.join(source,'bin','ffmpeg'));
   await assert.rejects(stageMp4Mov(root,'x64',{env:{V1124_MP4_MOV_X64_DIR:source}}),/component/);
 });
+
+const {selectExportEncoder}=require('../desktop/isolated-export-encoder-router.cjs');
+function webmFixture(root){
+ const runtime=path.join(root,'ffmpeg-runtime');
+ fs.mkdirSync(path.join(runtime,'bin'),{recursive:true});
+ fs.mkdirSync(path.join(runtime,'lib'));
+ const binary=path.join(runtime,'bin','ffmpeg');
+ fs.writeFileSync(binary,'webm',{mode:0o755});
+ for(const name of ['libvpx.12.dylib','libopus.0.dylib'])fs.writeFileSync(path.join(runtime,'lib',name),'fixture');
+ return fs.realpathSync(binary);
+}
+test('D3.2 default and explicit WebM preserve existing resolver without MP4/MOV',async t=>{
+ const {root}=fixture(t);
+ fs.rmSync(path.join(root,'ffmpeg-mp4-mov-runtime'),{recursive:true});
+ const binary=webmFixture(root);
+ for(const format of [undefined,'webm']){
+  const result=await selectExportEncoder(root,format,{...options,run:()=>assert.fail('unexpected probe')});
+  assert.deepEqual(result,{format:'webm',binary});
+  assert.ok(Object.isFrozen(result));
+ }
+});
+test('D3.2 MP4 and MOV select only the separate validated runtime',async t=>{
+ const {root,binary}=fixture(t);
+ for(const format of ['mp4','mov']){
+  const calls=[];
+  const result=await selectExportEncoder(root,format,{...options,run:async(file,args)=>{
+   assert.equal(file,fs.realpathSync(binary));calls.push(args[1]);return runner({})(file,args);
+  }});
+  assert.deepEqual(result,{format,binary:fs.realpathSync(binary)});
+  assert.ok(Object.isFrozen(result));
+  assert.deepEqual(calls,['-version','-encoders','-muxers']);
+ }
+});
+test('D3.2 unsupported format rejected before runtime access',async()=>{
+ for(const format of ['avi','MP4','',null,{},1])
+  await assert.rejects(selectExportEncoder('relative',format,options),/Invalid export format/);
+});
+test('D3.2 missing or invalid MP4/MOV runtime never falls back to WebM',async t=>{
+ const {root,binary}=fixture(t);webmFixture(root);
+ await assert.rejects(selectExportEncoder(root,'mp4',{...options,run:runner({'-version':'ffmpeg version 9.0.2'})}),/version/);
+ await assert.rejects(selectExportEncoder(root,'mov',{...options,run:runner({'-muxers':' E mp4 MP4'})}),/capabilities/);
+ fs.unlinkSync(binary);
+ await assert.rejects(selectExportEncoder(root,'mp4',{...options,run:()=>assert.fail('unexpected probe')}),/ENOENT/);
+});
+test('D3.2 missing WebM never falls back to MP4/MOV',async t=>{
+ const {root}=fixture(t);
+ await assert.rejects(selectExportEncoder(root,'webm',{...options,run:()=>assert.fail('unexpected probe')}),/ENOENT/);
+});
+test('D3.2 unsupported OS rejects MP4/MOV before probing',async t=>{
+ const {root}=fixture(t);
+ for(const o of [{platform:'linux',release:'24.0.0'},{platform:'darwin',release:'23.6.0'}])
+  await assert.rejects(selectExportEncoder(root,'mov',{...o,run:()=>assert.fail('unexpected probe')}),/macOS 15/);
+});
+test('D3.2 abort propagates before and during routing',async t=>{
+ const {root}=fixture(t);
+ const before=new AbortController();before.abort();
+ for(const format of ['webm','mp4','mov'])
+  await assert.rejects(selectExportEncoder(root,format,{...options,signal:before.signal,run:()=>assert.fail('unexpected probe')}),{name:'AbortError'});
+ const during=new AbortController();let calls=0;
+ await assert.rejects(selectExportEncoder(root,'mp4',{...options,signal:during.signal,run:async()=>{calls++;during.abort();return {stdout:responses['-version']}}}),{name:'AbortError'});
+ assert.equal(calls,1);
+});
