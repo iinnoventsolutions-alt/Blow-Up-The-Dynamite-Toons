@@ -393,3 +393,45 @@ test('D3.3-D3.3 stereo option cannot change WebM profile',()=>{
   assert.ok(args.includes('-an'));assert.ok(!args.includes('-ac'));assert.ok(!args.includes('-b:a'));
  }
 });
+
+test('D6-B capability policy defaults off and rejects renderer opt-in',async()=>{
+ const {createExportFormatPolicy}=require('../desktop/isolated-export-format-policy.cjs');
+ const policy=await createExportFormatPolicy({probe:()=>assert.fail('unexpected probe')});
+ const request={projectId:'p',width:854,height:480,fps:24,outputName:'p.webm'};
+ assert.deepEqual(policy.capabilities,{webm:true,mp4:false,mov:false});
+ assert.deepEqual(policy.validate(request),request);
+ assert.throws(()=>policy.validate({...request,format:'mp4',outputName:'p.mp4'}),/unavailable/);
+ assert.throws(()=>policy.validate({...request,allowMp4Mov:true}),/fields/);
+});
+test('D6-B capability policy requires trusted opt-in and complete probe',async()=>{
+ const {createExportFormatPolicy}=require('../desktop/isolated-export-format-policy.cjs');
+ const good=async()=>({version:'7.1.5',formats:['mp4','mov']});
+ const policy=await createExportFormatPolicy({enableMp4Mov:true,probe:good});
+ assert.deepEqual(policy.capabilities,{webm:true,mp4:true,mov:true});
+ assert.ok(Object.isFrozen(policy.capabilities));
+ for(const format of ['mp4','mov'])assert.equal(policy.validate({projectId:'p',width:854,height:480,fps:24,format,outputName:'p.'+format}).format,format);
+ for(const probe of [async()=>{throw Error('missing')},async()=>({version:'7.1.5',formats:['mp4']}),async()=>({version:'9',formats:['mp4','mov']})]){
+  const denied=await createExportFormatPolicy({enableMp4Mov:true,probe});
+  assert.deepEqual(denied.capabilities,{webm:true,mp4:false,mov:false});
+ }
+ const controller=new AbortController();
+ await assert.rejects(createExportFormatPolicy({enableMp4Mov:true,signal:controller.signal,probe:async()=>{controller.abort();return good()}}),{name:'AbortError'});
+});
+test('D6-B session and backend boundaries deny by default and accept trusted policy',async()=>{
+ const {createExportFormatPolicy}=require('../desktop/isolated-export-format-policy.cjs');
+ const {createIsolatedExportSessions}=require('../desktop/isolated-export-sessions.cjs');
+ const {createTrustedExportBackend}=require('../desktop/isolated-export-backend.cjs');
+ const request={projectId:'p',width:854,height:480,fps:24,format:'mp4',outputName:'p.mp4'};
+ const owner={};
+ const policy=await createExportFormatPolicy({enableMp4Mov:true,probe:async()=>({version:'7.1.5',formats:['mp4','mov']})});
+ assert.throws(()=>createIsolatedExportSessions({startExport:async()=>{}}).start(owner,request),/unavailable/);
+ const session=createIsolatedExportSessions({formatPolicy:policy,startExport:async input=>input.format}).start(owner,request);
+ assert.equal(await session.done,'mp4');
+ let resolved=0;
+ const deps={resolveProject:async()=>{resolved++;return null},renderFrame:async()=>{},renderAudio:async()=>{}};
+ const context={signal:new AbortController().signal,report:()=>{}};
+ await assert.rejects(createTrustedExportBackend(deps)(request,context),/unavailable/);
+ assert.equal(resolved,0);
+ await assert.rejects(createTrustedExportBackend({...deps,formatPolicy:policy})(request,context),/Trusted project unavailable/);
+ assert.equal(resolved,1);
+});
