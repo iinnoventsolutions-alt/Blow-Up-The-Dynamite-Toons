@@ -6,7 +6,7 @@ import type {Project} from './model.ts';
 import {projectFrames} from './model.ts';
 
 import type {StereoChunkSource} from './deterministic-stereo-audio.ts';
-export type IsolatedBrowserRequest={token:string;kind:'frame'|'audio'|'stereo-begin'|'stereo-chunk'|'stereo-cancel';sessionId?:string;index?:number;totalFrames?:number;startFrame?:number};
+export type IsolatedBrowserRequest={token:string;kind:'frame'|'audio'|'stereo-begin'|'stereo-chunk'|'stereo-cancel';sessionId?:string;geometry?:{width:number;height:number};index?:number;totalFrames?:number;startFrame?:number};
 export type IsolatedBrowserReply={token:string;kind:'frame'|'audio'|'stereo-begin'|'stereo-chunk'|'stereo-cancel';sessionId?:string;data:unknown;error?:string};
 export interface IsolatedBrowserChannel {
  onRequest:(callback:(request:IsolatedBrowserRequest)=>void)=>()=>void;
@@ -59,8 +59,13 @@ export function attachIsolatedStoryboardRenderer(channel:IsolatedBrowserChannel,
      ?await (async()=>{
        if(!Number.isSafeInteger(request.index)||request.index!<0||request.index!>=projectFrames(project))throw new RangeError('Invalid frame index');
        const {renderIsolatedProjectFrame}=await import('./deterministic-artwork-renderer.ts');
-       const frame=await renderIsolatedProjectFrame(project,request.index!,{signal:controller.signal,width:project.width});
-       if(frame.width!==project.width||frame.height!==project.height)throw new Error('Unexpected rendered geometry');
+       const geometry=request.geometry;
+       if(geometry){
+        const scale=Math.min(1,1920/Math.max(project.width,project.height));
+        if(!enableStereo||geometry.width!==Math.floor(project.width*scale/2)*2||geometry.height!==Math.floor(project.height*scale/2)*2||geometry.width<2||geometry.height<2)throw new Error('Invalid export geometry');
+       }
+       const frame=await renderIsolatedProjectFrame(project,request.index!,{signal:controller.signal,width:geometry?.width??project.width,height:geometry?.height});
+       if(frame.width!==(geometry?.width??project.width)||frame.height!==(geometry?.height??project.height))throw new Error('Unexpected rendered geometry');
        return {index:frame.index,timestampUs:frame.timestampUs,pixels:frame.pixels};
       })()
      :await (async()=>{const {mixProjectAudioInBrowser}=await import('./deterministic-project-audio.ts');return mixProjectAudioInBrowser(project,controller.signal)})();
