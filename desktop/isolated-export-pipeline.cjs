@@ -1,6 +1,6 @@
 /** N3.17-E isolated frame/audio-to-FFmpeg pipeline. Not registered in production Electron. */
 const {createIsolatedFfmpegSink}=require('./isolated-ffmpeg-sink.cjs');
-function createIsolatedExportPipeline({resourcesPath,renderFrame,renderAudio,frameCount,sinkFactory=createIsolatedFfmpegSink,maxRawBytes=512*1024*1024}={}){
+function createIsolatedExportPipeline({resourcesPath,renderFrame,renderAudio,createStereoTransport,frameCount,sinkFactory=createIsolatedFfmpegSink,maxRawBytes=512*1024*1024}={}){
  if(typeof renderFrame!=='function'||typeof renderAudio!=='function'||typeof sinkFactory!=='function')throw new TypeError('Export pipeline dependencies required');
  if(!Number.isSafeInteger(frameCount)||frameCount<1||frameCount>100000)throw new RangeError('Invalid frame count');
  return async function startExport(request,{signal,report}){
@@ -14,10 +14,16 @@ function createIsolatedExportPipeline({resourcesPath,renderFrame,renderAudio,fra
   const sink=await sinkFactory({resourcesPath,width,height,fps,signal,maxRawBytes,...(format==='webm'?{}:{format})});
   try{
    signal.throwIfAborted();report(0);
+   if(format!=='webm'&&typeof createStereoTransport==='function'){
+    const totalFrames=Math.round(frameCount/fps*48000);
+    const transport=await createStereoTransport(request,signal);
+    try{await sink.writeStereo(transport,totalFrames,signal)}finally{transport.close()}
+   }else{
    const audio=await renderAudio(request,signal);
    signal.throwIfAborted();
    if(audio!==null&&(!audio||audio.sampleRate!==48000||!(audio.samples instanceof Float32Array)||audio.samples.byteLength>128*1024*1024||audio.samples.byteLength>maxRawBytes))throw new RangeError('Invalid audio or raw disk budget');
    await sink.writeAudio(audio,signal);
+   }
    for(let index=0;index<frameCount;index++){
     signal.throwIfAborted();
     const frame=await renderFrame(request,index,signal);
