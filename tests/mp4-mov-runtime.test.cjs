@@ -307,3 +307,60 @@ test('D3.3-D3.2-B concurrent requests and cancellation rejected',async()=>{
  controller.abort();release({sampleRate:48000,channels:2,totalFrames:1});
  await assert.rejects(pending,{name:'AbortError'});
 });
+
+test('D3.3-D3.2-C stages ordered stereo bytes and disposes temporary file',async()=>{
+ const {stageStereoAudio}=require('../desktop/isolated-stereo-audio-staging.cjs');
+ let closed=false;const offsets=[];
+ const transport={begin:async totalFrames=>({sampleRate:48000,channels:2,totalFrames}),read:async startFrame=>{
+  offsets.push(startFrame);const frameCount=Math.min(48000,48001-startFrame),samples=new Float32Array(frameCount*2);samples[0]=.5;samples[1]=-.25;
+  return {sampleRate:48000,channels:2,startFrame,frameCount,samples};
+ },close(){closed=true}};
+ const staged=await stageStereoAudio({transport,totalFrames:48001});
+ try{
+  assert.deepEqual(offsets,[0,48000]);assert.equal(closed,true);
+  const bytes=fs.readFileSync(staged.audioFile);
+  assert.equal(bytes.length,48001*8);assert.equal(bytes.readFloatLE(0),.5);assert.equal(bytes.readFloatLE(4),-.25);assert.equal(bytes.readFloatLE(384000),.5);
+ }finally{await staged.dispose()}
+ assert.equal(fs.existsSync(staged.audioFile),false);await staged.dispose();
+});
+test('D3.3-D3.2-C rejects incomplete staging, cancellation and disk budget',async()=>{
+ const {stageStereoAudio}=require('../desktop/isolated-stereo-audio-staging.cjs');
+ const before=new Set(fs.readdirSync(os.tmpdir()).filter(n=>n.startsWith('rfdr-stereo-')));
+ for(const abort of [false,true]){
+  const controller=new AbortController();let closed=false;
+  const transport={begin:async totalFrames=>({sampleRate:48000,channels:2,totalFrames}),read:async startFrame=>{
+   if(abort)controller.abort();
+   return {sampleRate:48000,channels:2,startFrame,frameCount:1,samples:new Float32Array(0)};
+  },close(){closed=true}};
+  await assert.rejects(stageStereoAudio({transport,totalFrames:1,signal:controller.signal}),abort?{name:'AbortError'}:/Invalid stereo/);
+  assert.equal(closed,true);
+ }
+ assert.deepEqual(fs.readdirSync(os.tmpdir()).filter(n=>n.startsWith('rfdr-stereo-')&&!before.has(n)),[]);
+ await assert.rejects(stageStereoAudio({transport:{begin(){},read(){},close(){}},totalFrames:28800000,maxRawBytes:128*1024*1024}),/budget/);
+});
+test('D3.3-D3.2-C authenticated IPC rejects foreign sender, frame and token; fresh broker recovers',async()=>{
+ const {EventEmitter}=require('node:events');
+ const {createIsolatedBrowserIpc,REPLY_CHANNEL}=require('../desktop/isolated-browser-ipc.cjs');
+ const ipcMain=new EventEmitter(),pageURL='file:///test/index.html',mainFrame={url:pageURL};
+ let sent;const webContents={mainFrame,send:(_,message)=>{sent=message}},window={webContents};
+ const trusted={sender:webContents,senderFrame:mainFrame};
+ const make=()=>createIsolatedBrowserIpc({ipcMain,window,pageURL,windowIsUsable:()=>true,enabled:true,enableStereo:true,audioTimeoutMs:1000});
+ const first=make(),controller=new AbortController();
+ const pending=first.stereo.begin(1,controller.signal);
+ const reply={token:sent.token,kind:sent.kind,data:{sampleRate:48000,channels:2,totalFrames:1}};
+ ipcMain.emit(REPLY_CHANNEL,{...trusted,sender:{}},reply);
+ ipcMain.emit(REPLY_CHANNEL,{...trusted,senderFrame:{url:pageURL}},reply);
+ ipcMain.emit(REPLY_CHANNEL,trusted,{...reply,token:'wrong'});
+ controller.abort();await assert.rejects(pending,{name:'AbortError'});first.close();
+ const second=make();
+ try{
+  const next=second.stereo.begin(1);
+  ipcMain.emit(REPLY_CHANNEL,trusted,reply);
+  ipcMain.emit(REPLY_CHANNEL,trusted,{...reply,token:sent.token});
+  assert.equal((await next).totalFrames,1);
+  const chunk=second.stereo.read(0);
+  ipcMain.emit(REPLY_CHANNEL,trusted,{token:sent.token,kind:sent.kind,data:{sampleRate:48000,channels:2,startFrame:0,frameCount:1,samples:new Float32Array([.5,-.5])}});
+  assert.deepEqual([...(await chunk).samples],[.5,-.5]);
+ }finally{second.close()}
+ assert.equal(ipcMain.listenerCount(REPLY_CHANNEL),0);
+});
