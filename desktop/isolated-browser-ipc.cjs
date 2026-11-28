@@ -6,9 +6,10 @@
 const {randomUUID}=require('node:crypto');
 const {assertTrustedSender}=require('./ipc-security.cjs');
 const {createIsolatedBrowserTransport}=require('./isolated-browser-transport.cjs');
+const {createStereoChunkTransport}=require('./isolated-stereo-chunk-transport.cjs');
 const REPLY_CHANNEL='isolated-export:browser-reply';
 const REQUEST_CHANNEL='isolated-export:browser-request';
-function createIsolatedBrowserIpc({ipcMain,window,pageURL,windowIsUsable,enabled=false,frameTimeoutMs=30000,audioTimeoutMs=60000}={}){
+function createIsolatedBrowserIpc({ipcMain,window,pageURL,windowIsUsable,enabled=false,enableStereo=false,frameTimeoutMs=30000,audioTimeoutMs=60000}={}){
  if(!enabled)return Object.freeze({enabled:false,close(){},transport:null});
  if(!ipcMain||typeof ipcMain.on!=='function'||typeof ipcMain.removeListener!=='function'||!window?.webContents||typeof window.webContents.send!=='function'||typeof windowIsUsable!=='function')
   throw new TypeError('Trusted Electron IPC dependencies required');
@@ -26,7 +27,7 @@ function createIsolatedBrowserIpc({ipcMain,window,pageURL,windowIsUsable,enabled
   }
  }
  ipcMain.on(REPLY_CHANNEL,onReply);
- function request(kind,index,signal){
+ function request(kind,index,signal,extra={}){
   if(closed)throw new Error('Browser IPC closed');
   if(pending)throw new Error('Browser IPC request already pending');
   signal?.throwIfAborted();
@@ -48,7 +49,7 @@ function createIsolatedBrowserIpc({ipcMain,window,pageURL,windowIsUsable,enabled
    },Math.max(1,(kind==='frame'?frameTimeoutMs:audioTimeoutMs)-5));
    try{
     if(!windowIsUsable(window))throw new Error('Trusted Electron window unavailable');
-    window.webContents.send(REQUEST_CHANNEL,{token,kind,...(kind==='frame'?{index}:{})});
+    window.webContents.send(REQUEST_CHANNEL,{token,kind,...(kind==='frame'?{index}:{}),...extra});
    }catch(error){pending=null;entry.cleanup();reject(error)}
   });
  }
@@ -57,12 +58,13 @@ function createIsolatedBrowserIpc({ipcMain,window,pageURL,windowIsUsable,enabled
   requestAudio:signal=>request('audio',undefined,signal),
   frameTimeoutMs,audioTimeoutMs
  });
+ const stereo=enableStereo===true?createStereoChunkTransport((kind,data,signal)=>request(kind,undefined,signal,data)):null;
  function close(){
   if(closed)return;closed=true;
   ipcMain.removeListener(REPLY_CHANNEL,onReply);
-  transport.close();
+  transport.close();stereo?.close();
   if(pending){const entry=pending;pending=null;entry.cleanup();entry.reject(new Error('Browser IPC closed'))}
  }
- return Object.freeze({enabled:true,transport,close,channels:Object.freeze({request:REQUEST_CHANNEL,reply:REPLY_CHANNEL})});
+ return Object.freeze({enabled:true,transport,...(stereo?{stereo}:{}),close,channels:Object.freeze({request:REQUEST_CHANNEL,reply:REPLY_CHANNEL})});
 }
 module.exports={createIsolatedBrowserIpc,REQUEST_CHANNEL,REPLY_CHANNEL};
