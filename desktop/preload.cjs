@@ -8,6 +8,12 @@ contextBridge.exposeInMainWorld('desktop', {
       ipcRenderer.on('isolated-export:available', listener);
       return () => ipcRenderer.removeListener('isolated-export:available', listener);
     },
+    onCapabilities: callback => {
+      if (typeof callback !== 'function') throw new TypeError('Export capabilities callback required');
+      const listener = (_event, value) => callback({webm:true,mp4:value?.mp4===true,mov:value?.mov===true});
+      ipcRenderer.on('isolated-export:capabilities', listener);
+      return () => ipcRenderer.removeListener('isolated-export:capabilities', listener);
+    },
     start: request => ipcRenderer.invoke('isolated-export:start', request),
     progress: id => ipcRenderer.invoke('isolated-export:progress', id),
     cancel: id => ipcRenderer.invoke('isolated-export:cancel', id),
