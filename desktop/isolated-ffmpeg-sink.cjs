@@ -2,6 +2,7 @@
 const fs=require('node:fs/promises');
 const os=require('node:os');
 const path=require('node:path');
+const {stageStereoAudio}=require('./isolated-stereo-audio-staging.cjs');
 const {spawn}=require('node:child_process');
 const {selectExportEncoder}=require('./isolated-export-encoder-router.cjs');
 const {buildEncodingArgs}=require('./isolated-export-encoding-profile.cjs');
@@ -18,10 +19,11 @@ async function createIsolatedFfmpegSink({resourcesPath,width,height,fps,signal,f
  signal?.throwIfAborted();
  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'rfdr-n315-'));
  const audioFile=path.join(dir,'audio.f32'),output=path.join(dir,'export.'+format);
+ let staged=null,audioChannels=1,audioBusy=false;
  let closed=false,count=0,hasAudio=false,child,completion,stopTimer,removeAbort=()=>{},failure=null;
  function ensure(s){if(closed)throw Error('Sink disposed');signal?.throwIfAborted();s?.throwIfAborted();if(failure)throw failure}
  function launch(s){
-  const args=buildEncodingArgs({format,width,height,fps,hasAudio,audioFile,output});
+  const args=buildEncodingArgs({format,width,height,fps,hasAudio,audioFile:staged?.audioFile??audioFile,output,audioChannels});
   child=spawnProcess(binary,args,{shell:false,stdio:['pipe','ignore','pipe'],windowsHide:true});
   // A cancelled/killed FFmpeg process can emit EPIPE after a write callback settles.
   // Keep a lifetime listener so late pipe errors never escape to Electron's main process.
@@ -43,14 +45,21 @@ async function createIsolatedFfmpegSink({resourcesPath,width,height,fps,signal,f
   completion.catch(()=>{});
  }
  return {
+  async writeStereo(transport,totalFrames,s){
+   ensure(s);if(format==='webm'||child||count||hasAudio||audioBusy)throw Error('Invalid stereo staging state');
+   audioBusy=true;
+   try{staged=await stageStereoAudio({transport,totalFrames,signal:s??signal,maxRawBytes});ensure(s);hasAudio=staged!==null;audioChannels=hasAudio?2:1;}
+   catch(error){failure=error;await staged?.dispose();staged=null;throw error}
+   finally{audioBusy=false}
+  },
   async writeAudio(audio,s){
-   ensure(s);if(child||count)throw Error('Audio must precede streamed frames');
+   ensure(s);if(child||count||audioBusy||hasAudio)throw Error('Audio must precede streamed frames');
    if(audio===null)return;
    if(audio.sampleRate!==48000||!(audio.samples instanceof Float32Array)||audio.samples.byteLength>128*1024*1024||audio.samples.byteLength>maxRawBytes)throw Error('Invalid audio format');
    await fs.writeFile(audioFile,Buffer.from(audio.samples.buffer,audio.samples.byteOffset,audio.samples.byteLength),{flag:'wx'});hasAudio=true;
   },
   async writeFrame(frame,s){
-   ensure(s);
+   ensure(s);if(audioBusy)throw Error('Audio staging pending');
    if(frame.index!==count||frame.pixels.byteLength!==width*height*4)throw Error('Invalid frame order or RGBA size');
    // Streamed video is piped with backpressure, not stored on disk.
    // Bound a single in-flight frame; do not cap cumulative streamed bytes.
@@ -77,7 +86,7 @@ async function createIsolatedFfmpegSink({resourcesPath,width,height,fps,signal,f
    if(closed)return;closed=true;
    if(child&&child.exitCode===null)child.kill('SIGKILL');
    clearTimeout(stopTimer);removeAbort();
-   await fs.rm(dir,{recursive:true,force:true});
+   try{await staged?.dispose()}finally{await fs.rm(dir,{recursive:true,force:true})} 
   }
  };
 }
