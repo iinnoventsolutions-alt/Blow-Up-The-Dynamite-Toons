@@ -71,7 +71,7 @@ export default function App() {
   const [capabilities,setCapabilities]=useState<ExportCapabilities>({webm:true,mp4:false,mov:false});
   const [selectedFormat,setSelectedFormat]=useState<ExportFormat>('webm');
   const [activeExportFormat,setActiveExportFormat]=useState<ExportFormat>('webm');
-  useEffect(()=>window.desktop?.isolatedExport?.onCapabilities(setCapabilities),[]);
+  useEffect(()=>window.desktop?.isolatedExport?.onCapabilities?.(setCapabilities),[]);
   const isolatedProjectRef = useRef<Project | null>(null);
   const isolatedExportSnapshotRef = useRef<Project | null>(null);
   isolatedProjectRef.current = project ?? null;
@@ -306,26 +306,33 @@ export default function App() {
     let unsubscribe: (() => void) | undefined;
     let poll: ReturnType<typeof setInterval> | undefined;
     let sessionId: string | undefined;
+    let removeAbortListener: (()=>void)|undefined;
     try {
       // Main validates and owns this snapshot; metadata cannot be forged by export:start.
       resultValue(await window.desktop.snapshot(serializeProject(snapshot)));
       if (abort.signal.aborted) throw new Error('Export cancelled');
       const outputName = (snapshot.title.replace(/[^a-zA-Z0-9 _-]/g, '').replace(/^[^a-zA-Z0-9]+/,'').slice(0, 90) || 'Storyboard') + '.'+format;
       const profile=extendedExportProfile(snapshot);
-      const completion = new Promise<{status:'saved' | 'cancelled' | 'failed';error?:string}>((resolve, reject) => {
-        unsubscribe = channel.onComplete(result => {
-          if (result.id === sessionId) resolve(result);
-        });
-        abort.signal.addEventListener('abort', () => reject(new Error('Export cancelled')), {once:true});
+      type Completion={id:string;status:'saved'|'cancelled'|'failed';error?:string};
+      const early=new Map<string,Completion>();
+      let complete!:(result:Completion)=>void;
+      const completion=new Promise<Completion>(resolve=>{complete=resolve;});
+      unsubscribe=channel.onComplete(result=>{
+        if(result.id===sessionId)complete(result);
+        else if(!sessionId&&early.size<16)early.set(result.id,result);
       });
+      const onAbort=()=>{if(sessionId)void channel.cancel(sessionId).catch(()=>{});};
+      abort.signal.addEventListener('abort',onAbort,{once:true});
+      removeAbortListener=()=>abort.signal.removeEventListener('abort',onAbort);
       const started = await channel.start({projectId:snapshot.id,width:format==='webm'?snapshot.width:profile.outputWidth,height:format==='webm'?snapshot.height:profile.outputHeight,fps:snapshot.fps,outputName,format});
       sessionId = started.id;
-      if (abort.signal.aborted) { await channel.cancel(sessionId); throw new Error('Export cancelled'); }
+      const prior=early.get(sessionId);if(prior)complete(prior);early.clear();
+      if (abort.signal.aborted) await channel.cancel(sessionId);
       poll = setInterval(() => {
         if (!sessionId) return;
         void channel.progress(sessionId).then(value => {
           const progress = value as {progress?:number};
-          if (typeof progress?.progress === 'number') setExportProgress(progress.progress);
+          if (exportAbort.current===abort && typeof progress?.progress === 'number') setExportProgress(progress.progress);
         }).catch(() => {});
       }, 250);
       const result = await completion;
@@ -337,6 +344,7 @@ export default function App() {
     } finally {
       if (poll) clearInterval(poll);
       unsubscribe?.();
+      removeAbortListener?.();
       isolatedExportSnapshotRef.current = null;
       busyRef.current = false;
       exportAbort.current = null;
@@ -383,7 +391,7 @@ onSequentialStatic={pose=>{try{if(!scene||!panel||!latest.current)return;install
     <footer className="status-bar"><span>{dirty ? '●' : '✓'} {dirty ? 'Unsaved changes' : 'Saved'}{fileName && ` · ${fileName}`}</span><span>{window.desktop ? 'Desktop' : 'Browser preview'} · {BUILD_LABEL} · {history?.past.length || 0} undo steps</span></footer>
     </>}
     {message && <div className="toast" role="status">{message}<Button onClick={() => setMessage('')} title="Dismiss message">×</Button></div>}
-    {showExportFormats&&project&&<Modal title="Export animatic" close={()=>setShowExportFormats(false)}><p>Choose a supported video format. Unavailable formats cannot be exported until their encoders and containers are validated.</p><fieldset aria-label="Video format" className="format-capabilities">{exportFormats.map(f=><label key={f.extension} className="format-option"><input type="radio" name="animatic-format" value={f.extension} checked={selectedFormat===f.extension} disabled={!capabilities[f.extension]||(f.extension!=='webm'&&!extendedExportProfile(project).eligible)} onChange={()=>setSelectedFormat(f.extension)}/><span className="format-option-copy"><span className="format-option-title"><strong>{f.name} (.{f.extension})</strong> — {capabilities[f.extension]&&(f.extension==='webm'||extendedExportProfile(project).eligible)?"Available":"Not yet available"}</span><small>{f.extension!=='webm'&&capabilities[f.extension]?'H.264 video; AAC stereo audio when present':f.detail}</small></span></label>)}</fieldset><p>Output: {(selectedFormat==='webm'?exportProfile(project):extendedExportProfile(project)).outputWidth} × {(selectedFormat==='webm'?exportProfile(project):extendedExportProfile(project)).outputHeight} · {project.fps} fps · {exportProfile(project).frames} frames ({exportProfile(project).seconds.toFixed(1)} seconds). Longest edge is limited to 1920 pixels. {selectedFormat==='webm'?'WebM recording runs in real time; keep the application visible.':'H.264/AAC export supports up to 10 minutes.'}</p><p>{selectedFormat==='webm'?'Browser WebM output size depends on available memory and recording support; there is no guaranteed fixed browser size ceiling.':'Desktop encoded output limit: '+Math.round(DESKTOP_ENCODED_OUTPUT_MAX_BYTES/1048576)+' MB.'}</p><div className="dialog-footer"><Button onClick={()=>setShowExportFormats(false)}>Cancel</Button><Button className="primary" disabled={!capabilities[selectedFormat]||(selectedFormat!=='webm'&&!extendedExportProfile(project).eligible)} onClick={()=>{setShowExportFormats(false);if(selectedFormat==='webm')void exportVideo();else void exportVideoFfmpeg(selectedFormat);}}>Export {selectedFormat==='webm'?'WebM':selectedFormat.toUpperCase()}</Button></div></Modal>}
+    {showExportFormats&&project&&<Modal title="Export animatic" close={()=>setShowExportFormats(false)}><p>Choose a supported video format. Unavailable formats cannot be exported until their encoders and containers are validated.</p><fieldset aria-label="Video format" className="format-capabilities">{exportFormats.map(f=><label key={f.extension} className="format-option"><input type="radio" name="animatic-format" value={f.extension} checked={selectedFormat===f.extension} disabled={!capabilities[f.extension]||(f.extension!=='webm'&&!extendedExportProfile(project).eligible)} onChange={()=>setSelectedFormat(f.extension)}/><span className="format-option-copy"><span className="format-option-title"><strong>{f.name} (.{f.extension})</strong> — {capabilities[f.extension]&&(f.extension==='webm'||extendedExportProfile(project).eligible)?"Available":"Not yet available"}</span><small>{f.extension!=='webm'&&capabilities[f.extension]?'H.264 video; AAC stereo audio when present':f.detail}</small></span></label>)}</fieldset><p>Output: {(selectedFormat==='webm'?exportProfile(project):extendedExportProfile(project)).outputWidth} × {(selectedFormat==='webm'?exportProfile(project):extendedExportProfile(project)).outputHeight} · {project.fps} fps · {exportProfile(project).frames} frames ({exportProfile(project).seconds.toFixed(1)} seconds). Longest edge is limited to 1920 pixels. {selectedFormat==='webm'?'WebM recording runs in real time; keep the application visible.':'H.264/AAC export supports up to 10 minutes.'}</p><p>{selectedFormat==='webm'?'Browser WebM output size depends on available memory and recording support; there is no guaranteed fixed browser size ceiling.':''} Desktop encoded output limit: {Math.round(DESKTOP_ENCODED_OUTPUT_MAX_BYTES/1048576)} MB (desktop FFmpeg exports only).</p><div className="dialog-footer"><Button onClick={()=>setShowExportFormats(false)}>Cancel</Button><Button className="primary" disabled={!capabilities[selectedFormat]||(selectedFormat!=='webm'&&!extendedExportProfile(project).eligible)} onClick={()=>{setShowExportFormats(false);if(selectedFormat==='webm')void exportVideo();else void exportVideoFfmpeg(selectedFormat);}}>Export {selectedFormat==='webm'?'WebM':selectedFormat.toUpperCase()}</Button></div></Modal>}
     {exportProgress!==null&&<Modal title="Exporting animatic" close={()=>exportAbort.current?.abort()}><p>Creating {activeExportFormat==='webm'?'WebM':activeExportFormat.toUpperCase()} video with audio, camera motion and transitions. {activeExportFormat==='webm'?'Export runs in real time; keep the application visible.':'Encoding and saving through the desktop exporter.'}</p><p>HD output · up to 1920 pixels on the longest edge · {project?.fps} fps</p><progress aria-label="Animatic export progress" value={exportProgress} max="1"/><p>{Math.round(exportProgress*100)}%</p><div className="dialog-footer"><Button onClick={()=>exportAbort.current?.abort()}>Cancel export</Button></div></Modal>}
     {showNew && <Modal title="Create a storyboard" close={() => setShowNew(false)}><form onSubmit={e => { e.preventDefault(); void create(); }}><p className="dialog-intro">Set the stage for your story. Each workspace will use these project settings.</p><label className="field"><span>Project title</span><input autoFocus value={newTitle} maxLength={200} onChange={e => setNewTitle(e.target.value)}/></label><label className="field"><span>Subtitle · optional</span><input value={newSubtitle} maxLength={500} onChange={e => setNewSubtitle(e.target.value)}/></label><label className="field"><span>Resolution preset</span><select aria-label="Resolution preset" value={['1920x1080','1080x1920','2048x858','3840x2160'].includes(`${newWidth}x${newHeight}`) ? `${newWidth}x${newHeight}` : 'custom'} onChange={e => { const [w, h] = e.target.value.split('x').map(Number); if (w && h) { setNewWidth(w); setNewHeight(h); } }}><option value="1920x1080">HD · 1920 × 1080 · 16:9</option><option value="1080x1920">Vertical · 1080 × 1920 · 9:16</option><option value="2048x858">Cinema · 2048 × 858</option><option value="3840x2160">4K · 3840 × 2160 · 16:9</option><option value="custom">Custom dimensions</option></select></label><div className="form-row"><Numeric label="Width" value={newWidth} min={64} max={8192} onChange={setNewWidth}/><Numeric label="Height" value={newHeight} min={64} max={8192} onChange={setNewHeight}/><label className="field"><span>Frame rate</span><select aria-label="Frame rate" value={newFps} onChange={e => setNewFps(Number(e.target.value))}>{[...new Set([12,24,25,30,48,50,60,newFps])].sort((a,b)=>a-b).map(n => <option key={n} value={n}>{n} fps</option>)}</select></label></div><div className="dialog-footer"><Button onClick={() => setShowNew(false)}>Cancel</Button><button className="primary" type="submit">Create project →</button></div></form></Modal>}
     {showPerformance&&<Suspense fallback={null}><PerformanceDiagnostics close={()=>setShowPerformance(false)}/></Suspense>}
