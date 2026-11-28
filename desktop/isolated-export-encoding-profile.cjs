@@ -1,5 +1,10 @@
-/** D3.3-A: isolated argument builder; integration quality, not production quality. */
+/** D3.3-D2: isolated argument builder; resolution-dependent H.264 targets. */
 const path=require('node:path');
+// Pixel-area tiers are orientation independent; cap at the approved 1080p target.
+function videoBitrate(width,height){
+ const pixels=width*height;
+ return pixels<=854*480?'2500k':pixels<=1280*720?'5000k':'10000k';
+}
 function buildEncodingArgs({format='webm',width,height,fps,hasAudio,audioFile,output}={}){
  if(!['webm','mp4','mov'].includes(format))throw new TypeError('Invalid export format');
  if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||width<2||height<2||width*height*4>64*1024*1024)throw new RangeError('Invalid frame dimensions');
@@ -13,7 +18,7 @@ function buildEncodingArgs({format='webm',width,height,fps,hasAudio,audioFile,ou
  if(hasAudio)args.push('-f','f32le','-ar','48000','-ac','1','-i',audioFile);
  args.push('-map','0:v:0',...(hasAudio?['-map','1:a:0']:[]));
  if(format==='webm')args.push('-c:v','libvpx','-pix_fmt','yuv420p','-auto-alt-ref','0','-b:v','1M',...(hasAudio?['-c:a','libopus']:['-an']));
- else args.push('-c:v','h264_videotoolbox','-pix_fmt','yuv420p','-b:v','2000k',...(hasAudio?['-c:a','aac','-b:a','128k']:['-an']),'-movflags','+faststart');
+ else args.push('-c:v','h264_videotoolbox','-pix_fmt','yuv420p','-b:v',videoBitrate(width,height),...(hasAudio?['-c:a','aac','-b:a','128k']:['-an']),'-movflags','+faststart');
  args.push('-f',format,output);
  return Object.freeze(args);
 }
