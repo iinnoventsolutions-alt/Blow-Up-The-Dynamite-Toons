@@ -13,12 +13,13 @@ function createIsolatedBrowserIpc({ipcMain,window,pageURL,windowIsUsable,enabled
  if(!enabled)return Object.freeze({enabled:false,close(){},transport:null});
  if(!ipcMain||typeof ipcMain.on!=='function'||typeof ipcMain.removeListener!=='function'||!window?.webContents||typeof window.webContents.send!=='function'||typeof windowIsUsable!=='function')
   throw new TypeError('Trusted Electron IPC dependencies required');
- let closed=false,pending=null;
+ let closed=false,pending=null,activeStereo=null;
+ function notifyCancel(sessionId){try{if(windowIsUsable(window))window.webContents.send(REQUEST_CHANNEL,{token:randomUUID(),kind:'stereo-cancel',sessionId})}catch{}}
  const check=event=>assertTrustedSender(event,window,pageURL,windowIsUsable);
  function onReply(event,message){
   try{check(event)}catch{return}
   if(!pending||!message||typeof message!=='object'||Array.isArray(message)||
-     message.token!==pending.token||message.kind!==pending.kind)return;
+     message.token!==pending.token||message.kind!==pending.kind|| (pending.sessionId!==undefined&&message.sessionId!==pending.sessionId))return;
   const current=pending;pending=null;current.cleanup();
   if(message.error!==undefined){
    current.reject(new Error('Browser export operation failed'));
@@ -38,7 +39,7 @@ function createIsolatedBrowserIpc({ipcMain,window,pageURL,windowIsUsable,enabled
     if(pending!==entry)return;
     pending=null;entry.cleanup();reject(signal.reason instanceof Error?signal.reason:new Error('Export aborted'));
    };
-   const entry={token,kind,resolve,reject,cleanup:()=>{
+   const entry={token,kind,sessionId:extra.sessionId,resolve,reject,cleanup:()=>{
     clearTimeout(timer);signal?.removeEventListener('abort',onAbort);
    }};
    pending=entry;
@@ -58,13 +59,27 @@ function createIsolatedBrowserIpc({ipcMain,window,pageURL,windowIsUsable,enabled
   requestAudio:signal=>request('audio',undefined,signal),
   frameTimeoutMs,audioTimeoutMs
  });
+ function createStereoSession(){
+  if(closed||enableStereo!==true||activeStereo)throw new Error('Stereo session unavailable');
+  const sessionId=randomUUID();
+  const inner=createStereoChunkTransport((kind,data,signal)=>request(kind,undefined,signal,{...data,sessionId}));
+  let ended=false;
+  function closeSession(){
+   if(ended)return;ended=true;inner.close();
+   if(pending?.sessionId===sessionId){const entry=pending;pending=null;entry.cleanup();entry.reject(new Error('Stereo session closed'))}
+   notifyCancel(sessionId);if(activeStereo===session)activeStereo=null;
+  }
+  const session=Object.freeze({begin:async(...args)=>{try{return await inner.begin(...args)}catch(error){closeSession();throw error}},read:async(...args)=>{try{return await inner.read(...args)}catch(error){closeSession();throw error}},close:closeSession});
+  activeStereo=session;return session;
+ }
+ // Legacy opt-in adapter retained for existing isolated tests.
  const stereo=enableStereo===true?createStereoChunkTransport((kind,data,signal)=>request(kind,undefined,signal,data)):null;
  function close(){
   if(closed)return;closed=true;
   ipcMain.removeListener(REPLY_CHANNEL,onReply);
-  transport.close();stereo?.close();
+  transport.close();stereo?.close();activeStereo?.close();
   if(pending){const entry=pending;pending=null;entry.cleanup();entry.reject(new Error('Browser IPC closed'))}
  }
- return Object.freeze({enabled:true,transport,...(stereo?{stereo}:{}),close,channels:Object.freeze({request:REQUEST_CHANNEL,reply:REPLY_CHANNEL})});
+ return Object.freeze({enabled:true,transport,...(stereo?{stereo,createStereoSession}:{}),close,channels:Object.freeze({request:REQUEST_CHANNEL,reply:REPLY_CHANNEL})});
 }
 module.exports={createIsolatedBrowserIpc,REQUEST_CHANNEL,REPLY_CHANNEL};
