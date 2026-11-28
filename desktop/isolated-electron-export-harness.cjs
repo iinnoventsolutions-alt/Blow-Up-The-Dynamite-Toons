@@ -15,7 +15,7 @@ function createIsolatedElectronExportHarness({ipcMain,window,pageURL,windowIsUsa
  try{
   const startExport=createTrustedExportBackend({
    resourcesPath,formatPolicy,...(extended?{createStereoTransport:()=>browser.createStereoSession()}:{}),resolveProject:(id,signal)=>registry.resolveProject(id,signal),
-   renderFrame:(project,index,signal)=>browser.transport.frame(index,project.width,project.height,project.fps,signal),
+   renderFrame:(project,index,signal,geometry)=>browser.transport.frame(index,geometry?.width??project.width,geometry?.height??project.height,project.fps,signal,geometry),
    renderAudio:(_project,signal)=>browser.transport.audio(signal),
    ...(sinkFactory?{sinkFactory}:{})
   });
