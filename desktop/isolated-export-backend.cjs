@@ -10,7 +10,11 @@ function createTrustedExportBackend({resourcesPath,resolveProject,renderFrame,re
   const project=await resolveProject(request.projectId,signal);
   signal.throwIfAborted();
   if(!project||typeof project!=='object'||project.id!==request.projectId||!Number.isSafeInteger(project.frameCount)||project.frameCount<1||project.frameCount>100000)throw new Error('Trusted project unavailable');
-  if(project.width!==request.width||project.height!==request.height||project.fps!==request.fps)throw new Error('Project export settings mismatch');
+  const extended=request.format==='mp4'||request.format==='mov';
+  const scale=Math.min(1,1920/Math.max(project.width,project.height));
+  const width=extended?Math.floor(project.width*scale/2)*2:project.width;
+  const height=extended?Math.floor(project.height*scale/2)*2:project.height;
+  if(width!==request.width||height!==request.height||project.fps!==request.fps)throw new Error('Project export settings mismatch');
   if(request.format==='mp4'||request.format==='mov'){
    if(typeof createStereoTransport!=='function')throw new Error('Stereo transport unavailable');
    if(request.width%2||request.height%2||Math.max(request.width,request.height)>1920)throw new RangeError('Invalid MP4/MOV export geometry');
@@ -18,7 +22,7 @@ function createTrustedExportBackend({resourcesPath,resolveProject,renderFrame,re
   }
   const pipeline=createIsolatedExportPipeline({
    resourcesPath,frameCount:project.frameCount,
-   renderFrame:(_,index,s)=>renderFrame(project,index,s),
+   renderFrame:(_,index,s)=>renderFrame(project,index,s,extended?{width,height}:undefined),
    renderAudio:(_,s)=>renderAudio(project,s),
    ...(createStereoTransport?{createStereoTransport:(_,s)=>createStereoTransport(project,s)}:{}),
    ...(sinkFactory?{sinkFactory}:{})
