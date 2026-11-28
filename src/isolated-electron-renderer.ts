@@ -5,24 +5,47 @@
 import type {Project} from './model.ts';
 import {projectFrames} from './model.ts';
 
-export type IsolatedBrowserRequest={token:string;kind:'frame'|'audio';index?:number};
-export type IsolatedBrowserReply={token:string;kind:'frame'|'audio';data:unknown;error?:string};
+import type {StereoChunkSource} from './deterministic-stereo-audio.ts';
+export type IsolatedBrowserRequest={token:string;kind:'frame'|'audio'|'stereo-begin'|'stereo-chunk';index?:number;totalFrames?:number;startFrame?:number};
+export type IsolatedBrowserReply={token:string;kind:'frame'|'audio'|'stereo-begin'|'stereo-chunk';data:unknown;error?:string};
 export interface IsolatedBrowserChannel {
  onRequest:(callback:(request:IsolatedBrowserRequest)=>void)=>()=>void;
  reply:(message:IsolatedBrowserReply)=>void;
 }
-export function attachIsolatedStoryboardRenderer(channel:IsolatedBrowserChannel,getProject:()=>Project|null){
+export function attachIsolatedStoryboardRenderer(channel:IsolatedBrowserChannel,getProject:()=>Project|null,enableStereo=false){
  let closed=false;
+ let stereo:StereoChunkSource|null=null,stereoProject:Project|null=null,next=0,stereoBusy=false;
  const controllers=new Set<AbortController>();
  const unsubscribe=channel.onRequest(request=>{
   if(closed||!request||typeof request.token!=='string'||!/^[-a-zA-Z0-9]{1,120}$/.test(request.token)||
-     (request.kind!=='frame'&&request.kind!=='audio'))return;
+     (request.kind!=='frame'&&request.kind!=='audio'&&!(enableStereo===true&&(request.kind==='stereo-begin'||request.kind==='stereo-chunk'))))return;
+  const isStereo=request.kind==='stereo-begin'||request.kind==='stereo-chunk';
+  if(isStereo&&stereoBusy){channel.reply({token:request.token,kind:request.kind,data:null,error:'Export renderer busy'});return;}
+  if(isStereo)stereoBusy=true;
   const controller=new AbortController();controllers.add(controller);
   void (async()=>{
    try{
     const project=getProject();
     if(!project)throw new Error('No active storyboard project');
-    const data=request.kind==='frame'
+    const data=request.kind==='stereo-begin'
+     ?await (async()=>{
+       stereo=null;stereoProject=null;next=0;
+       const expected=Math.round(projectFrames(project)/project.fps*48000);
+       if(request.totalFrames!==expected||expected<1||expected>28800000)throw new RangeError('Invalid stereo duration');
+       const {createBrowserStereoChunkSource}=await import('./deterministic-stereo-audio.ts');
+       stereo=await createBrowserStereoChunkSource(project,controller.signal);
+       if(!stereo)return null;
+       stereoProject=project;
+       return {sampleRate:48000,channels:2,totalFrames:stereo.totalFrames};
+      })()
+     :request.kind==='stereo-chunk'
+     ?(()=>{
+       if(!stereo||stereoProject!==project||request.startFrame!==next)throw new Error('Invalid stereo sequence');
+       const chunk=stereo.readChunk(next,controller.signal);next+=chunk.frameCount;
+       if(next===stereo.totalFrames){stereo=null;stereoProject=null;}
+       return chunk;
+      })()
+     :request.kind==='frame'
      ?await (async()=>{
        if(!Number.isSafeInteger(request.index)||request.index!<0||request.index!>=projectFrames(project))throw new RangeError('Invalid frame index');
        const {renderIsolatedProjectFrame}=await import('./deterministic-artwork-renderer.ts');
@@ -33,11 +56,12 @@ export function attachIsolatedStoryboardRenderer(channel:IsolatedBrowserChannel,
      :await (async()=>{const {mixProjectAudioInBrowser}=await import('./deterministic-project-audio.ts');return mixProjectAudioInBrowser(project,controller.signal)})();
     if(!closed&&!controller.signal.aborted)channel.reply({token:request.token,kind:request.kind,data});
    }catch{
+    if(isStereo){stereo=null;stereoProject=null;}
     // Fail promptly through the existing authenticated main-side error channel.
     // Do not expose internal exception details or project data.
     if(!closed&&!controller.signal.aborted)channel.reply({token:request.token,kind:request.kind,data:null,error:'Export renderer failed'});
-   }finally{controllers.delete(controller)}
+   }finally{controllers.delete(controller);if(isStereo)stereoBusy=false}
   })();
  });
- return ()=>{if(closed)return;closed=true;unsubscribe();for(const controller of controllers)controller.abort();controllers.clear()};
+ return ()=>{if(closed)return;closed=true;stereo=null;stereoProject=null;unsubscribe();for(const controller of controllers)controller.abort();controllers.clear()};
 }
