@@ -171,15 +171,15 @@ test('D3.3-A WebM profile preserves exact existing arguments with and without au
  }
 });
 for(const format of ['mp4','mov']){
- test('D3.3-A '+format+' fixed integration profile',()=>{
+ test('D3.3-A '+format+' low-resolution quality profile',()=>{
   const args=profileFor(format);
-  assert.deepEqual(args,[...commonArgs,...audioArgs,'-map','0:v:0','-map','1:a:0','-c:v','h264_videotoolbox','-pix_fmt','yuv420p','-b:v','2000k','-c:a','aac','-b:a','128k','-movflags','+faststart','-f',format,'/tmp/fixture/export.'+format]);
+  assert.deepEqual(args,[...commonArgs,...audioArgs,'-map','0:v:0','-map','1:a:0','-c:v','h264_videotoolbox','-pix_fmt','yuv420p','-b:v','2500k','-c:a','aac','-b:a','128k','-movflags','+faststart','-f',format,'/tmp/fixture/export.'+format]);
   assert.ok(Object.isFrozen(args));
  });
 }
 test('D3.3-A MP4/MOV video-only profiles omit audio inputs and codecs',()=>{
  for(const format of ['mp4','mov'])
-  assert.deepEqual(profileFor(format,{hasAudio:false,audioFile:undefined}),[...commonArgs,'-map','0:v:0','-c:v','h264_videotoolbox','-pix_fmt','yuv420p','-b:v','2000k','-an','-movflags','+faststart','-f',format,'/tmp/fixture/export.'+format]);
+  assert.deepEqual(profileFor(format,{hasAudio:false,audioFile:undefined}),[...commonArgs,'-map','0:v:0','-c:v','h264_videotoolbox','-pix_fmt','yuv420p','-b:v','2500k','-an','-movflags','+faststart','-f',format,'/tmp/fixture/export.'+format]);
 });
 test('D3.3-A unsupported format rejected',()=>{
  for(const format of ['avi','MP4','',null,{},1])
@@ -250,4 +250,24 @@ test('D3.3-B rejects invalid format, odd dimensions and missing runtime before s
  await assert.rejects(createIsolatedFfmpegSink({...opts,format:'avi'}),/format/);
  await assert.rejects(createIsolatedFfmpegSink({...opts,format:'mov',width:3}),/even dimensions/);
  await assert.rejects(createIsolatedFfmpegSink({...opts,format:'mp4'}),/ENOENT/);
+});
+
+test('D3.3-D2 approved bitrate targets and orientation-independent boundaries',()=>{
+ for(const format of ['mp4','mov']){
+  for(const [width,height,target] of [[640,360,'2500k'],[854,480,'2500k'],[480,854,'2500k'],[856,480,'5000k'],[1280,720,'5000k'],[720,1280,'5000k'],[1282,720,'10000k'],[1920,1080,'10000k'],[1080,1920,'10000k'],[2560,1440,'10000k']]){
+   for(const hasAudio of [true,false]){
+    const args=profileFor(format,{width,height,hasAudio});
+    assert.equal(args[args.indexOf('-b:v')+1],target);
+    if(hasAudio)assert.equal(args[args.indexOf('-b:a')+1],'128k');
+    else assert.ok(args.includes('-an'));
+   }
+  }
+ }
+});
+test('D3.3-D2 WebM bitrate remains unchanged at every resolution',()=>{
+ for(const [width,height] of [[854,480],[1280,720],[1920,1080],[1080,1920]]){
+  const args=profileFor('webm',{width,height});
+  assert.equal(args[args.indexOf('-b:v')+1],'1M');
+  assert.equal(args[args.indexOf('-c:a')+1],'libopus');
+ }
 });
