@@ -1,10 +1,10 @@
 /** N3.17-I trusted backend composition. Not activated by production main.cjs. */
 const {validateExportRequest}=require('./isolated-export-ipc-contract.cjs');
 const {createIsolatedExportPipeline}=require('./isolated-export-pipeline.cjs');
-function createTrustedExportBackend({resourcesPath,resolveProject,renderFrame,renderAudio,sinkFactory}={}){
+function createTrustedExportBackend({resourcesPath,resolveProject,renderFrame,renderAudio,sinkFactory,formatPolicy}={}){
  if(typeof resolveProject!=='function'||typeof renderFrame!=='function'||typeof renderAudio!=='function')throw new TypeError('Trusted backend dependencies required');
  return async function startExport(untrusted,{signal,report}){
-  const request=validateExportRequest(untrusted);
+  const request=formatPolicy?formatPolicy.validate(untrusted):validateExportRequest(untrusted);
   signal.throwIfAborted();
   // Project IDs are selectors, never filesystem paths or renderer-provided project data.
   const project=await resolveProject(request.projectId,signal);
