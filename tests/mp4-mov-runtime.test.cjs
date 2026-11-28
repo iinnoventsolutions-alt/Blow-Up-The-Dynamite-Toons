@@ -435,3 +435,51 @@ test('D6-B session and backend boundaries deny by default and accept trusted pol
  await assert.rejects(createTrustedExportBackend({...deps,formatPolicy:policy})(request,context),/Trusted project unavailable/);
  assert.equal(resolved,1);
 });
+
+test('D6-C saves authorized MP4 and MOV with matching filters and exclusive destinations',async t=>{
+ const {createIsolatedExportOutput}=require('../desktop/isolated-export-output.cjs');
+ const {createExportFormatPolicy}=require('../desktop/isolated-export-format-policy.cjs');
+ const {root}=fixture(t);
+ const formatPolicy=await createExportFormatPolicy({enableMp4Mov:true,probe:async()=>({version:'7.1.5',formats:['mp4','mov']})});
+ const signal=new AbortController().signal,owner={},bytes=Uint8Array.of(1,2,3);
+ for(const format of ['mp4','mov']){
+  const name='test.'+format,destination=path.join(root,name);
+  const output=createIsolatedExportOutput({formatPolicy,sessions:{closeOwner:async()=>{}},dialog:{showSaveDialog:async(_,opts)=>{
+   assert.equal(opts.defaultPath,name);assert.deepEqual(opts.filters[0].extensions,[format]);return {filePath:destination};
+  }}});
+  assert.equal(await output.save(owner,name,bytes,signal,format),destination);
+  assert.deepEqual([...fs.readFileSync(destination)],[1,2,3]);
+  await assert.rejects(output.save(owner,name,Uint8Array.of(9),signal,format),{code:'EEXIST'});
+  assert.deepEqual([...fs.readFileSync(destination)],[1,2,3]);
+  assert.equal(fs.readdirSync(root).some(n=>n.endsWith('.tmp')),false);
+ }
+});
+test('D6-C denies unauthorized formats and invalid names before opening dialog',async()=>{
+ const {createIsolatedExportOutput}=require('../desktop/isolated-export-output.cjs');
+ const {createExportFormatPolicy}=require('../desktop/isolated-export-format-policy.cjs');
+ const deps={sessions:{closeOwner:async()=>{}},dialog:{showSaveDialog:async()=>assert.fail('unexpected dialog')}};
+ const signal=new AbortController().signal,owner={},bytes=Uint8Array.of(1);
+ await assert.rejects(createIsolatedExportOutput(deps).save(owner,'x.mp4',bytes,signal,'mp4'),/unavailable/);
+ const formatPolicy=await createExportFormatPolicy({enableMp4Mov:true,probe:async()=>({version:'7.1.5',formats:['mp4','mov']})});
+ const output=createIsolatedExportOutput({...deps,formatPolicy});
+ for(const name of ['../x.mp4','x.mov','x..mp4','x/evil.mp4','.x.mp4'])await assert.rejects(output.save(owner,name,bytes,signal,'mp4'),/Invalid output name/);
+ await assert.rejects(output.save(owner,'x.avi',bytes,signal,'avi'),/unavailable/);
+ await assert.rejects(output.save(owner,'x.mp4',new Uint8Array(0),signal,'mp4'),/Invalid output bytes/);
+});
+test('D6-C cancellation, mismatched destination and staging cleanup',async t=>{
+ const {createIsolatedExportOutput}=require('../desktop/isolated-export-output.cjs');
+ const {createExportFormatPolicy}=require('../desktop/isolated-export-format-policy.cjs');
+ const {root}=fixture(t);
+ const formatPolicy=await createExportFormatPolicy({enableMp4Mov:true,probe:async()=>({version:'7.1.5',formats:['mp4','mov']})});
+ const controller=new AbortController(),owner={},bytes=Uint8Array.of(1);
+ const deps={formatPolicy,sessions:{closeOwner:async()=>{}}};
+ const make=result=>createIsolatedExportOutput({...deps,dialog:{showSaveDialog:async()=>result}});
+ assert.equal(await make({canceled:true}).save(owner,'x.mov',bytes,controller.signal,'mov'),null);
+ await assert.rejects(make({filePath:path.join(root,'x.mp4')}).save(owner,'x.mov',bytes,controller.signal,'mov'),/destination must be/);
+ const destination=path.join(root,'x.mov');
+ const realFs=require('node:fs/promises');
+ const output=createIsolatedExportOutput({...deps,dialog:{showSaveDialog:async()=>({filePath:destination})},writeFs:{...realFs,writeFile:async(...args)=>{await realFs.writeFile(...args);controller.abort()}}});
+ await assert.rejects(output.save(owner,'x.mov',bytes,controller.signal,'mov'),{name:'AbortError'});
+ assert.equal(fs.existsSync(destination),false);
+ assert.equal(fs.readdirSync(root).some(n=>n.endsWith('.tmp')),false);
+});
