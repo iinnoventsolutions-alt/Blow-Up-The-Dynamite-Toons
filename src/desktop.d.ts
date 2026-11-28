@@ -5,7 +5,8 @@ declare global {
     desktop?: {
       isolatedExport?: {
         onAvailability(callback:(enabled:boolean)=>void):()=>void;
-        start(request:{projectId:string;width:number;height:number;fps:number;outputName:string}):Promise<{id:string}>;
+        onCapabilities(callback:(capabilities:{webm:boolean;mp4:boolean;mov:boolean})=>void):()=>void;
+        start(request:{projectId:string;width:number;height:number;fps:number;outputName:string;format?:'webm'|'mp4'|'mov'}):Promise<{id:string}>;
         progress(id:string):Promise<unknown>;
         cancel(id:string):Promise<unknown>;
         onRequest(callback:(request:import('./isolated-electron-renderer').IsolatedBrowserRequest)=>void):()=>void;

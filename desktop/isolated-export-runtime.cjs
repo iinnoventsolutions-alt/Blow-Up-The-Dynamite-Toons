@@ -11,19 +11,19 @@ function publicExportError(error){
  return 'FFmpeg export failed; check the isolated export diagnostic logs';
 }
 
-function createIsolatedExportRuntime({ipcMain,window,pageURL,windowIsUsable,enabled=false,startExport,saveOutput}={}){
+function createIsolatedExportRuntime({ipcMain,window,pageURL,windowIsUsable,enabled=false,startExport,saveOutput,formatPolicy}={}){
  if(!enabled){
   return Object.freeze({enabled:false,dispose:async()=>{}});
  }
  if(typeof startExport!=='function')throw new Error('Isolated export backend unavailable; refusing IPC activation');
  if(!window?.webContents)throw new TypeError('Trusted Electron window required');
  if(saveOutput!==undefined&&typeof saveOutput!=='function')throw new TypeError('Invalid output delivery callback');
- const sessions=createIsolatedExportSessions({startExport:async(request,context)=>{
+ const sessions=createIsolatedExportSessions({formatPolicy,singleActive:formatPolicy?.capabilities?.mp4===true,startExport:async(request,context)=>{
   try{
    const bytes=await startExport(request,context);
    context.signal.throwIfAborted();
    if(!saveOutput)return bytes;
-   const destination=await saveOutput(window.webContents,request.outputName,bytes,context.signal);
+   const destination=await saveOutput(window.webContents,request.outputName,bytes,context.signal,request.format??'webm');
    context.signal.throwIfAborted();
    if(windowIsUsable(window))window.webContents.send('isolated-export:complete',{id:context.id,status:destination===null?'cancelled':'saved'});
    return destination;

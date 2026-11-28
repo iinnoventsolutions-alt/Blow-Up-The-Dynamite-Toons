@@ -21,3 +21,12 @@ export function exportProfile(project:Pick<Project,'width'|'height'|'fps'|'scene
   desktopEncodedMaxBytes:DESKTOP_ENCODED_OUTPUT_MAX_BYTES
  };
 }
+
+export type ExportFormat='webm'|'mp4'|'mov';
+export type ExportCapabilities=Record<ExportFormat,boolean>;
+export function extendedExportProfile(project:Pick<Project,'width'|'height'|'fps'|'scenes'>){
+ const profile=exportProfile(project);
+ const scale=Math.min(1,EXPORT_LONGEST_EDGE/Math.max(project.width,project.height));
+ const outputWidth=Math.floor(project.width*scale/2)*2,outputHeight=Math.floor(project.height*scale/2)*2;
+ return {...profile,outputWidth,outputHeight,eligible:outputWidth>=2&&outputHeight>=2&&profile.frames>=1&&profile.frames<=100000&&profile.seconds<=600};
+}

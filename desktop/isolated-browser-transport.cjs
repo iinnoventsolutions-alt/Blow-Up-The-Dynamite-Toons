@@ -30,11 +30,11 @@ function createIsolatedBrowserTransport({requestFrame,requestAudio,frameTimeoutM
   }
  }
  return Object.freeze({
-  async frame(index,width,height,fps,signal){
+  async frame(index,width,height,fps,signal,geometry){
    if(!Number.isSafeInteger(index)||index<0||!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||
       width<2||height<2||width*height*4>MAX_FRAME_BYTES||!Number.isFinite(fps)||fps<1||fps>120)
     throw new RangeError('Invalid frame request');
-   const frame=await invoke(requestFrame,[index,signal],signal,frameTimeoutMs);
+   const frame=await invoke(requestFrame,[index,signal,geometry],signal,frameTimeoutMs);
    if(!frame||frame.index!==index||frame.timestampUs!==Math.round(index*1e6/fps)||
       !(frame.pixels instanceof Uint8Array||frame.pixels instanceof Uint8ClampedArray)||
       frame.pixels.byteLength!==width*height*4)throw new Error('Invalid browser frame response');

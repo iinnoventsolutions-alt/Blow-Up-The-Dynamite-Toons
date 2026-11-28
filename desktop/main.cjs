@@ -10,6 +10,7 @@ const { createIsolatedExportRuntime } = require('./isolated-export-runtime.cjs')
 const { createTrustedProjectRegistry } = require('./isolated-export-project-registry.cjs');
 const { createIsolatedElectronExportHarness } = require('./isolated-electron-export-harness.cjs');
 const { packagedEncoder } = require('./isolated-ffmpeg.cjs');
+const { createExportFormatPolicy } = require('./isolated-export-format-policy.cjs');
 const metadata = require('../src/build-info.json');
 const previousDataDirectory = app.getPath('userData');
 // Preserve packaged recovery/preferences across the display-name correction.
@@ -37,6 +38,8 @@ async function remember(filePath) {
 }
 async function openPath(filePath) { const text = await readProject(filePath); const {parseProject} = await import('../src/project-format.js'); exportProjects.clear(); exportProjects.publish(parseProject(text)); currentPath = filePath; await remember(filePath); return { text, name: path.basename(filePath) }; }
 app.whenReady().then(async () => {
+  // Extended formats require a separate explicit, unpackaged development opt-in.
+  const formatPolicy = await createExportFormatPolicy({resourcesPath:process.resourcesPath,enableMp4Mov:!app.isPackaged && process.platform==='darwin' && process.env.RFDR_ENABLE_PRODUCTION_EXPORT==='1' && process.env.V1124_ENABLE_MP4_MOV==='1'});
   try { const list = JSON.parse(await fs.readFile(dataPath('recent.json'), 'utf8')); if (Array.isArray(list)) recentFiles = list.filter(f => typeof f.id === 'string' && typeof f.path === 'string' && typeof f.name === 'string').slice(0, 12); } catch {}
   handle('project:recent', () => recentFiles.map(({ id, name }) => ({ id, name })));
   // Only clear the recent-file index; never unlink user project files or recovery.
@@ -100,10 +103,14 @@ app.whenReady().then(async () => {
     }
     const exportOptIn = app.isPackaged ? productionExportReady : testExportOptIn;
     const isolatedExportRuntime = exportOptIn
-      ? createIsolatedElectronExportHarness({ipcMain, window: thisWindow, pageURL, windowIsUsable, registry: exportProjects, resourcesPath: process.resourcesPath, dialog, enabled: true})
+      ? createIsolatedElectronExportHarness({ipcMain, window: thisWindow, pageURL, windowIsUsable, registry: exportProjects, resourcesPath: process.resourcesPath, dialog, formatPolicy, enabled: true})
       : createIsolatedExportRuntime({ipcMain, window: thisWindow, pageURL, windowIsUsable});
     thisWindow.webContents.on('did-finish-load', () => {
-      if (exportOptIn && windowIsUsable(thisWindow)) thisWindow.webContents.send('isolated-export:available', true);
+      // Legacy developer control visibility is separate from production runtime readiness.
+      if (windowIsUsable(thisWindow)) {
+        thisWindow.webContents.send('isolated-export:available', exportOptIn && testExportOptIn);
+        thisWindow.webContents.send('isolated-export:capabilities', {webm:true,mp4:exportOptIn && formatPolicy.capabilities.mp4,mov:exportOptIn && formatPolicy.capabilities.mov});
+      }
     });
     thisWindow.on('closed', () => { void isolatedExportRuntime.dispose().catch(() => {}); });
     thisWindow.on('closed', () => {
